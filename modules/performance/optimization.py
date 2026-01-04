@@ -1,5 +1,4 @@
 from typing import Callable
-
 from skopt import gp_minimize
 from skopt.space import Integer, Real
 import numpy as np
@@ -7,8 +6,16 @@ from random import uniform, randint
 from joblib import Parallel, delayed
 
 
-def random_search(strategy_func: Callable, param_space: list, static_params: dict, metric: tuple, n_iter: int = 1000,
-                  n_jobs: int = -1, replicates: int = 1, penalty_bad: int = -1e2) -> tuple[dict, float]:
+def random_search(
+    strategy_func: Callable,
+    param_space: list,
+    static_params: dict,
+    metric: tuple[str, str],
+    n_iter: int = 1000,
+    n_jobs: int = -1,
+    replicates: int = 1,
+    penalty_bad: float = -1e2,
+) -> tuple[dict, float]:
     def evaluate_point(pd, idx) -> tuple[float, dict]:
         scores = []
         for _ in range(replicates):
@@ -44,8 +51,17 @@ def random_search(strategy_func: Callable, param_space: list, static_params: dic
     return best_params, best_score
 
 
-def bayesian_search(strategy_func: Callable, param_space: list, static_params: dict, metric: tuple, n_iter: int = 100,
-                    n_jobs: int = -1, replicates: int = 1, penalty_bad: int = -1e2) -> tuple[dict, float]:
+def bayesian_search(
+    strategy_func: Callable,
+    param_space: list,
+    static_params: dict,
+    metric: tuple[str, str],
+    n_iter: int = 50,
+    n_jobs: int = -1,
+    random_state: int = 42,
+    replicates: int = 1,
+    penalty_bad: int = -100,
+) -> tuple[dict, float]:
     def objective(params_values):
         pdict = {dim.name: val for dim, val in zip(param_space, params_values)}
 
@@ -62,7 +78,6 @@ def bayesian_search(strategy_func: Callable, param_space: list, static_params: d
                 scores.append(penalty_bad)
 
         avg_score = float(np.mean(scores))
-        # print(f"Score: {avg_score:.4f} | Params: {pdict}")
 
         return -avg_score
 
@@ -71,8 +86,8 @@ def bayesian_search(strategy_func: Callable, param_space: list, static_params: d
         dimensions=param_space,
         n_calls=n_iter,
         n_jobs=n_jobs,
-        random_state=42,
-        verbose=True
+        random_state=random_state,
+        verbose=True,
     )
 
     best_params_values = result.x

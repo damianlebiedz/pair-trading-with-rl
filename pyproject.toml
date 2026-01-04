@@ -7,7 +7,7 @@ authors = [
 ]
 license = {text = "Proprietary"}
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = "==3.13.*"
 dependencies = [
     "pandas (>=2.3.3,<2.4.0)",
     "python-binance (>=1.0.30,<1.1.0)",
@@ -29,6 +29,11 @@ dependencies = [
 
 [tool.poetry]
 packages = [{ include = "modules" }]
+
+[tool.poetry.group.dev.dependencies]
+ruff = "^0.14.9"
+mypy = "^1.19.1"
+black = "^25.12.0"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]

@@ -1,7 +1,6 @@
 .idea
 __pycache__
 .hydra/
-*.log
 
 data/*
 !data/.ignore
@@ -9,3 +8,5 @@ data/*
 
 results/*
 !results/.ignore
+
+scripts/logs

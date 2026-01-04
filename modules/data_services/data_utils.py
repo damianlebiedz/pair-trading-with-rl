@@ -1,102 +1,153 @@
 from functools import reduce
+from io import StringIO
 from pathlib import Path
-
-import numpy as np
+from typing import Literal
 import pandas as pd
+import pyarrow as pa
+import pyarrow.parquet as pq
+import json
 
-from modules.core.models import Pair
-from modules.data_services.data_loaders import load_data
+from modules.core.models import StrategyResult
+from modules.data_services.data_loaders import load_data, get_project_root
 
 
-def get_steps(interval: str) -> int:
+def _unique_path(path: Path) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    if not path.exists():
+        return path
+
+    stem = path.stem
+    suffix = path.suffix
+    parent = path.parent
+
+    i = 1
+    while True:
+        candidate = parent / f"{stem} ({i}){suffix}"
+        if not candidate.exists():
+            return candidate
+        i += 1
+
+
+def get_steps(
+    interval: Literal["1d", "4h", "1h", "30m", "15m", "5m", "3m", "1m"],
+) -> int:
     """Get steps of the interval."""
-    if interval == '1d':
+    if interval == "1d":
         return 1
-    elif interval == '4h':
+    elif interval == "4h":
         return 6
-    elif interval == '1h':
+    elif interval == "1h":
         return 24
-    elif interval == '30m':
+    elif interval == "30m":
         return 48
-    elif interval == '15m':
+    elif interval == "15m":
         return 96
-    elif interval == '5m':
+    elif interval == "5m":
         return 288
-    elif interval == '3m':
+    elif interval == "3m":
         return 480
-    elif interval == '1m':
+    elif interval == "1m":
         return 1440
     else:
-        return ValueError(
-            f"Wrong interval '{interval}', should be one of: '1d', '4h', '1h', '30m', '15m', '5m', '3m', '1m'.")
+        raise ValueError(
+            f"Wrong interval '{interval}', should be one of: '1d', '4h', '1h', '30m', '15m', '5m', '3m', '1m'."
+        )
 
 
 def merge_by_pair(dfs: list[pd.DataFrame], keep_cols: list[list[str]]) -> pd.DataFrame:
     """Merge dataframes from statistical tests into one dataframe."""
     trimmed = []
     for df, cols in zip(dfs, keep_cols):
-        trimmed.append(df[['pair'] + cols])
+        trimmed.append(df[["pair"] + cols])
 
-    merged = reduce(lambda left, right: pd.merge(left, right, on='pair', how='outer'), trimmed)
+    merged = reduce(
+        lambda left, right: pd.merge(left, right, on="pair", how="outer"), trimmed
+    )
     return merged
-
-
-def add_returns(pair: Pair) -> None:
-    """Add return and log return columns into Pair data."""
-    data = pair.data.copy()
-    col_x = pair.x
-    col_y = pair.y
-
-    data[f"{col_x}_returns"] = data[col_x].pct_change()
-    data[f"{col_y}_returns"] = data[col_y].pct_change()
-
-    data[f"{col_x}_log_returns"] = np.log(data[col_x] / data[col_x].shift(1))
-    data[f"{col_y}_log_returns"] = np.log(data[col_y] / data[col_y].shift(1))
-
-    pair.data = data.dropna()
-
-
-def cumulative_returns_index(df: pd.DataFrame) -> pd.DataFrame:
-    """Normalize prices with cumulative returns to start from 1."""
-    df = df.copy()
-    for column in df.columns:
-        df[column] = (1 + df[column].pct_change().fillna(0)).cumprod()
-    return df
-
-
-def minmax_scale(pair_data: Pair) -> Pair:
-    """Scale prices to range [0, 1]."""
-    df = pair_data.data.copy()
-
-    def minmax_scale_series(series: pd.Series) -> pd.Series:
-        """Scale a series to range [0, 1]."""
-        return (series - series.min()) / (series.max() - series.min())
-
-    df[f"{pair_data.x}_scaled"] = minmax_scale_series(df[pair_data.x])
-    df[f"{pair_data.y}_scaled"] = minmax_scale_series(df[pair_data.y])
-    pair_data.data = df
-    return pair_data
 
 
 def load_btc_benchmark(test_start: str, test_end: str, interval: str) -> pd.DataFrame:
     btc_data = load_data(
-        tickers=['BTCUSDT'],
+        tickers=["BTCUSDT"],
         start=test_start,
         end=test_end,
         interval=interval,
     )
-    btc_data['BTC_return'] = btc_data['BTCUSDT'].pct_change()
-    btc_data.loc[btc_data.index[0], 'BTC_return'] = 0.0
-    btc_data['BTC_cum_return'] = (1 + btc_data['BTC_return']).cumprod() - 1
+    btc_data["BTC_return"] = btc_data["BTCUSDT"].pct_change()
+    btc_data.loc[btc_data.index[0], "BTC_return"] = 0.0
+    btc_data["BTC_c_return"] = (1 + btc_data["BTC_return"]).cumprod() - 1
+
     return btc_data
 
 
-def save_to_parquet(df: pd.DataFrame, file_name: str) -> None:
-    PARQUET_DIR = Path.cwd() / "parquets"
-    PARQUET_DIR.mkdir(parents=True, exist_ok=True)
-    df.to_parquet(PARQUET_DIR / f"{file_name}.parquet")
+def save_dataframe(df: pd.DataFrame, file_name: str) -> None:
+    path = get_project_root() / "results" / f"{file_name}.parquet"
+    path = _unique_path(path)
+
+    df.to_parquet(path, engine="pyarrow", index=False)
 
 
-def load_parquet(file_name: str) -> pd.DataFrame:
-    PARQUET_DIR = Path.cwd() / "parquets"
-    return pd.read_parquet(PARQUET_DIR / f"{file_name}.parquet")
+def save_strategy_result(result: StrategyResult, file_name: str) -> None:
+    PARQUET_DIR = get_project_root() / "results"
+
+    path = PARQUET_DIR / f"{file_name}.parquet"
+    path = _unique_path(path)
+
+    table = pa.Table.from_pandas(df=result.data) # noqa
+    metadata = {
+        "ticker_x": result.ticker_x,
+        "ticker_y": result.ticker_y,
+        "start": result.start,
+        "end": result.end,
+        "interval": result.interval,
+        "fee_rate": float(result.fee_rate),
+        "rolling_window": int(result.rolling_window),
+        "stats_json": result.stats.to_json(),
+    }
+
+    custom_meta_key = "strategy_params".encode("utf-8")
+    custom_meta_value = json.dumps(metadata).encode("utf-8")
+
+    existing_meta = table.schema.metadata or {}
+    new_meta = {**existing_meta, custom_meta_key: custom_meta_value}
+
+    table = table.replace_schema_metadata(new_meta)
+    pq.write_table(table, path)
+
+
+def load_dataframe(file_name: str) -> pd.DataFrame:
+    PARQUET_DIR = get_project_root() / "results"
+    path = PARQUET_DIR / f"{file_name}.parquet"
+
+    table = pq.read_table(path)
+    df = table.to_pandas()
+
+    return df
+
+
+def load_strategy_result(file_name: str) -> StrategyResult:
+    PARQUET_DIR = get_project_root() / "results"
+    path = PARQUET_DIR / f"{file_name}.parquet"
+
+    table = pq.read_table(path)
+    df = table.to_pandas()
+
+    raw_meta = table.schema.metadata.get(b"strategy_params")
+    meta = json.loads(raw_meta.decode("utf-8"))
+
+    return StrategyResult(
+        data=df,
+        ticker_x=meta["ticker_x"],
+        ticker_y=meta["ticker_y"],
+        start=meta["start"],
+        end=meta["end"],
+        interval=meta["interval"],
+        fee_rate=float(meta["fee_rate"]),
+        rolling_window=meta["rolling_window"],
+        stats=pd.read_json(StringIO(meta["stats_json"])),
+    )
+
+
+def merge_multi_pair_results():
+    ...

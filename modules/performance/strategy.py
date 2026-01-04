@@ -1,85 +1,175 @@
-from functools import partial
+from typing import Literal
 import pandas as pd
 
 from modules.core.execution import TradeExecutor
-from modules.core.indicators import calculate_beta_returns, calculate_zscore_prices, generate_signal
+from modules.core.indicators import calculate_z_score, generate_signal, calculate_beta
 from modules.data_services.data_loaders import load_pair
-from modules.core.models import Pair
-from modules.data_services.data_utils import add_returns
-from modules.performance.optimization import random_search
-from modules.core.models import PositionState, StrategyParams
+from modules.data_services.data_preparation import (
+    add_log_prices,
+    add_c_norm_returns,
+    add_c_returns,
+    add_c_log_returns,
+)
+from modules.performance.optimization import bayesian_search
+from modules.core.models import PositionState, ExecutionContext, StrategyResult
 from modules.performance.stats import calculate_stats
 
 
-def single_pair_strategy(pair: Pair, rolling_window: int, entry_threshold: float = None, exit_threshold: float = None,
-                         stop_loss: float = None, pos_size: float = None, beta_hedge: bool = False,
-                         is_spread: bool = False) -> Pair:
-    df = pair.data.copy()
-    x_col, y_col = pair.x, pair.y
-    initial_cash = pair.initial_cash
+class Strategy:
+    def __init__(
+        self,
+        ticker_x: str,
+        ticker_y: str,
+        start: str,
+        end: str,
+        interval: Literal["1d", "4h", "1h", "30m", "15m", "5m", "3m", "1m"],
+        fee_rate: float,
+        initial_cash: float,
+        risk_free_rate_annual: float,
+        source: Literal["log", "c_returns", "c_log_returns", "c_norm_returns"],
+        beta_hedge: Literal["dynamic_hedge", "static_hedge", None],
+    ):
 
-    total_fees = 0.0
-    total_pnl = 0.0
-    prev_pnl = 0.0
+        if source not in ["log", "c_returns", "c_log_returns", "c_norm_returns"]:
+            raise ValueError(
+                "Invalid source: should be 'log', 'c_returns', 'c_log_returns', or 'c_norm_returns'"
+            )
 
-    position_state = PositionState()
-    strategy_params = StrategyParams
+        if beta_hedge not in ["dynamic_hedge", "static_hedge", None]:
+            raise ValueError(
+                "Invalid beta_hedge: should be 'dynamic_hedge', 'static_hedge' or None"
+            )
 
-    if pair.test_start is not None:
-        start_pos = df.index.get_loc(pd.to_datetime(pair.test_start))
-    else:
-        raise ValueError("Test start must be set to run the strategy")
-    if start_pos - rolling_window + 1 < 0:
-        raise ValueError("Rolling window cannot be bigger than pre-training period")
-    df = df.iloc[start_pos - rolling_window + 1:]
-    first_pos = rolling_window - 1
-    last_pos = df.index.get_loc(pd.to_datetime(pair.end))
+        self.ticker_x = ticker_x
+        self.ticker_y = ticker_y
+        self.start = start
+        self.end = end
+        self.interval = interval
+        self.fee_rate = fee_rate
+        self.initial_cash = initial_cash
+        self.risk_free_rate_annual = risk_free_rate_annual
+        self.source = source
+        self.beta_hedge = beta_hedge
 
-    for i in range(first_pos, last_pos + 1):
-        if total_pnl == -initial_cash:
-            # BANKRUPT
-            df = df.iloc[:i].copy()
-            break
+        self.exec_ctx = ExecutionContext(
+            ticker_x=self.ticker_x,
+            ticker_y=self.ticker_y,
+            initial_cash=self.initial_cash,
+            fee_rate=self.fee_rate,
+        )
+
+        self.data = load_pair(
+            x=ticker_x, y=ticker_y, start=start, end=end, interval=interval
+        )
+
+        source_map = {
+            "c_norm_returns": add_c_norm_returns,
+            "c_returns": add_c_returns,
+            "c_log_returns": add_c_log_returns,
+            "log": add_log_prices,
+        }
+        func_to_call = source_map[self.source]
+        func_to_call(self.data, self.ticker_x, self.ticker_y)
+
+    def _execute_loop(
+        self,
+        df: pd.DataFrame,
+        rolling_window: int,
+        entry_threshold: float,
+        exit_threshold: float,
+        stop_loss: float,
+        test_start: str,
+        test_end: str,
+        beta_calculation_start: str | None = None,
+        beta_hedge: Literal["dynamic_hedge", "static_hedge", None] | None = None,
+    ) -> pd.DataFrame:
+        df = df.copy()
+
+        x_col = self.ticker_x
+        y_col = self.ticker_y
+
+        total_fees = 0.0
+        total_pnl = 0.0
+        prev_pnl = 0.0
+
+        position_state = PositionState()
+
+        source_x_col = f"{x_col}_{self.source}"
+        source_y_col = f"{y_col}_{self.source}"
+
+        test_start_pos = df.index.get_loc(pd.to_datetime(test_start))
+        if test_start_pos - rolling_window < 0:
+            raise ValueError("Rolling window cannot be bigger than pre-training period")
+
+        start_pos = None
+        if beta_calculation_start is None:
+            if beta_hedge in ["static_hedge", "dynamic_hedge"]:
+                raise ValueError(
+                    "'start' must be provided for 'static_hedge' or 'dynamic_hedge'"
+                )
+            else:
+                pass
         else:
-            prev_pos = position_state.prev_position
+            start_pos = df.index.get_loc(pd.to_datetime(beta_calculation_start))
+
+        beta = 1.0
+        if beta_hedge == "static_hedge":
+            beta = calculate_beta(
+                x_col=source_x_col,
+                y_col=source_y_col,
+                df=df.iloc[start_pos:test_start_pos],
+            )
+        elif beta_hedge == "dynamic_hedge":
+            pass
+
+        end_pos = df.index.get_loc(pd.to_datetime(test_end))
+
+        df["z_score"] = None
+
+        for i in range(test_start_pos, len(df)):
+            if total_pnl == -self.initial_cash:
+                df = df.iloc[:i].copy()
+                break
 
             price_x = df[x_col].iloc[i]
             price_y = df[y_col].iloc[i]
 
-            if all(x is None for x in [entry_threshold, exit_threshold, stop_loss, pos_size, rolling_window]):
-                # TODO: Agent
-                entry_threshold = ...  # [-inf,+inf]
-                exit_threshold = ...  # [-inf,+inf]
-                stop_loss = ...  # > entry_threshold
-
-            strategy_params.entry_threshold = entry_threshold
-            strategy_params.exit_threshold = exit_threshold
-            strategy_params.stop_loss = stop_loss
-
-            if beta_hedge:
-                beta = calculate_beta_returns(
-                    f"{x_col}_returns", f"{y_col}_returns", df.iloc[i - rolling_window + 1:i + 1]
+            if beta_hedge == "dynamic_hedge":
+                beta = calculate_beta(
+                    x_col=source_x_col,
+                    y_col=source_y_col,
+                    df=df.iloc[start_pos + i - test_start_pos : i],
                 )
-            else:
-                beta = 1
-            z_score = calculate_zscore_prices(
-                x_col, y_col, beta, df.iloc[i - rolling_window + 1:i + 1]
+
+            z_score = calculate_z_score(
+                x_col=source_x_col,
+                y_col=source_y_col,
+                beta=beta,
+                df=df.iloc[i - rolling_window : i],
             )
 
-            signal = generate_signal(entry_threshold, z_score)
+            signal = generate_signal(entry_threshold=entry_threshold, z_score=z_score)
 
-            if pos_size is None:
-                if prev_pos == 0 and signal != 0:
-                    # TODO: Agent
-                    pos_size = ...  # [-1,1]
+            if beta > 0:
+                position_state.signal = signal
 
-            if beta is not None and beta >= 0: # Execute trade only if beta exists and is >= 0
-                position_state.position = signal * pos_size
-
-            strategy_params.pos_size = pos_size
+            idx = df.index[i]
+            prev_z_score = (
+                0.0 if pd.isna(df.iloc[i - 1]["z_score"]) else df.iloc[i - 1]["z_score"]
+            )
 
             pnl, total_fees = TradeExecutor.execute(
-                pair, position_state, strategy_params, price_x, price_y, z_score, beta, total_fees, is_spread
+                ctx=self.exec_ctx,
+                position_state=position_state,
+                price_x=price_x,
+                price_y=price_y,
+                z_score=z_score,
+                prev_z_score=prev_z_score,
+                beta=beta,
+                total_fees=total_fees,
+                entry_threshold=entry_threshold,
+                exit_threshold=exit_threshold,
+                stop_loss=stop_loss,
             )
 
             if pnl != 0:
@@ -87,101 +177,138 @@ def single_pair_strategy(pair: Pair, rolling_window: int, entry_threshold: float
             else:
                 prev_pnl = total_pnl
 
-        if total_pnl <= -initial_cash:
-            total_pnl = -initial_cash
+            if total_pnl <= -self.initial_cash:
+                total_pnl = -self.initial_cash
 
-        idx = df.index[i]
-        df.at[idx, 'z_score'] = z_score
-        df.at[idx, 'beta'] = beta
-        df.at[idx, 'entry_thr'] = strategy_params.entry_threshold
-        df.at[idx, 'exit_thr'] = strategy_params.exit_threshold
-        df.at[idx, 'sl_thr'] = position_state.stop_loss_threshold
-        df.at[idx, 'w_x'] = position_state.w_x
-        df.at[idx, 'w_y'] = position_state.w_y
-        df.at[idx, 'q_x'] = position_state.q_x
-        df.at[idx, 'q_y'] = position_state.q_y
-        # df.at[idx, 'cash'] = initial_cash - position_state.entry_val
-        # df.at[idx, 'signal'] = signal
-        # df.at[idx, 'prev_position'] = position_state.prev_position
-        df.at[idx, 'position'] = position_state.position
-        df.at[idx, 'total_return'] = total_pnl
-        df.at[idx, 'total_fees'] = total_fees
-        df.at[idx, 'net_return'] = total_pnl - total_fees
+            df.at[idx, "z_score"] = z_score
+            df.at[idx, "beta"] = beta
+            df.at[idx, "entry_thr"] = entry_threshold
+            df.at[idx, "exit_thr"] = exit_threshold
+            df.at[idx, "sl_thr"] = position_state.stop_loss_threshold
+            df.at[idx, "q_x"] = position_state.q_x
+            df.at[idx, "q_y"] = position_state.q_y
+            df.at[idx, "w_x"] = position_state.w_x
+            df.at[idx, "w_y"] = position_state.w_y
+            df.at[idx, "signal"] = position_state.signal
+            df.at[idx, "position"] = position_state.position
+            df.at[idx, "total_return"] = total_pnl
+            df.at[idx, "total_fees"] = total_fees
+            df.at[idx, "net_return"] = total_pnl - total_fees
 
-        position_state.prev_position = position_state.position
+            position_state.prev_position = position_state.position
 
-    df['total_return_pct'] = df['total_return'] / initial_cash
-    df['net_return_pct'] = df['net_return'] / initial_cash
+        df["total_return_pct"] = df["total_return"] / self.initial_cash
+        df["net_return_pct"] = df["net_return"] / self.initial_cash
 
-    pair.data = df[rolling_window - 1:].drop(
-        columns=[f'{x_col}_returns', f'{y_col}_returns', f'{x_col}_log_returns', f'{y_col}_log_returns']).round(4)
-    return pair
+        df = df.iloc[test_start_pos : end_pos + 1].copy()
 
+        return df.drop(columns=[source_x_col, source_y_col])
 
-def run_single_pair_strategy(rolling_window: int, entry_threshold: float, exit_threshold: float, stop_loss: float,
-                             ticker_x: str, ticker_y: str, fee_rate: float, initial_cash: float, position_size: float,
-                             pre_trading_start: str, trading_start: str, trading_end: str, interval: str,
-                             beta_hedge: bool, is_spread: bool, risk_free_rate_annual: float) -> Pair:
-    pair = load_pair(x=ticker_x, y=ticker_y, start=pre_trading_start, end=trading_end, interval=interval)
-    add_returns(pair)
-    pair.test_start = trading_start
-    pair.fee_rate = fee_rate
-    pair.initial_cash = initial_cash
-    single_pair_strategy(
-        pair, rolling_window, entry_threshold, exit_threshold, stop_loss, position_size, beta_hedge, is_spread
-    )
-    pair.stats = calculate_stats(pair, risk_free_rate_annual)
-    return pair
+    def run_strategy(
+        self,
+        rolling_window: int,
+        entry_threshold: float,
+        exit_threshold: float,
+        stop_loss: float,
+        test_start: str,
+        test_end: str,
+        beta_calculation_start: str | None = None,
+        beta_hedge: str | None = None,
+    ) -> StrategyResult:
 
+        if beta_hedge is None:
+            beta_hedge = self.beta_hedge
 
-def strategy_wrapper(rolling_window: int, entry_threshold: float, exit_threshold: float, stop_loss: float,
-                     ticker_x: str, ticker_y: str, fee_rate: float, initial_cash: float, position_size: float,
-                     pre_trading_start: str, trading_start: str, trading_end: str, interval: str, metric: tuple,
-                     beta_hedge: bool, is_spread: bool, risk_free_rate_annual: float) -> float:
-    try:
-        pair = run_single_pair_strategy(rolling_window, entry_threshold, exit_threshold, stop_loss, ticker_x, ticker_y,
-                                        fee_rate, initial_cash, position_size, pre_trading_start, trading_start,
-                                        trading_end, interval, beta_hedge, is_spread, risk_free_rate_annual)
-        score = pair.stats.loc[metric]
+        data = self._execute_loop(
+            df=self.data,
+            rolling_window=rolling_window,
+            entry_threshold=entry_threshold,
+            exit_threshold=exit_threshold,
+            stop_loss=stop_loss,
+            test_start=test_start,
+            test_end=test_end,
+            beta_calculation_start=beta_calculation_start,
+            beta_hedge=beta_hedge,
+        )
 
-        if isinstance(score, pd.Series):
-            score = score.iloc[0]
-        if pd.isna(score):
-            return 0.0
-        return score
+        stats = calculate_stats(
+            df=data,
+            initial_cash=self.initial_cash,
+            interval=self.interval,
+            risk_free_rate_annual=self.risk_free_rate_annual,
+        )
 
-    except Exception as e:
-        print("Error in strategy run:", e)
-        return -1e9
+        return StrategyResult(
+            data=data,
+            ticker_x=self.ticker_x,
+            ticker_y=self.ticker_y,
+            start=test_start,
+            end=test_end,
+            interval=self.interval,
+            fee_rate=self.fee_rate,
+            rolling_window=rolling_window,
+            stats=stats,
+        )
 
+    def run_optimization(
+        self,
+        static_params: dict,
+        param_space: list,
+        metric: tuple[str, str],
+        opt_start: str,
+        opt_end: str,
+        opt_beta_calculation_start: str | None = None,
+        n_iter: int | None = None,
+        random_state: int | None = None,
+        replicates: int | None = None,
+        penalty_bad: int | None = None,
+    ) -> tuple[dict, float]:
 
-def optimize_params(ticker_x: str, ticker_y: str, fee_rate: float, initial_cash: float, position_size: float,
-                    pre_training_start: str, training_start: str, training_end: str, interval: str,
-                    beta_hedge: bool, is_spread: bool, risk_free_rate_annual: float, param_space: list,
-                    metric: tuple = ("sortino_ratio_annual", "0.05% fee")) -> tuple[dict, float]:
-    static_params = {
-        "ticker_x": ticker_x,
-        "ticker_y": ticker_y,
-        "fee_rate": fee_rate,
-        "initial_cash": initial_cash,
-        "position_size": position_size,
-        "pre_trading_start": pre_training_start,
-        "trading_start": training_start,
-        "trading_end": training_end,
-        "interval": interval,
-    }
+        if self.beta_hedge == "dynamic_hedge":
+            beta_hedge = "static_hedge"
+        else:
+            beta_hedge = None
 
-    wrapped_strategy = partial(
-        strategy_wrapper,
-        beta_hedge=beta_hedge,
-        is_spread=is_spread,
-        risk_free_rate_annual=risk_free_rate_annual,
-    )
+        def objective_wrapper(
+            rolling_window: int,
+            entry_threshold: float,
+            exit_threshold: float,
+            stop_loss: float,
+            **_kwargs,
+        ) -> float:
+            try:
+                result = self.run_strategy(
+                    rolling_window=int(rolling_window),
+                    entry_threshold=entry_threshold,
+                    exit_threshold=exit_threshold,
+                    stop_loss=stop_loss,
+                    test_start=opt_start,
+                    test_end=opt_end,
+                    beta_calculation_start=opt_beta_calculation_start,
+                    beta_hedge=beta_hedge,
+                )
 
-    best_params, best_score = random_search(
-        strategy_func=wrapped_strategy,
-        param_space=param_space,
-        static_params=static_params,
-        metric=metric,
-    )
-    return best_params, best_score
+                score = result.stats.loc[metric]
+
+                if isinstance(score, pd.Series):
+                    score = score.iloc[0]
+                if pd.isna(score):
+                    return penalty_bad
+                return score
+
+            except Exception as e:
+                print(f"Error in optimization run: {e}")
+                return penalty_bad
+
+        best_params, best_score = bayesian_search(
+            strategy_func=objective_wrapper,
+            param_space=param_space,
+            static_params=static_params,
+            metric=metric,
+            n_iter=n_iter,
+            random_state=random_state,
+            replicates=replicates,
+            penalty_bad=penalty_bad,
+        )
+
+        return best_params, best_score
