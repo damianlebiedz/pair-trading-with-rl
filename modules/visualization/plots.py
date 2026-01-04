@@ -35,12 +35,34 @@ def plot_zscore(
     plt.figure(figsize=(12, 6))
     sns.lineplot(x=df.index, y=df["z_score"], color="grey")
 
-    plt.plot(df.index, df["entry_thr"].astype(float), color="red", label="Entry Threshold")
+    plt.plot(
+        df.index, df["entry_thr"].astype(float), color="red", label="Entry Threshold"
+    )
     plt.plot(df.index, -df["entry_thr"].astype(float), color="red")
-    plt.plot(df.index, df["exit_thr"].astype(float), color="green", label="Exit Threshold")
+    plt.plot(
+        df.index, df["exit_thr"].astype(float), color="green", label="Exit Threshold"
+    )
     plt.plot(df.index, -df["exit_thr"].astype(float), color="green")
-    plt.plot(df.index, df["sl_thr"].astype(float), color="red", linestyle="--", label="SL Threshold")
-    plt.plot(df.index, -df["sl_thr"].astype(float), color="red", linestyle="--")
+
+    plt.plot(
+        df.index,
+        df["sl_thr"].astype(float),
+        color="red",
+        linestyle="--",
+        label="SL Threshold",
+        zorder=10,
+        marker="o",
+        markersize=1,
+    )
+    plt.plot(
+        df.index,
+        -df["sl_thr"].astype(float),
+        color="red",
+        linestyle="--",
+        zorder=10,
+        marker="o",
+        markersize=1,
+    )
 
     plt.title(f"Z-Score: {x}/{y}")
     plt.ylabel("Z-Score")

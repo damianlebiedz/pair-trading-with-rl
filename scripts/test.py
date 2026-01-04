@@ -2,16 +2,9 @@ import logging
 import hydra
 from omegaconf import DictConfig, OmegaConf
 
-from modules.data_services.data_utils import (
-    load_btc_benchmark,
-    save_strategy_result
-)
+from modules.data_services.data_utils import load_btc_benchmark, save_strategy_result
 from modules.performance.strategy import Strategy
-from modules.visualization.plots import (
-    plot_positions,
-    plot_zscore,
-    plot_pnl
-)
+from modules.visualization.plots import plot_positions, plot_zscore, plot_pnl
 
 logger = logging.getLogger(__name__)
 

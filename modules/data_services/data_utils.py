@@ -103,7 +103,7 @@ def save_strategy_result(result: StrategyResult, file_name: str) -> None:
         "interval": result.interval,
         "fee_rate": float(result.fee_rate),
         "rolling_window": int(result.rolling_window),
-        "stats_json": result.stats.to_json()
+        "stats_json": result.stats.to_json(),
     }
 
     custom_meta_key = "strategy_params".encode("utf-8")
@@ -147,3 +147,7 @@ def load_strategy_result(file_name: str) -> StrategyResult:
         rolling_window=meta["rolling_window"],
         stats=pd.read_json(StringIO(meta["stats_json"])),
     )
+
+
+def merge_multi_pair_results():
+    ...

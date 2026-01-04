@@ -12,6 +12,7 @@ class ExecutionContext:
 
 @dataclass
 class PositionState:
+    signal: int = 0
     position: float = 0
     prev_position: float = 0
     q_x: float = 0

@@ -81,7 +81,7 @@ class Strategy:
         test_start: str,
         test_end: str,
         beta_calculation_start: str | None = None,
-        beta_hedge: Literal["dynamic_hedge", "static_hedge"] | None = None,
+        beta_hedge: Literal["dynamic_hedge", "static_hedge", None] | None = None,
     ) -> pd.DataFrame:
         df = df.copy()
 
@@ -124,6 +124,8 @@ class Strategy:
 
         end_pos = df.index.get_loc(pd.to_datetime(test_end))
 
+        df["z_score"] = None
+
         for i in range(test_start_pos, len(df)):
             if total_pnl == -self.initial_cash:
                 df = df.iloc[:i].copy()
@@ -149,7 +151,12 @@ class Strategy:
             signal = generate_signal(entry_threshold=entry_threshold, z_score=z_score)
 
             if beta > 0:
-                position_state.position = signal
+                position_state.signal = signal
+
+            idx = df.index[i]
+            prev_z_score = (
+                0.0 if pd.isna(df.iloc[i - 1]["z_score"]) else df.iloc[i - 1]["z_score"]
+            )
 
             pnl, total_fees = TradeExecutor.execute(
                 ctx=self.exec_ctx,
@@ -157,8 +164,10 @@ class Strategy:
                 price_x=price_x,
                 price_y=price_y,
                 z_score=z_score,
+                prev_z_score=prev_z_score,
                 beta=beta,
                 total_fees=total_fees,
+                entry_threshold=entry_threshold,
                 exit_threshold=exit_threshold,
                 stop_loss=stop_loss,
             )
@@ -171,7 +180,6 @@ class Strategy:
             if total_pnl <= -self.initial_cash:
                 total_pnl = -self.initial_cash
 
-            idx = df.index[i]
             df.at[idx, "z_score"] = z_score
             df.at[idx, "beta"] = beta
             df.at[idx, "entry_thr"] = entry_threshold
@@ -181,7 +189,7 @@ class Strategy:
             df.at[idx, "q_y"] = position_state.q_y
             df.at[idx, "w_x"] = position_state.w_x
             df.at[idx, "w_y"] = position_state.w_y
-            df.at[idx, "signal"] = signal
+            df.at[idx, "signal"] = position_state.signal
             df.at[idx, "position"] = position_state.position
             df.at[idx, "total_return"] = total_pnl
             df.at[idx, "total_fees"] = total_fees
@@ -220,7 +228,7 @@ class Strategy:
             test_start=test_start,
             test_end=test_end,
             beta_calculation_start=beta_calculation_start,
-            beta_hedge = beta_hedge,
+            beta_hedge=beta_hedge,
         )
 
         stats = calculate_stats(
@@ -250,6 +258,10 @@ class Strategy:
         opt_start: str,
         opt_end: str,
         opt_beta_calculation_start: str | None = None,
+        n_iter: int | None = None,
+        random_state: int | None = None,
+        replicates: int | None = None,
+        penalty_bad: int | None = None,
     ) -> tuple[dict, float]:
 
         if self.beta_hedge == "dynamic_hedge":
@@ -258,11 +270,11 @@ class Strategy:
             beta_hedge = None
 
         def objective_wrapper(
-                rolling_window: int,
-                entry_threshold: float,
-                exit_threshold: float,
-                stop_loss: float,
-                **_kwargs,
+            rolling_window: int,
+            entry_threshold: float,
+            exit_threshold: float,
+            stop_loss: float,
+            **_kwargs,
         ) -> float:
             try:
                 result = self.run_strategy(
@@ -273,7 +285,7 @@ class Strategy:
                     test_start=opt_start,
                     test_end=opt_end,
                     beta_calculation_start=opt_beta_calculation_start,
-                    beta_hedge=beta_hedge
+                    beta_hedge=beta_hedge,
                 )
 
                 score = result.stats.loc[metric]
@@ -281,18 +293,22 @@ class Strategy:
                 if isinstance(score, pd.Series):
                     score = score.iloc[0]
                 if pd.isna(score):
-                    return 0.0
+                    return penalty_bad
                 return score
 
             except Exception as e:
                 print(f"Error in optimization run: {e}")
-                return -1e9
+                return penalty_bad
 
         best_params, best_score = bayesian_search(
             strategy_func=objective_wrapper,
             param_space=param_space,
             static_params=static_params,
             metric=metric,
+            n_iter=n_iter,
+            random_state=random_state,
+            replicates=replicates,
+            penalty_bad=penalty_bad,
         )
 
         return best_params, best_score

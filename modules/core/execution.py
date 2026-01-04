@@ -23,16 +23,13 @@ class TradeExecutor:
         price_x: float,
         price_y: float,
         z_score: float,
+        prev_z_score: float,
         beta: float,
         total_fees: float,
+        entry_threshold: float,
         exit_threshold: float,
         stop_loss: float,
     ) -> tuple[float, float]:
-        """
-        Main execution method.
-        Returns: (pnl_from_this_step, updated_total_fees)
-        Modifies the position_state object in place.
-        """
 
         # IN POSITION
         if position_state.prev_position != 0:
@@ -56,10 +53,28 @@ class TradeExecutor:
                     )
                 )
             ):
+                # OPEN REVERSE POSITION
+                if (position_state.prev_position < 0 < position_state.signal) or (
+                    position_state.prev_position > 0 > position_state.signal
+                ):
+                    pnl_close, total_fees_close = cls._close_position(
+                        ctx, position_state, price_x, price_y, total_fees
+                    )
+                    pnl_open, total_fees_open = cls._open_position(
+                        ctx,
+                        beta,
+                        z_score,
+                        position_state,
+                        price_x,
+                        price_y,
+                        total_fees,
+                        stop_loss,
+                    )
+                    return pnl_close + pnl_open, total_fees_close + total_fees_open
+
                 return cls._close_position(
                     ctx, position_state, price_x, price_y, total_fees
                 )
-
             # HOLD POSITION
             else:
                 return cls._hold_position(position_state, price_x, price_y, total_fees)
@@ -67,7 +82,9 @@ class TradeExecutor:
         # OUT OF POSITION
         else:
             # OPEN POSITION
-            if position_state.position != 0:
+            if (prev_z_score < entry_threshold and position_state.signal < 0) or (
+                prev_z_score > -entry_threshold and position_state.signal > 0
+            ):
                 return cls._open_position(
                     ctx,
                     beta,
@@ -101,10 +118,10 @@ class TradeExecutor:
             ctx.ticker_x, ctx.ticker_y, position_state.position
         )
 
-        if position_state.position > 0:
+        if position_state.signal > 0:
             qx = ctx.initial_cash * wx / (price_x * x_spread)
             qy = -(ctx.initial_cash * wy) / (price_y * y_spread)
-        elif position_state.position < 0:
+        elif position_state.signal < 0:
             qx = -(ctx.initial_cash * wx) / (price_x * x_spread)
             qy = ctx.initial_cash * wy / (price_y * y_spread)
         else:
@@ -118,7 +135,7 @@ class TradeExecutor:
         entry_dif = qx * (price_x * x_spread) + qy * (price_y * y_spread)
 
         position_state.update_position(
-            position=position_state.position,
+            position=position_state.signal,
             prev_position=position_state.prev_position,
             q_x=qx,
             q_y=qy,

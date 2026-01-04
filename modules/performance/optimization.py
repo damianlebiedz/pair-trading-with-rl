@@ -56,10 +56,11 @@ def bayesian_search(
     param_space: list,
     static_params: dict,
     metric: tuple[str, str],
-    n_iter: int = 100,
+    n_iter: int = 50,
     n_jobs: int = -1,
+    random_state: int = 42,
     replicates: int = 1,
-    penalty_bad: int = -1e2,
+    penalty_bad: int = -100,
 ) -> tuple[dict, float]:
     def objective(params_values):
         pdict = {dim.name: val for dim, val in zip(param_space, params_values)}
@@ -77,7 +78,6 @@ def bayesian_search(
                 scores.append(penalty_bad)
 
         avg_score = float(np.mean(scores))
-        # print(f"Score: {avg_score:.4f} | Params: {pdict}")
 
         return -avg_score
 
@@ -86,7 +86,7 @@ def bayesian_search(
         dimensions=param_space,
         n_calls=n_iter,
         n_jobs=n_jobs,
-        random_state=42,
+        random_state=random_state,
         verbose=True,
     )
 

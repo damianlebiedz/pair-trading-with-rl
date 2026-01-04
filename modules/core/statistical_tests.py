@@ -53,7 +53,7 @@ def pearson_correlation(
 
 
 def engle_granger_cointegration(
-        df: pd.DataFrame, source: Literal["prices", "log_prices"]
+    df: pd.DataFrame, source: Literal["prices", "log_prices"]
 ) -> pd.DataFrame:
     df_clean = df[df.columns].dropna()
     results = []

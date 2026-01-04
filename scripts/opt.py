@@ -41,13 +41,10 @@ def main(cfg: DictConfig):
         beta_hedge=beta_hedge,
     )
 
-    # TODO: zoptymalizować deklarowanie static_params i param_space (oba [] + instrukcja jak to robić)
-    static_params = {
-        "stop_loss": 1.2  # Disable SL
-    }
+    static_params = {"stop_loss": 2}
     param_space = [
-        Integer(10, 400, name="rolling_window"),  # TODO: rozwiązać problem rolling_window większego niż
-        Real(1.01, 4.00, name="entry_threshold"), # zakres (exception?)
+        Integer(10, 400, name="rolling_window"),  # UWAGA: nie może przekraczać zakresu danych!
+        Real(1.01, 4.00, name="entry_threshold"),
         Real(0.0, 1.00, name="exit_threshold"),
         # Real(1.01, 3.00, name="stop_loss"),
     ]
@@ -61,6 +58,10 @@ def main(cfg: DictConfig):
         opt_start=opt_start,
         opt_end=opt_end,
         opt_beta_calculation_start=opt_beta_calculation_start,
+        n_iter=cfg.performance.optimization.n_iter,
+        random_state=cfg.performance.optimization.random_state,
+        replicates=cfg.performance.optimization.replicates,
+        penalty_bad=cfg.performance.optimization.penalty_bad,
     )
 
     log = (best_params, best_score)

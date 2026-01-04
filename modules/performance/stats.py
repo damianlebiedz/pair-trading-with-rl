@@ -87,12 +87,14 @@ def calculate_stats(
         )
 
         # CAGR (Compound Annual Growth Rate)
-        years = len(equity_curve) / periods_per_year if len(equity_curve) > 0 else 0
-        cagr = (
-            ((equity_curve.iloc[-1] / equity_curve.iloc[0]) ** (1 / years) - 1)
-            if years > 0 and equity_curve.iloc[0] > 0
-            else 0.0
-        )
+        if len(equity_curve) > 0 and equity_curve.iloc[0] > 0:
+            years = len(equity_curve) / periods_per_year
+            if years <= 0 or equity_curve.iloc[-1] <= 0:
+                cagr = None
+            else:
+                cagr = (equity_curve.iloc[-1] / equity_curve.iloc[0]) ** (1 / years) - 1
+        else:
+            cagr = None
 
         # Sharpe ratio
         period_rf = (1 + risk_free_rate_annual) ** (1 / periods_per_year) - 1
@@ -154,7 +156,7 @@ def calculate_stats(
         slope, r2 = equity_slope_r2(equity_curve)
         slope_r2 = slope * r2 if slope is not None and r2 is not None else None
 
-        if total_trades < 30:
+        if total_trades < 15:
             slope_r2 = -1e2
 
         return {
@@ -177,6 +179,7 @@ def calculate_stats(
             "sortino_ratio_annual": sortino_ratio_annual,
             "calmar_ratio": calmar_ratio,
             "calmar_ratio_annual": calmar_ratio_annual,
+            "r2": r2,
             "equity_slope_r2": slope_r2,
         }
 
@@ -203,6 +206,7 @@ def calculate_stats(
         "sortino_ratio_annual",
         "calmar_ratio",
         "calmar_ratio_annual",
+        "r2",
         "equity_slope_r2",
     ]
 
@@ -215,3 +219,7 @@ def calculate_stats(
     ).set_index("metric")
 
     return stats_df.round(4)
+
+
+def calculate_multi_pair_stats():
+    ...
