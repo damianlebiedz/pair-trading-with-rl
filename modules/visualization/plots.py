@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 
 from modules.core.models import StrategyResult
+from modules.data_services.data_utils import _unique_path
 
 
 def get_project_root() -> Path:
@@ -12,18 +13,18 @@ def get_project_root() -> Path:
 
 
 def _resolve_results_dir(directory: str | None) -> Path:
-    base = get_project_root() / "results"
+    path = get_project_root() / "results" / "plots"
     if directory:
-        base = base / directory
-    base.mkdir(parents=True, exist_ok=True)
-    return base
+        path = path / directory
+    path.mkdir(parents=True, exist_ok=True)
+    return path
 
 
 def plot_zscore(
     result: StrategyResult,
     directory: str | None = None,
     save: bool = False,
-    show: bool = True,
+    show: bool = False,
 ) -> None:
     x, y = result.ticker_x, result.ticker_y
     start, end = result.start, result.end
@@ -34,22 +35,23 @@ def plot_zscore(
     plt.figure(figsize=(12, 6))
     sns.lineplot(x=df.index, y=df["z_score"], color="grey")
 
-    plt.plot(df.index, df["entry_thr"].astype(float), color="red", label="entry_thr")
+    plt.plot(df.index, df["entry_thr"].astype(float), color="red", label="Entry Threshold")
     plt.plot(df.index, -df["entry_thr"].astype(float), color="red")
-    plt.plot(df.index, df["exit_thr"].astype(float), color="green", label="exit_thr")
+    plt.plot(df.index, df["exit_thr"].astype(float), color="green", label="Exit Threshold")
     plt.plot(df.index, -df["exit_thr"].astype(float), color="green")
+    plt.plot(df.index, df["sl_thr"].astype(float), color="red", linestyle="--", label="SL Threshold")
+    plt.plot(df.index, -df["sl_thr"].astype(float), color="red", linestyle="--")
 
     plt.title(f"Z-Score: {x}/{y}")
     plt.ylabel("Z-Score")
     plt.xlabel("Date")
     plt.grid(True, alpha=0.3)
-    plt.xticks(rotation=45, ha="right")
     plt.xlim(df.index.min(), df.index.max())
     plt.legend(loc="lower right", fontsize="small")
 
     if save:
         filename = f"{x}_{y}_zscore_{start}_{end}_{interval}.png".replace(":", "-")
-        save_path = results_dir / filename
+        save_path = _unique_path(results_dir / filename)
         plt.savefig(save_path, dpi=150)
     if show:
         plt.show()
@@ -60,7 +62,7 @@ def plot_positions(
     result: StrategyResult,
     directory: str | None = None,
     save: bool = False,
-    show: bool = True,
+    show: bool = False,
 ) -> None:
     x, y, start, end, interval = (
         result.ticker_x,
@@ -72,21 +74,20 @@ def plot_positions(
     df = result.data
     results_dir = _resolve_results_dir(directory)
 
-    fig, ax = plt.subplots(figsize=(12, 3))
-    ax.plot(df.index, df["position"], color="white", linewidth=1.6)
-    ax.set_ylabel("Position", color="white")
+    fig, ax = plt.subplots(figsize=(12, 4))
+    ax.plot(df.index, df["position"], color="grey", linewidth=1.6)
+    ax.set_ylabel("Position")
     ax.set_yticks([-1, 0, 1])
-    ax.tick_params(axis="y", labelcolor="white")
-    ax.set_ylim(-1.5, 1.5)
+    ax.tick_params(axis="y")
+    ax.set_ylim(-1.2, 1.2)
     ax.set_xlabel("Date")
     ax.set_title(f"Position Over Time: {x}/{y}")
     ax.grid(True, alpha=0.3)
     ax.set_xlim(df.index.min(), df.index.max())
-    plt.xticks(rotation=45, ha="right")
 
     if save:
         filename = f"{x}_{y}_positions_{start}_{end}_{interval}.png".replace(":", "-")
-        save_path = results_dir / filename
+        save_path = _unique_path(results_dir / filename)
         plt.savefig(save_path, dpi=150)
     if show:
         plt.show()
@@ -98,7 +99,7 @@ def plot_pnl(
     btc_data: pd.DataFrame | None = None,
     directory: str | None = None,
     save: bool = False,
-    show: bool = True,
+    show: bool = False,
 ) -> None:
     x, y, start, end, interval = (
         result.ticker_x,
@@ -130,15 +131,14 @@ def plot_pnl(
         zorder=3,
     )
     ax1.set_xlabel("Date")
-    ax1.set_ylabel("Total Return", color="white")
-    ax1.tick_params(axis="y", labelcolor="white")
+    ax1.set_ylabel("Total Return")
+    ax1.tick_params(axis="y")
     plt.grid(True, alpha=0.3)
-    plt.xticks(rotation=45, ha="right")
 
     if btc_data is not None:
         ax1.plot(
             btc_data.index,
-            btc_data["BTC_cum_return"],
+            btc_data["BTC_c_return"],
             label="BTCUSDT total return",
             linewidth=1,
             linestyle="--",
@@ -152,7 +152,7 @@ def plot_pnl(
 
     if save:
         filename = f"{x}_{y}_return_{start}_{end}_{interval}.png".replace(":", "-")
-        save_path = results_dir / filename
+        save_path = _unique_path(results_dir / filename)
         plt.savefig(save_path, dpi=150)
     if show:
         plt.show()

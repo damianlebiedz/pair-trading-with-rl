@@ -27,16 +27,17 @@ class Strategy:
         initial_cash: float,
         risk_free_rate_annual: float,
         source: Literal["log", "c_returns", "c_log_returns", "c_norm_returns"],
-        beta_hedge: Literal["dynamic_hedge", "static_hedge"] | None = None,
+        beta_hedge: Literal["dynamic_hedge", "static_hedge", None],
     ):
-        if beta_hedge not in ["dynamic_hedge", "static_hedge", None]:
-            raise ValueError(
-                "Invalid beta_hedge: should be 'dynamic_hedge', 'static_hedge' or None"
-            )
 
         if source not in ["log", "c_returns", "c_log_returns", "c_norm_returns"]:
             raise ValueError(
                 "Invalid source: should be 'log', 'c_returns', 'c_log_returns', or 'c_norm_returns'"
+            )
+
+        if beta_hedge not in ["dynamic_hedge", "static_hedge", None]:
+            raise ValueError(
+                "Invalid beta_hedge: should be 'dynamic_hedge', 'static_hedge' or None"
             )
 
         self.ticker_x = ticker_x
@@ -47,8 +48,8 @@ class Strategy:
         self.fee_rate = fee_rate
         self.initial_cash = initial_cash
         self.risk_free_rate_annual = risk_free_rate_annual
-        self.beta_hedge = beta_hedge
         self.source = source
+        self.beta_hedge = beta_hedge
 
         self.exec_ctx = ExecutionContext(
             ticker_x=self.ticker_x,
@@ -204,7 +205,11 @@ class Strategy:
         test_start: str,
         test_end: str,
         beta_calculation_start: str | None = None,
+        beta_hedge: str | None = None,
     ) -> StrategyResult:
+
+        if beta_hedge is None:
+            beta_hedge = self.beta_hedge
 
         data = self._execute_loop(
             df=self.data,
@@ -215,7 +220,7 @@ class Strategy:
             test_start=test_start,
             test_end=test_end,
             beta_calculation_start=beta_calculation_start,
-            beta_hedge=self.beta_hedge,
+            beta_hedge = beta_hedge,
         )
 
         stats = calculate_stats(
@@ -233,23 +238,31 @@ class Strategy:
             end=test_end,
             interval=self.interval,
             fee_rate=self.fee_rate,
+            rolling_window=rolling_window,
             stats=stats,
         )
 
     def run_optimization(
         self,
-        opt_start: str,
-        opt_end: str,
         static_params: dict,
         param_space: list,
         metric: tuple[str, str],
+        opt_start: str,
+        opt_end: str,
+        opt_beta_calculation_start: str | None = None,
     ) -> tuple[dict, float]:
 
+        if self.beta_hedge == "dynamic_hedge":
+            beta_hedge = "static_hedge"
+        else:
+            beta_hedge = None
+
         def objective_wrapper(
-            rolling_window: int,
-            entry_threshold: float,
-            exit_threshold: float,
-            stop_loss: float,
+                rolling_window: int,
+                entry_threshold: float,
+                exit_threshold: float,
+                stop_loss: float,
+                **_kwargs,
         ) -> float:
             try:
                 result = self.run_strategy(
@@ -259,6 +272,8 @@ class Strategy:
                     stop_loss=stop_loss,
                     test_start=opt_start,
                     test_end=opt_end,
+                    beta_calculation_start=opt_beta_calculation_start,
+                    beta_hedge=beta_hedge
                 )
 
                 score = result.stats.loc[metric]

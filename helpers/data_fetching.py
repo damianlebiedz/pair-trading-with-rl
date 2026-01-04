@@ -123,8 +123,8 @@ if __name__ == "__main__":
     for ticker in tickers:
         fetch_data_from_binance(
             symbol=ticker,
-            interval="1m",
+            interval="1h",
             start_str="01.01.2024",
-            end_str="01.11.2025",
+            end_str="01.03.2025",
             date_format="%d.%m.%Y",
         )

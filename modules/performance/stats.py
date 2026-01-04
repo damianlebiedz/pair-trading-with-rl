@@ -129,12 +129,33 @@ def calculate_stats(
         calmar_ratio = total_return / abs(max_drawdown) if max_drawdown != 0 else None
         calmar_ratio_annual = cagr / abs(max_drawdown) if max_drawdown != 0 else None
 
-        # Sortino ratio annual * sqrt(number of trades)
-        sortino_annual_with_trades = (
-            sortino_ratio_annual * np.sqrt(total_wins + total_losses)
-            if sortino_ratio_annual is not None
-            else None
-        )
+        def equity_slope_r2(eq_curve: pd.Series) -> tuple[float | None, float | None]:
+            if len(eq_curve) < 2:
+                return None, None
+
+            eq = eq_curve[eq_curve > 0]
+            if len(eq) < 2:
+                return None, None
+
+            y = np.log(eq.values)
+            x = np.arange(len(y))
+
+            s, intercept = np.polyfit(x, y, 1)
+
+            y_hat = s * x + intercept
+            ss_res = np.sum((y - y_hat) ** 2)
+            ss_tot = np.sum((y - np.mean(y)) ** 2)
+
+            r_2 = 1.0 - float(ss_res) / float(ss_tot) if ss_tot != 0 else None
+
+            return s, r_2
+
+        # Equity slope and R^2
+        slope, r2 = equity_slope_r2(equity_curve)
+        slope_r2 = slope * r2 if slope is not None and r2 is not None else None
+
+        if total_trades < 30:
+            slope_r2 = -1e2
 
         return {
             "total_return": total_return,
@@ -156,7 +177,7 @@ def calculate_stats(
             "sortino_ratio_annual": sortino_ratio_annual,
             "calmar_ratio": calmar_ratio,
             "calmar_ratio_annual": calmar_ratio_annual,
-            "sortino_annual_with_trades": sortino_annual_with_trades,
+            "equity_slope_r2": slope_r2,
         }
 
     gross_stats = compute_stats(df["total_return"])
@@ -182,7 +203,7 @@ def calculate_stats(
         "sortino_ratio_annual",
         "calmar_ratio",
         "calmar_ratio_annual",
-        "sortino_annual_with_trades",
+        "equity_slope_r2",
     ]
 
     stats_df = pd.DataFrame(

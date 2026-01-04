@@ -1,10 +1,32 @@
 from functools import reduce
+from io import StringIO
 from pathlib import Path
 from typing import Literal
-
 import pandas as pd
+import pyarrow as pa
+import pyarrow.parquet as pq
+import json
 
-from modules.data_services.data_loaders import load_data
+from modules.core.models import StrategyResult
+from modules.data_services.data_loaders import load_data, get_project_root
+
+
+def _unique_path(path: Path) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    if not path.exists():
+        return path
+
+    stem = path.stem
+    suffix = path.suffix
+    parent = path.parent
+
+    i = 1
+    while True:
+        candidate = parent / f"{stem} ({i}){suffix}"
+        if not candidate.exists():
+            return candidate
+        i += 1
 
 
 def get_steps(
@@ -59,12 +81,69 @@ def load_btc_benchmark(test_start: str, test_end: str, interval: str) -> pd.Data
     return btc_data
 
 
-def save_to_parquet(df: pd.DataFrame, file_name: str) -> None:
-    PARQUET_DIR = Path.cwd() / "parquets"
-    PARQUET_DIR.mkdir(parents=True, exist_ok=True)
-    df.to_parquet(PARQUET_DIR / f"{file_name}.parquet")
+def save_dataframe(df: pd.DataFrame, file_name: str) -> None:
+    path = get_project_root() / "results" / f"{file_name}.parquet"
+    path = _unique_path(path)
+
+    df.to_parquet(path, engine="pyarrow", index=False)
 
 
-def load_parquet(file_name: str) -> pd.DataFrame:
-    PARQUET_DIR = Path.cwd() / "parquets"
-    return pd.read_parquet(PARQUET_DIR / f"{file_name}.parquet")
+def save_strategy_result(result: StrategyResult, file_name: str) -> None:
+    PARQUET_DIR = get_project_root() / "results"
+
+    path = PARQUET_DIR / f"{file_name}.parquet"
+    path = _unique_path(path)
+
+    table = pa.Table.from_pandas(df=result.data) # noqa
+    metadata = {
+        "ticker_x": result.ticker_x,
+        "ticker_y": result.ticker_y,
+        "start": result.start,
+        "end": result.end,
+        "interval": result.interval,
+        "fee_rate": float(result.fee_rate),
+        "rolling_window": int(result.rolling_window),
+        "stats_json": result.stats.to_json()
+    }
+
+    custom_meta_key = "strategy_params".encode("utf-8")
+    custom_meta_value = json.dumps(metadata).encode("utf-8")
+
+    existing_meta = table.schema.metadata or {}
+    new_meta = {**existing_meta, custom_meta_key: custom_meta_value}
+
+    table = table.replace_schema_metadata(new_meta)
+    pq.write_table(table, path)
+
+
+def load_dataframe(file_name: str) -> pd.DataFrame:
+    PARQUET_DIR = get_project_root() / "results"
+    path = PARQUET_DIR / f"{file_name}.parquet"
+
+    table = pq.read_table(path)
+    df = table.to_pandas()
+
+    return df
+
+
+def load_strategy_result(file_name: str) -> StrategyResult:
+    PARQUET_DIR = get_project_root() / "results"
+    path = PARQUET_DIR / f"{file_name}.parquet"
+
+    table = pq.read_table(path)
+    df = table.to_pandas()
+
+    raw_meta = table.schema.metadata.get(b"strategy_params")
+    meta = json.loads(raw_meta.decode("utf-8"))
+
+    return StrategyResult(
+        data=df,
+        ticker_x=meta["ticker_x"],
+        ticker_y=meta["ticker_y"],
+        start=meta["start"],
+        end=meta["end"],
+        interval=meta["interval"],
+        fee_rate=float(meta["fee_rate"]),
+        rolling_window=meta["rolling_window"],
+        stats=pd.read_json(StringIO(meta["stats_json"])),
+    )
