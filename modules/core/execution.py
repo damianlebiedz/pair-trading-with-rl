@@ -57,20 +57,20 @@ class TradeExecutor:
                 if (position_state.prev_position < 0 < position_state.signal) or (
                     position_state.prev_position > 0 > position_state.signal
                 ):
-                    pnl_close, total_fees_close = cls._close_position(
+                    pnl_close, total_fees_after_close = cls._close_position(
                         ctx, position_state, price_x, price_y, total_fees
                     )
-                    pnl_open, total_fees_open = cls._open_position(
+                    _, total_fees_final = cls._open_position(
                         ctx,
                         beta,
                         z_score,
                         position_state,
                         price_x,
                         price_y,
-                        total_fees,
+                        total_fees_after_close,
                         stop_loss,
                     )
-                    return pnl_close + pnl_open, total_fees_close + total_fees_open
+                    return pnl_close, total_fees_final
 
                 return cls._close_position(
                     ctx, position_state, price_x, price_y, total_fees

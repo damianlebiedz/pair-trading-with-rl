@@ -7,6 +7,8 @@ hydra:
     dir: logs
   output_subdir: null
 
+overwrite: true
+
 market:
   initial_cash: 100000
   fee_rate: 0.0005
@@ -35,11 +37,8 @@ pair_selection:
     - "UNIUSDT"
 
 performance:
-  ticker_x: "BNBUSDT"
-  ticker_y: "UNIUSDT"
-
   source: "log" # "log", "c_returns", "c_log_returns", "c_norm_returns"
-  beta_hedge: "static_hedge" # "dynamic_hedge", "static_hedge", None
+  beta_hedge: # "dynamic_hedge", "static_hedge", None (exactly nothing, like 'beta_hedge: ')
 
   optimization:
     beta_start: "2024-01-01"
@@ -47,7 +46,7 @@ performance:
     end: "2024-03-01"
 
     # Bayesian-Search parameters
-    n_iter: 50
+    n_iter: 100
     random_state: 42
     replicates: 1
     penalty_bad: -100

@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 @hydra.main(version_base=None, config_path="../conf", config_name="config")
-def opt(cfg: DictConfig) -> None:
+def opt_and_test(cfg: DictConfig) -> None:
     logger.info("CONFIG:\n%s", OmegaConf.to_yaml(cfg))
 
     interval = cfg.market.interval
@@ -26,6 +26,10 @@ def opt(cfg: DictConfig) -> None:
     opt_start = cfg.performance.optimization.start
     opt_end = cfg.performance.optimization.end
 
+    test_beta_calculation_start = cfg.performance.test.beta_start
+    test_start = cfg.performance.test.start
+    test_end = cfg.performance.test.end
+
     ticker_x = "BNBUSDT"
     ticker_y = "UNIUSDT"
 
@@ -35,7 +39,7 @@ def opt(cfg: DictConfig) -> None:
         ticker_x=ticker_x,
         ticker_y=ticker_y,
         start=opt_beta_calculation_start,
-        end=opt_end,
+        end=test_end,
         interval=interval,
         fee_rate=fee_rate,
         initial_cash=initial_cash,
@@ -43,6 +47,8 @@ def opt(cfg: DictConfig) -> None:
         source=source,
         beta_hedge=beta_hedge,
     )
+
+    # === OPTIMIZATION ===
 
     static_params = {
         # "stop_loss": 2
@@ -77,7 +83,7 @@ def opt(cfg: DictConfig) -> None:
     exit_threshold = best_params["exit_threshold"]
     stop_loss = best_params["stop_loss"]
 
-    result = bt.run_strategy(
+    result_opt = bt.run_strategy(
         rolling_window=rolling_window,
         entry_threshold=entry_threshold,
         exit_threshold=exit_threshold,
@@ -87,18 +93,40 @@ def opt(cfg: DictConfig) -> None:
         beta_calculation_start=opt_beta_calculation_start,
     )
 
-    parquet_file_name = f"opt_{ticker_x}_{ticker_y}"
-    save_strategy_result(result=result, file_name=parquet_file_name, overwrite=cfg.overwrite)
+    save_strategy_result(result=result_opt, file_name=f"opt_{ticker_x}_{ticker_y}", overwrite=cfg.overwrite)
 
-    plot_positions(result, directory="opt", save=True, overwrite=cfg.overwrite)
+    plot_positions(result_opt, directory="opt", save=True, overwrite=cfg.overwrite)
     btc_data = load_btc_benchmark(
         test_start=opt_start,
         test_end=opt_end,
         interval=interval,
     )
-    plot_pnl(result, btc_data, directory="opt", save=True, overwrite=cfg.overwrite)
-    plot_zscore(result, directory="opt", save=True, overwrite=cfg.overwrite)
+    plot_pnl(result_opt, btc_data, directory="opt", save=True, overwrite=cfg.overwrite)
+    plot_zscore(result_opt, directory="opt", save=True, overwrite=cfg.overwrite)
+
+    # === TEST ===
+
+    result_test = bt.run_strategy(
+        rolling_window=rolling_window,
+        entry_threshold=entry_threshold,
+        exit_threshold=exit_threshold,
+        stop_loss=stop_loss,
+        test_start=test_start,
+        test_end=test_end,
+        beta_calculation_start=test_beta_calculation_start,
+    )
+
+    save_strategy_result(result=result_test, file_name=f"test_{ticker_x}_{ticker_y}", overwrite=cfg.overwrite)
+
+    plot_positions(result_test, directory="test", save=True, overwrite=cfg.overwrite)
+    btc_data = load_btc_benchmark(
+        test_start=test_start,
+        test_end=test_end,
+        interval=interval,
+    )
+    plot_pnl(result_test, btc_data, directory="test", save=True, overwrite=cfg.overwrite)
+    plot_zscore(result_test, directory="test", save=True, overwrite=cfg.overwrite)
 
 
 if __name__ == "__main__":
-    opt()
+    opt_and_test()

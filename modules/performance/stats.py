@@ -1,6 +1,7 @@
 from typing import Literal
 import numpy as np
 import pandas as pd
+from sklearn.linear_model import LinearRegression
 
 from modules.data_services.data_utils import get_steps
 
@@ -154,10 +155,42 @@ def calculate_stats(
 
         # Equity slope and R^2
         slope, r2 = equity_slope_r2(equity_curve)
-        slope_r2 = slope * r2 if slope is not None and r2 is not None else None
 
-        if total_trades < 15:
-            slope_r2 = -1e2
+        # Objective
+        # Objective
+        def objective():
+            if total_trades == 0:
+                return -1e2
+
+            safe_returns = np.clip(trade_pnl / initial_cash, -0.99, None)
+            log_trade_returns = np.log(safe_returns + 1.0)
+            log_equity_curve = np.cumsum(log_trade_returns)
+
+            median_log_ret = np.median(log_trade_returns)
+
+            log_cum_max = np.maximum.accumulate(log_equity_curve)
+            log_drawdown = log_equity_curve - log_cum_max
+            max_log_dd = abs(np.min(log_drawdown))
+
+            def get_log_r2(le_curve):
+                if len(le_curve) < 5 or np.all(le_curve == le_curve[0]):
+                    return 0.0
+                y = le_curve
+                x = np.arange(len(y)).reshape(-1, 1)
+                lr: LinearRegression = LinearRegression().fit(x, y)
+                return float(lr.score(x, y))
+
+            r2_log = get_log_r2(log_equity_curve)
+
+            if total_trades >= 15:
+                score_base = median_log_ret / (max_log_dd + 1e-6)
+                obj = score_base * r2_log * np.log(total_trades)
+            else:
+                obj = -1e2
+
+            return obj
+
+        objective = objective()
 
         return {
             "total_return": total_return,
@@ -180,7 +213,8 @@ def calculate_stats(
             "calmar_ratio": calmar_ratio,
             "calmar_ratio_annual": calmar_ratio_annual,
             "r2": r2,
-            "equity_slope_r2": slope_r2,
+            "slope": slope,
+            "objective": objective,
         }
 
     gross_stats = compute_stats(df["total_return"])
@@ -207,7 +241,8 @@ def calculate_stats(
         "calmar_ratio",
         "calmar_ratio_annual",
         "r2",
-        "equity_slope_r2",
+        "slope",
+        "objective",
     ]
 
     stats_df = pd.DataFrame(

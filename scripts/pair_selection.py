@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 @hydra.main(version_base=None, config_path="../conf", config_name="config")
-def main(cfg: DictConfig):
+def pair_selection(cfg: DictConfig) -> None:
     interval = cfg.market.interval
 
     tickers = cfg.pair_selection.tickers
@@ -44,8 +44,9 @@ def main(cfg: DictConfig):
     save_dataframe(
         df=merged_df,
         file_name=f"pair_selection_{pair_selection_start}_{pair_selection_end}",
+        overwrite=cfg.overwrite,
     )
 
 
 if __name__ == "__main__":
-    main()
+    pair_selection()

@@ -174,6 +174,8 @@ class Strategy:
 
             if pnl != 0:
                 total_pnl = pnl + prev_pnl
+                if position_state.position != 0 and position_state.prev_position != position_state.position:
+                    prev_pnl = total_pnl
             else:
                 prev_pnl = total_pnl
 

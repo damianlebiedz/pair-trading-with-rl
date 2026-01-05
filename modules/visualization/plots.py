@@ -25,6 +25,8 @@ def plot_zscore(
     directory: str | None = None,
     save: bool = False,
     show: bool = False,
+    sl_thr: bool = False,
+    overwrite: bool = False,
 ) -> None:
     x, y = result.ticker_x, result.ticker_y
     start, end = result.start, result.end
@@ -44,25 +46,26 @@ def plot_zscore(
     )
     plt.plot(df.index, -df["exit_thr"].astype(float), color="green")
 
-    plt.plot(
-        df.index,
-        df["sl_thr"].astype(float),
-        color="red",
-        linestyle="--",
-        label="SL Threshold",
-        zorder=10,
-        marker="o",
-        markersize=1,
-    )
-    plt.plot(
-        df.index,
-        -df["sl_thr"].astype(float),
-        color="red",
-        linestyle="--",
-        zorder=10,
-        marker="o",
-        markersize=1,
-    )
+    if sl_thr:
+        plt.plot(
+            df.index,
+            df["sl_thr"].astype(float),
+            color="red",
+            linestyle="--",
+            label="SL Threshold",
+            zorder=10,
+            marker="o",
+            markersize=1,
+        )
+        plt.plot(
+            df.index,
+            -df["sl_thr"].astype(float),
+            color="red",
+            linestyle="--",
+            zorder=10,
+            marker="o",
+            markersize=1,
+        )
 
     plt.title(f"Z-Score: {x}/{y}")
     plt.ylabel("Z-Score")
@@ -73,7 +76,7 @@ def plot_zscore(
 
     if save:
         filename = f"{x}_{y}_zscore_{start}_{end}_{interval}.png".replace(":", "-")
-        save_path = _unique_path(results_dir / filename)
+        save_path = _unique_path(results_dir / filename, overwrite)
         plt.savefig(save_path, dpi=150)
     if show:
         plt.show()
@@ -85,6 +88,7 @@ def plot_positions(
     directory: str | None = None,
     save: bool = False,
     show: bool = False,
+    overwrite: bool = False,
 ) -> None:
     x, y, start, end, interval = (
         result.ticker_x,
@@ -109,7 +113,7 @@ def plot_positions(
 
     if save:
         filename = f"{x}_{y}_positions_{start}_{end}_{interval}.png".replace(":", "-")
-        save_path = _unique_path(results_dir / filename)
+        save_path = _unique_path(results_dir / filename, overwrite)
         plt.savefig(save_path, dpi=150)
     if show:
         plt.show()
@@ -122,6 +126,7 @@ def plot_pnl(
     directory: str | None = None,
     save: bool = False,
     show: bool = False,
+    overwrite: bool = False,
 ) -> None:
     x, y, start, end, interval = (
         result.ticker_x,
@@ -174,7 +179,7 @@ def plot_pnl(
 
     if save:
         filename = f"{x}_{y}_return_{start}_{end}_{interval}.png".replace(":", "-")
-        save_path = _unique_path(results_dir / filename)
+        save_path = _unique_path(results_dir / filename, overwrite)
         plt.savefig(save_path, dpi=150)
     if show:
         plt.show()
