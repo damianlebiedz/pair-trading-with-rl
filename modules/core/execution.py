@@ -164,10 +164,8 @@ class TradeExecutor:
         ) * (price_y * y_spread)
         pos_fees = exit_val * ctx.fee_rate
 
-        if position_state.prev_position < 0:
+        if position_state.prev_position != 0:
             pnl = exit_dif - position_state.entry_dif
-        elif position_state.prev_position > 0:
-            pnl = position_state.entry_dif - exit_dif
         else:
             raise ValueError("Cannot close the position while 'position' is 0")
 
@@ -182,10 +180,8 @@ class TradeExecutor:
     ) -> tuple[float, float]:
         curr_dif = position_state.q_x * price_x + position_state.q_y * price_y
 
-        if position_state.prev_position < 0:
+        if position_state.prev_position != 0:
             pnl = curr_dif - position_state.entry_dif
-        elif position_state.prev_position > 0:
-            pnl = position_state.entry_dif - curr_dif
         else:
             raise ValueError("Cannot hold the position while 'position' is 0")
 
