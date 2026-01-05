@@ -18,10 +18,12 @@ def test(cfg: DictConfig) -> None:
     initial_cash = cfg.market.initial_cash
     risk_free_rate = cfg.market.risk_free_rate_annual
 
+    window = cfg.performance.window
     source = cfg.performance.source
     beta_hedge = cfg.performance.beta_hedge
 
-    test_beta_calculation_start = cfg.performance.test.beta_start
+    pair_selection_start = cfg.pair_selection.start
+
     test_start = cfg.performance.test.start
     test_end = cfg.performance.test.end
 
@@ -33,12 +35,13 @@ def test(cfg: DictConfig) -> None:
     bt = Strategy(
         ticker_x=ticker_x,
         ticker_y=ticker_y,
-        start=test_beta_calculation_start,
+        start=pair_selection_start,
         end=test_end,
         interval=interval,
         fee_rate=fee_rate,
         initial_cash=initial_cash,
         risk_free_rate_annual=risk_free_rate,
+        window=window,
         source=source,
         beta_hedge=beta_hedge,
     )
@@ -46,16 +49,16 @@ def test(cfg: DictConfig) -> None:
     entry_threshold = 2.5
     exit_threshold = 0.8
     stop_loss = 1.2
-    rolling_window = 50
+    window_factor = 50
 
     result = bt.run_strategy(
-        rolling_window=rolling_window,
+        window_factor=window_factor,
         entry_threshold=entry_threshold,
         exit_threshold=exit_threshold,
         stop_loss=stop_loss,
         test_start=test_start,
         test_end=test_end,
-        beta_calculation_start=test_beta_calculation_start,
+        pair_selection_start=pair_selection_start,
     )
 
     parquet_file_name = f"test_{ticker_x}_{ticker_y}"

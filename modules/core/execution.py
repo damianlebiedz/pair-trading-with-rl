@@ -34,7 +34,12 @@ class TradeExecutor:
         # IN POSITION
         if position_state.prev_position != 0:
             # CLOSE POSITION (STOP LOSS OR TAKE PROFIT)
-            if (
+            if z_score is None:
+                # NO MEAN-REVERSION (FROM HALF-LIFE WINDOW CALCULATION)
+                return cls._close_position(
+                    ctx, position_state, price_x, price_y, total_fees
+                )
+            elif (
                 position_state.prev_position < 0
                 and (
                     z_score <= exit_threshold
@@ -81,8 +86,11 @@ class TradeExecutor:
 
         # OUT OF POSITION
         else:
+            # STAY OUT OF POSITION
+            if z_score is None:
+                return 0, total_fees
             # OPEN POSITION
-            if (prev_z_score < entry_threshold and position_state.signal < 0) or (
+            elif (prev_z_score < entry_threshold and position_state.signal < 0) or (
                 prev_z_score > -entry_threshold and position_state.signal > 0
             ):
                 return cls._open_position(

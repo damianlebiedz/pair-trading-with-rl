@@ -1,7 +1,7 @@
 import logging
 import hydra
 from omegaconf import DictConfig, OmegaConf
-from skopt.space import Integer, Real
+from skopt.space import Real
 
 from modules.data_services.data_utils import save_strategy_result, load_btc_benchmark
 from modules.performance.strategy import Strategy
@@ -19,14 +19,15 @@ def opt_and_test(cfg: DictConfig) -> None:
     initial_cash = cfg.market.initial_cash
     risk_free_rate = cfg.market.risk_free_rate_annual
 
+    window = cfg.performance.window
     source = cfg.performance.source
     beta_hedge = cfg.performance.beta_hedge
 
-    opt_beta_calculation_start = cfg.performance.optimization.beta_start
+    pair_selection_start = cfg.pair_selection.start
+
     opt_start = cfg.performance.optimization.start
     opt_end = cfg.performance.optimization.end
 
-    test_beta_calculation_start = cfg.performance.test.beta_start
     test_start = cfg.performance.test.start
     test_end = cfg.performance.test.end
 
@@ -38,12 +39,13 @@ def opt_and_test(cfg: DictConfig) -> None:
     bt = Strategy(
         ticker_x=ticker_x,
         ticker_y=ticker_y,
-        start=opt_beta_calculation_start,
+        start=pair_selection_start,
         end=test_end,
         interval=interval,
         fee_rate=fee_rate,
         initial_cash=initial_cash,
         risk_free_rate_annual=risk_free_rate,
+        window=window,
         source=source,
         beta_hedge=beta_hedge,
     )
@@ -54,7 +56,7 @@ def opt_and_test(cfg: DictConfig) -> None:
         # "stop_loss": 2
     }
     param_space = [
-        Integer(10, 200, name="rolling_window"),  # UWAGA: nie może przekraczać zakresu danych!
+        Real(0.5, 2, name="window_factor"),
         Real(1.01, 4.00, name="entry_threshold"),
         Real(0.0, 1.00, name="exit_threshold"),
         Real(1.01, 2.00, name="stop_loss"),
@@ -68,7 +70,7 @@ def opt_and_test(cfg: DictConfig) -> None:
         metric=metric,
         opt_start=opt_start,
         opt_end=opt_end,
-        opt_beta_calculation_start=opt_beta_calculation_start,
+        pair_selection_start=pair_selection_start,
         n_iter=cfg.performance.optimization.n_iter,
         random_state=cfg.performance.optimization.random_state,
         replicates=cfg.performance.optimization.replicates,
@@ -78,19 +80,19 @@ def opt_and_test(cfg: DictConfig) -> None:
     log = (best_params, best_score)
     logger.info(log)
 
-    rolling_window = best_params["rolling_window"]
+    window_factor = best_params["window_factor"]
     entry_threshold = best_params["entry_threshold"]
     exit_threshold = best_params["exit_threshold"]
     stop_loss = best_params["stop_loss"]
 
     result_opt = bt.run_strategy(
-        rolling_window=rolling_window,
+        window_factor=window_factor,
         entry_threshold=entry_threshold,
         exit_threshold=exit_threshold,
         stop_loss=stop_loss,
         test_start=opt_start,
         test_end=opt_end,
-        beta_calculation_start=opt_beta_calculation_start,
+        pair_selection_start=pair_selection_start,
     )
 
     save_strategy_result(result=result_opt, file_name=f"opt_{ticker_x}_{ticker_y}", overwrite=cfg.overwrite)
@@ -107,13 +109,13 @@ def opt_and_test(cfg: DictConfig) -> None:
     # === TEST ===
 
     result_test = bt.run_strategy(
-        rolling_window=rolling_window,
+        window_factor=window_factor,
         entry_threshold=entry_threshold,
         exit_threshold=exit_threshold,
         stop_loss=stop_loss,
         test_start=test_start,
         test_end=test_end,
-        beta_calculation_start=test_beta_calculation_start,
+        pair_selection_start=pair_selection_start,
     )
 
     save_strategy_result(result=result_test, file_name=f"test_{ticker_x}_{ticker_y}", overwrite=cfg.overwrite)

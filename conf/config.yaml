@@ -37,8 +37,9 @@ pair_selection:
     - "UNIUSDT"
 
 performance:
+  window: rolling # "rolling", "static", or int > 1
   source: "log" # "log", "c_returns", "c_log_returns", "c_norm_returns"
-  beta_hedge: # "dynamic_hedge", "static_hedge", None (exactly nothing, like 'beta_hedge: ')
+  beta_hedge: # "dynamic", "static", None (exactly nothing, like 'beta_hedge: ')
 
   optimization:
     beta_start: "2024-01-01"
