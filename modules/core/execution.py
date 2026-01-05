@@ -57,20 +57,20 @@ class TradeExecutor:
                 if (position_state.prev_position < 0 < position_state.signal) or (
                     position_state.prev_position > 0 > position_state.signal
                 ):
-                    pnl_close, total_fees_close = cls._close_position(
+                    pnl_close, total_fees_after_close = cls._close_position(
                         ctx, position_state, price_x, price_y, total_fees
                     )
-                    pnl_open, total_fees_open = cls._open_position(
+                    _, total_fees_final = cls._open_position(
                         ctx,
                         beta,
                         z_score,
                         position_state,
                         price_x,
                         price_y,
-                        total_fees,
+                        total_fees_after_close,
                         stop_loss,
                     )
-                    return pnl_close + pnl_open, total_fees_close + total_fees_open
+                    return pnl_close, total_fees_final
 
                 return cls._close_position(
                     ctx, position_state, price_x, price_y, total_fees
@@ -164,10 +164,8 @@ class TradeExecutor:
         ) * (price_y * y_spread)
         pos_fees = exit_val * ctx.fee_rate
 
-        if position_state.prev_position < 0:
+        if position_state.prev_position != 0:
             pnl = exit_dif - position_state.entry_dif
-        elif position_state.prev_position > 0:
-            pnl = position_state.entry_dif - exit_dif
         else:
             raise ValueError("Cannot close the position while 'position' is 0")
 
@@ -182,10 +180,8 @@ class TradeExecutor:
     ) -> tuple[float, float]:
         curr_dif = position_state.q_x * price_x + position_state.q_y * price_y
 
-        if position_state.prev_position < 0:
+        if position_state.prev_position != 0:
             pnl = curr_dif - position_state.entry_dif
-        elif position_state.prev_position > 0:
-            pnl = position_state.entry_dif - curr_dif
         else:
             raise ValueError("Cannot hold the position while 'position' is 0")
 

@@ -1,6 +1,7 @@
 from typing import Literal
 import numpy as np
 import pandas as pd
+from sklearn.linear_model import LinearRegression
 
 from modules.data_services.data_utils import get_steps
 
@@ -154,10 +155,62 @@ def calculate_stats(
 
         # Equity slope and R^2
         slope, r2 = equity_slope_r2(equity_curve)
-        slope_r2 = slope * r2 if slope is not None and r2 is not None else None
 
-        if total_trades < 15:
-            slope_r2 = -1e2
+        # Objective - Robust Median-Log-Sortino with R2
+        def objective():
+            """
+            Wzór:
+            Objective = (Median(ln(1+r)) / Downside_Deviation(ln(1+r))) * R2_log * ln(N)
+
+            Gdzie:
+            - Median(ln(1+r)): Typowy zysk ztransponowany na skalę logarytmiczną (wycina fuksy).
+            - Downside_Deviation: Odchylenie strat (Sortino) na log-zwrotach.
+            - R2_log: Liniowość wzrostu kapitału po logarytmowaniu.
+            - ln(N): Premia za liczbę transakcji (wiarygodność statystyczna).
+            """
+
+            if total_trades < 15:
+                return -1e2  # Kara za zbyt małą próbę statystyczną
+
+            # 1. Przygotowanie log-zwrotów (Neutralizacja outlierów i fuksów)
+            # Clip chroni przed logarytmowaniem wartości <= -1.0
+            safe_returns = np.clip(trade_pnl / initial_cash, -0.99, None)
+            log_returns = np.log(safe_returns + 1.0)
+
+            # 2. Mediana Log-Zwrotów (Licznik - typowa efektywność)
+            median_log_ret = np.median(log_returns)
+
+            # 3. Downside Deviation (Mianownik - ryzyko strat)
+            # Obliczamy zmienność tylko dla wyników ujemnych
+            losses = log_returns[log_returns < 0]
+            if len(losses) > 0:
+                # Standardowa formuła Sortino: pierwiastek średniej kwadratów strat
+                downside_dev = np.sqrt(np.mean(losses ** 2))
+            else:
+                downside_dev = 1e-6  # Idealny przypadek: brak strat w próbce
+
+            # 4. Logarytmiczne R^2 (Liniowość / Powtarzalność)
+            log_equity_curve = np.cumsum(log_returns)
+
+            def get_log_r2(le_curve):
+                # R2 wymaga zmienności; jeśli kapitał stoi w miejscu, R2 = 0
+                if len(le_curve) < 5 or np.all(le_curve == le_curve[0]):
+                    return 0.0
+                y = le_curve
+                x = np.arange(len(y)).reshape(-1, 1)
+                lr: LinearRegression = LinearRegression().fit(x, y)
+                return float(lr.score(x, y))
+
+            r2_log = get_log_r2(log_equity_curve)
+
+            # Medianowe Sortino * Liniowość * Logarytmiczna liczba tradów
+            median_sortino = median_log_ret / (downside_dev + 1e-6)
+
+            obj = median_sortino * r2_log * np.log(total_trades)
+
+            return obj
+
+        objective = objective()
 
         return {
             "total_return": total_return,
@@ -180,7 +233,8 @@ def calculate_stats(
             "calmar_ratio": calmar_ratio,
             "calmar_ratio_annual": calmar_ratio_annual,
             "r2": r2,
-            "equity_slope_r2": slope_r2,
+            "slope": slope,
+            "objective": objective,
         }
 
     gross_stats = compute_stats(df["total_return"])
@@ -207,7 +261,8 @@ def calculate_stats(
         "calmar_ratio",
         "calmar_ratio_annual",
         "r2",
-        "equity_slope_r2",
+        "slope",
+        "objective",
     ]
 
     stats_df = pd.DataFrame(

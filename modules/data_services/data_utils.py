@@ -11,10 +11,10 @@ from modules.core.models import StrategyResult
 from modules.data_services.data_loaders import load_data, get_project_root
 
 
-def _unique_path(path: Path) -> Path:
+def _unique_path(path: Path, overwrite: bool = False) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
 
-    if not path.exists():
+    if overwrite or not path.exists():
         return path
 
     stem = path.stem
@@ -81,18 +81,18 @@ def load_btc_benchmark(test_start: str, test_end: str, interval: str) -> pd.Data
     return btc_data
 
 
-def save_dataframe(df: pd.DataFrame, file_name: str) -> None:
+def save_dataframe(df: pd.DataFrame, file_name: str, overwrite: bool = False) -> None:
     path = get_project_root() / "results" / f"{file_name}.parquet"
-    path = _unique_path(path)
+    path = _unique_path(path, overwrite)
 
     df.to_parquet(path, engine="pyarrow", index=False)
 
 
-def save_strategy_result(result: StrategyResult, file_name: str) -> None:
+def save_strategy_result(result: StrategyResult, file_name: str, overwrite: bool = False) -> None:
     PARQUET_DIR = get_project_root() / "results"
 
     path = PARQUET_DIR / f"{file_name}.parquet"
-    path = _unique_path(path)
+    path = _unique_path(path, overwrite)
 
     table = pa.Table.from_pandas(df=result.data) # noqa
     metadata = {
