@@ -61,5 +61,5 @@ class StrategyResult:
     end: str
     interval: str
     fee_rate: float
-    rolling_window: int
+    window_factor: float
     stats: pd.DataFrame

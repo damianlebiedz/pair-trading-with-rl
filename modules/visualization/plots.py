@@ -4,7 +4,6 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 
 from modules.core.models import StrategyResult
-from modules.data_services.data_utils import _unique_path
 
 
 def get_project_root() -> Path:
@@ -13,9 +12,13 @@ def get_project_root() -> Path:
 
 
 def _resolve_results_dir(directory: str | None) -> Path:
-    path = get_project_root() / "results" / "plots"
-    if directory:
-        path = path / directory
+    if directory and (Path(directory).is_absolute() or "results" in str(directory)):
+        path = Path(directory)
+    else:
+        path = get_project_root() / "results" / "plots"
+        if directory:
+            path = path / directory
+
     path.mkdir(parents=True, exist_ok=True)
     return path
 
@@ -26,11 +29,9 @@ def plot_zscore(
     save: bool = False,
     show: bool = False,
     sl_thr: bool = False,
-    overwrite: bool = False,
 ) -> None:
     x, y = result.ticker_x, result.ticker_y
     start, end = result.start, result.end
-    interval = result.interval
     df = result.data
     results_dir = _resolve_results_dir(directory)
 
@@ -75,8 +76,8 @@ def plot_zscore(
     plt.legend(loc="lower right", fontsize="small")
 
     if save:
-        filename = f"{x}_{y}_zscore_{start}_{end}_{interval}.png".replace(":", "-")
-        save_path = _unique_path(results_dir / filename, overwrite)
+        filename = f"z_score_{x}_{y}_{start}_{end}.png".replace(":", "-")
+        save_path = results_dir / filename
         plt.savefig(save_path, dpi=150)
     if show:
         plt.show()
@@ -88,14 +89,12 @@ def plot_positions(
     directory: str | None = None,
     save: bool = False,
     show: bool = False,
-    overwrite: bool = False,
 ) -> None:
-    x, y, start, end, interval = (
+    x, y, start, end = (
         result.ticker_x,
         result.ticker_y,
         result.start,
         result.end,
-        result.interval,
     )
     df = result.data
     results_dir = _resolve_results_dir(directory)
@@ -112,8 +111,8 @@ def plot_positions(
     ax.set_xlim(df.index.min(), df.index.max())
 
     if save:
-        filename = f"{x}_{y}_positions_{start}_{end}_{interval}.png".replace(":", "-")
-        save_path = _unique_path(results_dir / filename, overwrite)
+        filename = f"positions_{x}_{y}_{start}_{end}.png".replace(":", "-")
+        save_path = results_dir / filename
         plt.savefig(save_path, dpi=150)
     if show:
         plt.show()
@@ -126,14 +125,12 @@ def plot_pnl(
     directory: str | None = None,
     save: bool = False,
     show: bool = False,
-    overwrite: bool = False,
 ) -> None:
-    x, y, start, end, interval = (
+    x, y, start, end = (
         result.ticker_x,
         result.ticker_y,
         result.start,
         result.end,
-        result.interval,
     )
     fee_rate = result.fee_rate
     df = result.data
@@ -178,8 +175,8 @@ def plot_pnl(
     ax1.set_title(f"Total Return: {x}/{y}")
 
     if save:
-        filename = f"{x}_{y}_return_{start}_{end}_{interval}.png".replace(":", "-")
-        save_path = _unique_path(results_dir / filename, overwrite)
+        filename = f"return_{x}_{y}_{start}_{end}.png".replace(":", "-")
+        save_path = results_dir / filename
         plt.savefig(save_path, dpi=150)
     if show:
         plt.show()

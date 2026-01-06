@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 import statsmodels.api as sm
 
@@ -43,3 +44,32 @@ def calculate_z_score(
     z_score = (spread - mean) / std
 
     return z_score
+
+
+def calculate_half_life_window(
+    x_col: str,
+    y_col: str,
+    beta: float,
+    df: pd.DataFrame,
+    window_factor: float,
+) -> int | None:
+    """Calculate Half-Life Window size with provided beta and window_factor."""
+    series = df[x_col] - (beta * df[y_col])
+
+    lag = series.shift(1)
+    ret = series - lag
+
+    lag = lag.iloc[1:]
+    ret = ret.iloc[1:]
+
+    X = sm.add_constant(lag)
+    model = sm.OLS(ret, X, missing="drop").fit()
+    lam = model.params.iloc[1]
+
+    if lam >= 0:
+        return None
+
+    half_life = -np.log(2) / lam
+    window = int(half_life * window_factor)
+
+    return window
