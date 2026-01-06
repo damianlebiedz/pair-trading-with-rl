@@ -8,5 +8,3 @@ data/*
 
 results/*
 !results/.ignore
-
-scripts/logs

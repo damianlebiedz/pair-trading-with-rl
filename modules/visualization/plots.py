@@ -90,12 +90,11 @@ def plot_positions(
     save: bool = False,
     show: bool = False,
 ) -> None:
-    x, y, start, end, interval = (
+    x, y, start, end = (
         result.ticker_x,
         result.ticker_y,
         result.start,
         result.end,
-        result.interval,
     )
     df = result.data
     results_dir = _resolve_results_dir(directory)
@@ -127,12 +126,11 @@ def plot_pnl(
     save: bool = False,
     show: bool = False,
 ) -> None:
-    x, y, start, end, interval = (
+    x, y, start, end = (
         result.ticker_x,
         result.ticker_y,
         result.start,
         result.end,
-        result.interval,
     )
     fee_rate = result.fee_rate
     df = result.data

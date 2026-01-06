@@ -2,7 +2,12 @@ from typing import Literal
 import pandas as pd
 
 from modules.core.execution import TradeExecutor
-from modules.core.indicators import calculate_z_score, generate_signal, calculate_beta, calculate_half_life_window
+from modules.core.indicators import (
+    calculate_z_score,
+    generate_signal,
+    calculate_beta,
+    calculate_half_life_window,
+)
 from modules.data_services.data_loaders import load_pair
 from modules.data_services.data_preparation import (
     add_log_prices,
@@ -31,20 +36,21 @@ class Strategy:
         window (str): Window mode: "fixed" (manual size), "rolling" (dynamic half-life), "static" (initial half-life).
         source (str): Data source type for beta or/and Z-score calculation.
         beta_hedge (str, optional): Hedge ratio mode: "dynamic", "static" or None.
-        """
+    """
+
     def __init__(
-            self,
-            ticker_x: str,
-            ticker_y: str,
-            start: str,
-            end: str,
-            interval: Literal["1d", "4h", "1h", "30m", "15m", "5m", "3m", "1m"],
-            fee_rate: float,
-            initial_cash: float,
-            risk_free_rate_annual: float,
-            window: Literal["rolling", "static", "fixed"],
-            source: Literal["log", "c_returns", "c_log_returns", "c_norm_returns"],
-            beta_hedge: Literal["dynamic", "static", None],
+        self,
+        ticker_x: str,
+        ticker_y: str,
+        start: str,
+        end: str,
+        interval: Literal["1d", "4h", "1h", "30m", "15m", "5m", "3m", "1m"],
+        fee_rate: float,
+        initial_cash: float,
+        risk_free_rate_annual: float,
+        window: Literal["rolling", "static", "fixed"],
+        source: Literal["log", "c_returns", "c_log_returns", "c_norm_returns"],
+        beta_hedge: Literal["dynamic", "static", None],
     ):
 
         if window not in ["rolling", "static", "fixed"]:
@@ -93,17 +99,17 @@ class Strategy:
         func_to_call(self.data, self.ticker_x, self.ticker_y)
 
     def _execute_loop(
-            self,
-            df: pd.DataFrame,
-            entry_threshold: float,
-            exit_threshold: float,
-            stop_loss: float,
-            test_start: str,
-            test_end: str,
-            window: Literal["rolling", "static", "fixed"],
-            window_factor: float | int,
-            beta_test_start: str,
-            beta_hedge: Literal["dynamic", "static", None] | None = None,
+        self,
+        df: pd.DataFrame,
+        entry_threshold: float,
+        exit_threshold: float,
+        stop_loss: float,
+        test_start: str,
+        test_end: str,
+        window: Literal["rolling", "static", "fixed"],
+        window_factor: float | int,
+        beta_test_start: str,
+        beta_hedge: Literal["dynamic", "static", None] | None = None,
     ) -> pd.DataFrame:
         df = df.copy()
 
@@ -155,7 +161,7 @@ class Strategy:
                 beta = calculate_beta(
                     x_col=source_x_col,
                     y_col=source_y_col,
-                    df=df.iloc[start_pos + i - test_start_pos: i],
+                    df=df.iloc[start_pos + i - test_start_pos : i],
                 )
 
             if window == "rolling":
@@ -163,7 +169,7 @@ class Strategy:
                     x_col=source_x_col,
                     y_col=source_y_col,
                     beta=beta,
-                    df=df.iloc[start_pos + i - test_start_pos: i],
+                    df=df.iloc[start_pos + i - test_start_pos : i],
                     window_factor=window_factor,
                 )
 
@@ -172,16 +178,20 @@ class Strategy:
                     x_col=source_x_col,
                     y_col=source_y_col,
                     beta=beta,
-                    df=df.iloc[i - win: i],
+                    df=df.iloc[i - win : i],
                 )
-                signal = generate_signal(entry_threshold=entry_threshold, z_score=z_score)
+                signal = generate_signal(
+                    entry_threshold=entry_threshold, z_score=z_score
+                )
             else:
                 z_score = None
                 signal = 0
 
             position_state.signal = signal
             idx = df.index[i]
-            prev_z_score = (0.0 if pd.isna(df.iloc[i - 1]["z_score"]) else df.iloc[i - 1]["z_score"])
+            prev_z_score = (
+                0.0 if pd.isna(df.iloc[i - 1]["z_score"]) else df.iloc[i - 1]["z_score"]
+            )
 
             pnl, total_fees = TradeExecutor.execute(
                 ctx=self.exec_ctx,
@@ -199,7 +209,10 @@ class Strategy:
 
             if pnl != 0:
                 total_pnl = pnl + prev_pnl
-                if position_state.position != 0 and position_state.prev_position != position_state.position:
+                if (
+                    position_state.position != 0
+                    and position_state.prev_position != position_state.position
+                ):
                     prev_pnl = total_pnl
             else:
                 prev_pnl = total_pnl
@@ -228,20 +241,20 @@ class Strategy:
         df["total_return_pct"] = df["total_return"] / self.initial_cash
         df["net_return_pct"] = df["net_return"] / self.initial_cash
 
-        df = df.iloc[test_start_pos: end_pos + 1].copy()
+        df = df.iloc[test_start_pos : end_pos + 1].copy()
 
         return df.drop(columns=[source_x_col, source_y_col])
 
     def run_strategy(
-            self,
-            window_factor: float | int,
-            entry_threshold: float,
-            exit_threshold: float,
-            stop_loss: float,
-            test_start: str,
-            test_end: str,
-            beta_test_start: str,
-            beta_hedge: str | None = None,
+        self,
+        window_factor: float | int,
+        entry_threshold: float,
+        exit_threshold: float,
+        stop_loss: float,
+        test_start: str,
+        test_end: str,
+        beta_test_start: str,
+        beta_hedge: str | None = None,
     ) -> StrategyResult:
         """
         Executes the strategy backtest with specific parameters.
@@ -302,17 +315,17 @@ class Strategy:
         )
 
     def run_optimization(
-            self,
-            static_params: dict,
-            param_space: list,
-            metric: tuple[str, str],
-            opt_start: str,
-            opt_end: str,
-            beta_opt_start: str,
-            n_iter: int | None = None,
-            random_state: int | None = None,
-            replicates: int | None = None,
-            penalty_bad: int | None = None,
+        self,
+        static_params: dict,
+        param_space: list,
+        metric: tuple[str, str],
+        opt_start: str,
+        opt_end: str,
+        beta_opt_start: str,
+        n_iter: int | None = None,
+        random_state: int | None = None,
+        replicates: int | None = None,
+        penalty_bad: int | None = None,
     ) -> tuple[dict, float]:
         """
         Runs Bayesian optimization to find the best parameter combination for the strategy.
@@ -360,11 +373,11 @@ class Strategy:
             beta_hedge = None
 
         def objective_wrapper(
-                window_factor: float | int,
-                entry_threshold: float,
-                exit_threshold: float,
-                stop_loss: float,
-                **_kwargs,
+            window_factor: float | int,
+            entry_threshold: float,
+            exit_threshold: float,
+            stop_loss: float,
+            **_kwargs,
         ) -> float:
             try:
                 result = self.run_strategy(

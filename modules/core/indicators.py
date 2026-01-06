@@ -47,11 +47,11 @@ def calculate_z_score(
 
 
 def calculate_half_life_window(
-        x_col: str,
-        y_col: str,
-        beta: float,
-        df: pd.DataFrame,
-        window_factor: float = 1.0,
+    x_col: str,
+    y_col: str,
+    beta: float,
+    df: pd.DataFrame,
+    window_factor: float,
 ) -> int | None:
     """
     Oblicza Half-Life DOKŁADNIE TEGO spreadu, którym handlujesz.

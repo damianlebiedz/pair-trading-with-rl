@@ -194,5 +194,4 @@ def calculate_stats(
     return stats_df.round(4)
 
 
-def calculate_multi_pair_stats():
-    ...
+def calculate_multi_pair_stats(): ...

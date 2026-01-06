@@ -1,27 +1,9 @@
-defaults:
-  - _self_
-  - agent: a2c_baseline
-
-hydra:
-  run:
-    dir: results/${now:%Y-%m-%d_%H-%M-%S}
-  output_subdir: null
-
-market:
-  initial_cash: 100000
-  fee_rate: 0.0005
-  risk_free_rate_annual: 0.01
-  interval: "1h"
-
 pair_selection:
   start: "2024-01-01"
   end: "2024-03-01"
 
-  tickers: [ "BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT", "ADAUSDT", "AVAXUSDT", "DOGEUSDT", "TRXUSDT",
-             "DOTUSDT", "LINKUSDT", "SHIBUSDT", "LTCUSDT", "BCHUSDT", "UNIUSDT" ]
-
 performance:
-  window: rolling # "rolling", "static", or int > 1
+  window: "static" # "rolling", "static" or "fixed"
   source: "log" # "log", "c_returns", "c_log_returns", "c_norm_returns"
   beta_hedge: # "dynamic", "static", None (exactly nothing -> 'beta_hedge: ')
 

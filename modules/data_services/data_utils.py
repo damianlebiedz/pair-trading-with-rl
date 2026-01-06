@@ -63,7 +63,9 @@ def load_btc_benchmark(test_start: str, test_end: str, interval: str) -> pd.Data
     return btc_data
 
 
-def save_dataframe(df: pd.DataFrame, file_name: str, directory: str | Path = None) -> None:
+def save_dataframe(
+    df: pd.DataFrame, file_name: str, directory: str | Path = None
+) -> None:
     if directory:
         target_dir = Path(directory)
     else:
@@ -74,7 +76,9 @@ def save_dataframe(df: pd.DataFrame, file_name: str, directory: str | Path = Non
     df.to_parquet(path, engine="pyarrow", index=False)
 
 
-def save_strategy_result(result: StrategyResult, file_name: str, directory: str | Path = None) -> None:
+def save_strategy_result(
+    result: StrategyResult, file_name: str, directory: str | Path = None
+) -> None:
     if directory:
         target_dir = Path(directory)
     else:
@@ -82,7 +86,7 @@ def save_strategy_result(result: StrategyResult, file_name: str, directory: str 
     target_dir.mkdir(parents=True, exist_ok=True)
     path = target_dir / f"{file_name}.parquet"
 
-    table = pa.Table.from_pandas(df=result.data) # noqa
+    table = pa.Table.from_pandas(df=result.data)  # noqa
     metadata = {
         "ticker_x": result.ticker_x,
         "ticker_y": result.ticker_y,
@@ -117,7 +121,9 @@ def load_dataframe(file_name: str, directory: str | None = None) -> pd.DataFrame
     return df
 
 
-def load_strategy_result(file_name: str, directory: str | None = None) -> StrategyResult:
+def load_strategy_result(
+    file_name: str, directory: str | None = None
+) -> StrategyResult:
     PARQUET_DIR = get_project_root() / "results"
     if directory:
         path = PARQUET_DIR / f"{directory}/{file_name}.parquet"
@@ -143,5 +149,4 @@ def load_strategy_result(file_name: str, directory: str | None = None) -> Strate
     )
 
 
-def merge_multi_pair_results():
-    ...
+def merge_multi_pair_results(): ...
