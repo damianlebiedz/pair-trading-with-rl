@@ -1,438 +1,417 @@
-from functools import partial
-import numpy as np
+from typing import Literal
 import pandas as pd
-import statsmodels.api as sm
 
-from config import RISK_FREE_ANNUAL
+from modules.core.execution import TradeExecutor
+from modules.core.indicators import (
+    calculate_z_score,
+    generate_signal,
+    calculate_beta,
+    calculate_half_life_window,
+)
 from modules.data_services.data_loaders import load_pair
-from modules.data_services.data_models import Pair
-from modules.data_services.data_utils import get_steps, add_returns
-from modules.performance.param_optimization import random_search
-from modules.performance.data_models import PositionState, StrategyParams
+from modules.data_services.data_preparation import (
+    add_log_prices,
+    add_c_norm_returns,
+    add_c_returns,
+    add_c_log_returns,
+)
+from modules.performance.optimization import bayesian_search
+from modules.core.models import PositionState, ExecutionContext, StrategyResult
+from modules.performance.stats import calculate_stats
 
 
-def generate_signal(entry_threshold: float, z_score: float) -> Pair:
-    signal = 0
-    if z_score is not None:
-        if z_score <= -entry_threshold:
-            signal = 1  # Long X Short Y
-        elif z_score >= entry_threshold:
-            signal = -1  # Short X Long Y
-    return signal
+class Strategy:
+    """
+    Main class for Strategy execution.
 
+    Args:
+        ticker_x (str): Ticker for asset X.
+        ticker_y (str): Ticker for asset Y.
+        start (str): Data start date.
+        end (str): Data end date.
+        interval (str): Data timeframe.
+        fee_rate (float): Transaction fee rate (e.g., 0.001 for 0.1%).
+        initial_cash (float): Starting capital (the same for every trade).
+        risk_free_rate_annual (float): Annual risk-free rate.
+        window (str): Window mode: "fixed" (manual size), "rolling" (dynamic half-life), "static" (initial half-life).
+        source (str): Data source type for beta or/and Z-score calculation.
+        beta_hedge (str, optional): Hedge ratio mode: "dynamic", "static" or None.
+    """
 
-def get_spread(x: str, y: str, position: float) -> tuple[float, float]:  # TODO
-    if position == 0:
-        # SPREAD FOR POSITION CLOSING
-        ...
-    elif position > 0:
-        # SPREAD FOR POSITIVE POSITION OPENING
-        ...
-    else:
-        # SPREAD FOR NEGATIVE POSITION OPENING
-        ...
-    return 1, 1
+    def __init__(
+        self,
+        ticker_x: str,
+        ticker_y: str,
+        start: str,
+        end: str,
+        interval: Literal["1d", "4h", "1h", "30m", "15m", "5m", "3m", "1m"],
+        fee_rate: float,
+        initial_cash: float,
+        risk_free_rate_annual: float,
+        window: Literal["rolling", "static", "fixed"],
+        source: Literal["log", "c_returns", "c_log_returns", "c_norm_returns"],
+        beta_hedge: Literal["dynamic", "static", None],
+    ):
 
+        if window not in ["rolling", "static", "fixed"]:
+            raise ValueError("Invalid window: should be 'rolling', 'static' or 'fixed'")
 
-def generate_trade(x: str, y: str, z_score: float, beta: float, pair: Pair, position_state: PositionState,
-                   strategy_params: StrategyParams, price_x: float, price_y: float, total_fees: float,
-                   is_spread: bool) -> tuple[float, float]:
-    prev_position = position_state.prev_position
-    q_x = position_state.q_x
-    q_y = position_state.q_y
+        if source not in ["log", "c_returns", "c_log_returns", "c_norm_returns"]:
+            raise ValueError(
+                "Invalid source: should be 'log', 'c_returns', 'c_log_returns', or 'c_norm_returns'"
+            )
 
-    exit_threshold = strategy_params.exit_threshold
-    stop_loss = strategy_params.stop_loss
-    fee_rate = pair.fee_rate
-    initial_cash = pair.initial_cash
+        if beta_hedge not in ["dynamic", "static", None]:
+            raise ValueError(
+                "Invalid beta_hedge: should be 'dynamic', 'static' or None"
+            )
 
-    def open_position() -> tuple[float, float, float, float, float, float, float]:
-        wx = 1 / (beta + 1)
-        wy = 1 - wx
+        self.ticker_x = ticker_x
+        self.ticker_y = ticker_y
+        self.start = start
+        self.end = end
+        self.interval = interval
+        self.fee_rate = fee_rate
+        self.initial_cash = initial_cash
+        self.risk_free_rate_annual = risk_free_rate_annual
+        self.window = window
+        self.source = source
+        self.beta_hedge = beta_hedge
 
-        position_cash = abs(position_state.position) * initial_cash
-        x_spread, y_spread = get_spread(x, y, position_state.position) if is_spread else 1, 1
+        self.exec_ctx = ExecutionContext(
+            ticker_x=self.ticker_x,
+            ticker_y=self.ticker_y,
+            initial_cash=self.initial_cash,
+            fee_rate=self.fee_rate,
+        )
 
-        if position_state.position > 0:
-            qx = position_cash * wx / (price_x * x_spread)
-            qy = -(position_cash * wy) / (price_y * y_spread)
-        elif position_state.position < 0:
-            qx = -(position_cash * wx) / (price_x * x_spread)
-            qy = position_cash * wy / (price_y * y_spread)
-        else:
-            raise ValueError("Position cannot be 0 while opening")
+        self.data = load_pair(
+            x=ticker_x, y=ticker_y, start=start, end=end, interval=interval
+        )
 
-        entry_value = abs(qx) * price_x + abs(qy) * price_y
-        pos_fees = entry_value * fee_rate
-        t_fees = total_fees + pos_fees
-        stop_loss_thr = abs(z_score * stop_loss)
-        return qx, qy, wx, wy, entry_value, stop_loss_thr, t_fees
+        source_map = {
+            "c_norm_returns": add_c_norm_returns,
+            "c_returns": add_c_returns,
+            "c_log_returns": add_c_log_returns,
+            "log": add_log_prices,
+        }
+        func_to_call = source_map[self.source]
+        func_to_call(self.data, self.ticker_x, self.ticker_y)
 
-    def close_position() -> tuple[float, float]:
-        x_spread, y_spread = get_spread(x, y, 0) if is_spread else 1, 1
-        exit_value = abs(q_x) * (price_x * x_spread) + abs(q_y) * (price_y * y_spread)
-        pos_fees = exit_value * fee_rate
-        if position_state.prev_position > 0:
-            pos_pnl = exit_value - position_state.entry_val
-        elif position_state.prev_position < 0:
-            pos_pnl = position_state.entry_val - exit_value
-        else:
-            raise ValueError("Position cannot be 0 while closing")
-        t_fees = total_fees + pos_fees
-        return pos_pnl, t_fees
+    def _execute_loop(
+        self,
+        df: pd.DataFrame,
+        entry_threshold: float,
+        exit_threshold: float,
+        stop_loss: float,
+        test_start: str,
+        test_end: str,
+        window: Literal["rolling", "static", "fixed"],
+        window_factor: float | int,
+        beta_test_start: str,
+        beta_hedge: Literal["dynamic", "static", None] | None = None,
+    ) -> pd.DataFrame:
+        df = df.copy()
 
-    # IN POSITION
-    if prev_position != 0:
-        # CLOSE POSITION (STOP LOSS OR TAKE PROFIT)
-        if (
-                prev_position < 0 and (
-                z_score <= exit_threshold or (
-                position_state.stop_loss_threshold is not None and z_score >= position_state.stop_loss_threshold))) or (
-                prev_position > 0 and (
-                z_score >= -exit_threshold or (
-                position_state.stop_loss_threshold is not None and z_score <= -position_state.stop_loss_threshold))
-        ):
-            pnl, total_fees = close_position()
-            position_state.clear_position()
-        # STAY IN POSITION
-        else:
-            exit_val = abs(q_x) * price_x + abs(q_y) * price_y
-            if prev_position > 0:
-                pnl = exit_val - position_state.entry_val
-            else:
-                pnl = position_state.entry_val - exit_val
-            position_state.position = prev_position
-    # OUT OF POSITION
-    else:
-        # OPEN POSITION
-        if position_state.position != 0:
-            q_x, q_y, w_x, w_y, entry_val, stop_loss_threshold, total_fees = open_position()
-            position_state.update_position(position_state.position, prev_position, q_x, q_y, w_x, w_y, entry_val,
-                                           stop_loss_threshold)
-            pnl = 0
-        # STAY OUT OF POSITION
-        else:
-            pnl = 0
-    return pnl, total_fees
+        x_col = self.ticker_x
+        y_col = self.ticker_y
+        source_x_col = f"{x_col}_{self.source}"
+        source_y_col = f"{y_col}_{self.source}"
 
+        total_fees = 0.0
+        total_pnl = 0.0
+        prev_pnl = 0.0
+        position_state = PositionState()
 
-def calculate_beta_returns(x_returns: str, y_returns: str, df: pd.DataFrame) -> float:
-    X = sm.add_constant(df[y_returns])
-    y = df[x_returns]
-    model = sm.OLS(y, X, missing="drop").fit()
+        test_start_pos = df.index.get_loc(pd.to_datetime(test_start))
+        start_pos = df.index.get_loc(pd.to_datetime(beta_test_start))
 
-    beta = model.params[y_returns]
-    return beta
+        beta = 1.0
+        if beta_hedge == "static":
+            beta = calculate_beta(
+                x_col=source_x_col,
+                y_col=source_y_col,
+                df=df.iloc[start_pos:test_start_pos],
+            )
 
+        win = 0
+        if window == "fixed":
+            win = int(window_factor)
+        elif window == "static":
+            win = calculate_half_life_window(
+                x_col=source_x_col,
+                y_col=source_y_col,
+                beta=beta,
+                df=df.iloc[start_pos:test_start_pos],
+                window_factor=window_factor,
+            )
 
-def calculate_zscore_prices(x_price: str, y_price: str, beta: float, df: pd.DataFrame) -> float:
-    spread_series = df[x_price] - (beta * df[y_price])
-    mean = spread_series.mean()
-    std = spread_series.std()
-    spread = spread_series.iloc[-1]
-    if std == 0:
-        return None
+        end_pos = df.index.get_loc(pd.to_datetime(test_end))
+        df["z_score"] = None
 
-    z_score = (spread - mean) / std
-    return z_score
-
-
-def single_pair_strategy(pair: Pair, rolling_window: int, entry_threshold: float = None, exit_threshold: float = None,
-                         stop_loss: float = None, pos_size: float = None, beta_hedge: bool = False,
-                         is_spread: bool = False) -> Pair:
-    df = pair.data.copy()
-    x_col, y_col = pair.x, pair.y
-    initial_cash = pair.initial_cash
-
-    total_fees = 0.0
-    total_pnl = 0.0
-    prev_pnl = 0.0
-
-    position_state = PositionState()
-    strategy_params = StrategyParams
-
-    if pair.test_start is not None:
-        start_pos = df.index.get_loc(pd.to_datetime(pair.test_start))
-    else:
-        raise ValueError("Test start must be set to run the strategy")
-    if start_pos - rolling_window + 1 < 0:
-        raise ValueError("Rolling window cannot be bigger than pre-training period")
-    df = df.iloc[start_pos - rolling_window + 1:]
-    first_pos = rolling_window - 1
-    last_pos = df.index.get_loc(pd.to_datetime(pair.end))
-
-    for i in range(first_pos, last_pos + 1):
-        if total_pnl == -initial_cash:
-            # BANKRUPT
-            df = df.iloc[:i].copy()
-            break
-        else:
-            prev_pos = position_state.prev_position
+        for i in range(test_start_pos, len(df)):
+            if total_pnl == -self.initial_cash:
+                df = df.iloc[:i].copy()
+                break
 
             price_x = df[x_col].iloc[i]
             price_y = df[y_col].iloc[i]
 
-            if all(x is None for x in [entry_threshold, exit_threshold, stop_loss, pos_size, rolling_window]):
-                # TODO: Agent
-                entry_threshold = ...  # [-inf,+inf]
-                exit_threshold = ...  # [-inf,+inf]
-                stop_loss = ...  # > entry_threshold
+            if beta_hedge == "dynamic":
+                beta = calculate_beta(
+                    x_col=source_x_col,
+                    y_col=source_y_col,
+                    df=df.iloc[start_pos + i - test_start_pos : i],
+                )
 
-            strategy_params.entry_threshold = entry_threshold
-            strategy_params.exit_threshold = exit_threshold
-            strategy_params.stop_loss = stop_loss
+            if window == "rolling":
+                win = calculate_half_life_window(
+                    x_col=source_x_col,
+                    y_col=source_y_col,
+                    beta=beta,
+                    df=df.iloc[start_pos + i - test_start_pos : i],
+                    window_factor=window_factor,
+                )
 
-            if beta_hedge:
-                beta = calculate_beta_returns(
-                    f"{x_col}_returns", f"{y_col}_returns", df.iloc[i - rolling_window + 1:i + 1]
+            if win is not None and beta > 0 and 2 <= win <= i:
+                z_score = calculate_z_score(
+                    x_col=source_x_col,
+                    y_col=source_y_col,
+                    beta=beta,
+                    df=df.iloc[i - win : i],
+                )
+                signal = generate_signal(
+                    entry_threshold=entry_threshold, z_score=z_score
                 )
             else:
-                beta = 1
-            z_score = calculate_zscore_prices(
-                x_col, y_col, beta, df.iloc[i - rolling_window + 1:i + 1]
+                z_score = None
+                signal = 0
+
+            position_state.signal = signal
+            idx = df.index[i]
+            prev_z_score = (
+                0.0 if pd.isna(df.iloc[i - 1]["z_score"]) else df.iloc[i - 1]["z_score"]
             )
 
-            signal = generate_signal(entry_threshold, z_score)
-
-            if pos_size is None:
-                if prev_pos == 0 and signal != 0:
-                    # TODO: Agent
-                    pos_size = ...  # [-1,1]
-
-            if beta is not None and beta >= 0:
-                position_state.position = signal * pos_size
-
-            strategy_params.pos_size = pos_size
-
-            pnl, total_fees = generate_trade(
-                x_col, y_col, z_score, beta, pair, position_state, strategy_params, price_x, price_y, total_fees,
-                is_spread
+            pnl, total_fees = TradeExecutor.execute(
+                ctx=self.exec_ctx,
+                position_state=position_state,
+                price_x=price_x,
+                price_y=price_y,
+                z_score=z_score,
+                prev_z_score=prev_z_score,
+                beta=beta,
+                total_fees=total_fees,
+                entry_threshold=entry_threshold,
+                exit_threshold=exit_threshold,
+                stop_loss=stop_loss,
             )
 
             if pnl != 0:
                 total_pnl = pnl + prev_pnl
+                if (
+                    position_state.position != 0
+                    and position_state.prev_position != position_state.position
+                ):
+                    prev_pnl = total_pnl
             else:
                 prev_pnl = total_pnl
 
-        if total_pnl <= -initial_cash:
-            total_pnl = -initial_cash
+            if total_pnl <= -self.initial_cash:
+                total_pnl = -self.initial_cash
 
-        idx = df.index[i]
-        df.at[idx, 'z_score'] = z_score
-        df.at[idx, 'beta'] = beta
-        df.at[idx, 'entry_thr'] = strategy_params.entry_threshold
-        df.at[idx, 'exit_thr'] = strategy_params.exit_threshold
-        df.at[idx, 'sl_thr'] = position_state.stop_loss_threshold
-        df.at[idx, 'w_x'] = position_state.w_x
-        df.at[idx, 'w_y'] = position_state.w_y
-        df.at[idx, 'q_x'] = position_state.q_x
-        df.at[idx, 'q_y'] = position_state.q_y
-        # df.at[idx, 'cash'] = initial_cash - position_state.entry_val
-        # df.at[idx, 'signal'] = signal
-        # df.at[idx, 'prev_position'] = position_state.prev_position
-        df.at[idx, 'position'] = position_state.position
-        df.at[idx, 'total_return'] = total_pnl
-        df.at[idx, 'total_fees'] = total_fees
-        df.at[idx, 'net_return'] = total_pnl - total_fees
+            df.at[idx, "z_score"] = z_score
+            df.at[idx, "window"] = win
+            df.at[idx, "beta"] = beta
+            df.at[idx, "entry_thr"] = entry_threshold
+            df.at[idx, "exit_thr"] = exit_threshold
+            df.at[idx, "sl_thr"] = position_state.stop_loss_threshold
+            df.at[idx, "q_x"] = position_state.q_x
+            df.at[idx, "q_y"] = position_state.q_y
+            df.at[idx, "w_x"] = position_state.w_x
+            df.at[idx, "w_y"] = position_state.w_y
+            df.at[idx, "signal"] = position_state.signal
+            df.at[idx, "position"] = position_state.position
+            df.at[idx, "total_return"] = total_pnl
+            df.at[idx, "total_fees"] = total_fees
+            df.at[idx, "net_return"] = total_pnl - total_fees
 
-        position_state.prev_position = position_state.position
+            position_state.prev_position = position_state.position
 
-    df['total_return_pct'] = df['total_return'] / initial_cash
-    df['net_return_pct'] = df['net_return'] / initial_cash
+        df["total_return_pct"] = df["total_return"] / self.initial_cash
+        df["net_return_pct"] = df["net_return"] / self.initial_cash
 
-    pair.data = df[rolling_window - 1:].drop(
-        columns=[f'{x_col}_returns', f'{y_col}_returns', f'{x_col}_log_returns', f'{y_col}_log_returns']).round(4)
-    return pair
+        df = df.iloc[test_start_pos : end_pos + 1].copy()
 
+        return df.drop(columns=[source_x_col, source_y_col])
 
-def calculate_stats(pair: Pair) -> pd.DataFrame:
-    df = pair.data.copy()
-    fee_rate = pair.fee_rate
-    initial_cash = pair.initial_cash
+    def run_strategy(
+        self,
+        window_factor: float | int,
+        entry_threshold: float,
+        exit_threshold: float,
+        stop_loss: float,
+        test_start: str,
+        test_end: str,
+        beta_test_start: str,
+        beta_hedge: str | None = None,
+    ) -> StrategyResult:
+        """
+        Executes the strategy backtest with specific parameters.
 
-    steps_per_day = get_steps(pair.interval)
-    periods_per_year = steps_per_day * 365
+        Args:
+            window_factor (float | int): Dual-purpose parameter controlling the lookback window.
+                The interpretation depends strictly on the `window` mode defined in `__init__`:
+                * If window="fixed":
+                    `window_factor` is the exact window size (Integer).
+                    Example: `100` means the strategy looks back exactly 100 bars.
+                * If window="rolling" or "static":
+                    `window_factor` is the Half-Life multiplier (Float).
+                    Example: `2.5` means the window size is calculated as `2.5 * Half_Life`.
+            entry_threshold (float): Z-score threshold to open a position.
+            exit_threshold (float): Z-score threshold to close a position.
+            stop_loss (float): Stop loss percentage (e.g., 0.05 for 5%).
+            test_start (str): Start date for the backtest loop.
+            test_end (str): End date for the backtest loop.
+            beta_test_start (str): Start date for beta and Z-score window calculation.
+            beta_hedge (str, optional): Override for beta_hedge mode.
 
-    def calc_trade_array(pnl_series: pd.Series, position_series: pd.Series) -> np.array:
-        prev = 0
-        open_idx = None
-        trade_pnl = []
+        Returns:
+            StrategyResult: Object containing backtest data and performance statistics.
+        """
+        if beta_hedge is None:
+            beta_hedge = self.beta_hedge
 
-        for i in range(len(pnl_series)):
-            pos = position_series.iloc[i]
+        data = self._execute_loop(
+            df=self.data,
+            entry_threshold=entry_threshold,
+            exit_threshold=exit_threshold,
+            stop_loss=stop_loss,
+            test_start=test_start,
+            test_end=test_end,
+            window=self.window,
+            window_factor=window_factor,
+            beta_test_start=beta_test_start,
+            beta_hedge=beta_hedge,
+        )
 
-            if prev == 0 and pos != 0:
-                open_idx = i
-            elif (prev < 0 <= pos) or (prev > 0 >= pos) or (prev != 0 and i == len(position_series) - 1):
-                if open_idx is not None:
-                    pnl = pnl_series.iloc[i] - pnl_series.iloc[open_idx]
-                    trade_pnl.append(pnl)
-                open_idx = i if pos != 0 else None
-            prev = pos
+        stats = calculate_stats(
+            df=data,
+            initial_cash=self.initial_cash,
+            interval=self.interval,
+            risk_free_rate_annual=self.risk_free_rate_annual,
+        )
 
-        return np.array(trade_pnl)
+        return StrategyResult(
+            data=data,
+            ticker_x=self.ticker_x,
+            ticker_y=self.ticker_y,
+            start=test_start,
+            end=test_end,
+            interval=self.interval,
+            fee_rate=self.fee_rate,
+            window_factor=window_factor,
+            stats=stats,
+        )
 
-    def compute_stats(pnl_series: pd.Series) -> dict:
-        equity_curve = pnl_series + initial_cash
-        returns = equity_curve.pct_change().dropna()
+    def run_optimization(
+        self,
+        static_params: dict,
+        param_space: list,
+        metric: tuple[str, str],
+        opt_start: str,
+        opt_end: str,
+        beta_opt_start: str,
+        n_iter: int | None = None,
+        random_state: int | None = None,
+        replicates: int | None = None,
+        penalty_bad: int | None = None,
+    ) -> tuple[dict, float]:
+        """
+        Runs Bayesian optimization to find the best parameter combination for the strategy.
 
-        total_pnl = pnl_series.iloc[-1]
-        total_return = total_pnl / initial_cash
+        Scenario A: Fixed Window Size (window="fixed")
+        -> 'window_factor' represents the exact window length (int)
+        >>> from skopt.space import Integer, Real
+        >>> param_space = [
+        >>>     Integer(10, 300, name='window_factor'), # Search window size from 10 to 300
+        >>>     Real(1.0, 3.0, name='entry_threshold'),
+        >>>     ...
+        >>> ]
 
-        trade_pnl = calc_trade_array(pnl_series, df['position'].dropna())
+        Scenario B: Dynamic Window (window="rolling" or "static")
+        -> 'window_factor' represents the Half-Life multiplier (float)
+        >>> from skopt.space import Real
+        >>> param_space = [
+        >>>     Real(0.5, 4.0, name='window_factor'),   # Search multiplier from 0.5 to 4.0
+        >>>     Real(1.0, 3.0, name='entry_threshold'),
+        >>>     ...
+        >>> ]
 
-        # Total wins / Total losses
-        total_wins = np.sum(trade_pnl > 0)
-        total_losses = np.sum(trade_pnl < 0)
+        Scenario C: Locking parameters (static_params)
+        >>> static_params = {'stop_loss': 1.5}         # 'stop_loss' will be constant 0.05 for all iterations.
 
-        # Win rate
-        total_trades = total_wins + total_losses
-        win_rate = total_wins / total_trades if total_trades > 0 else None
+        Args:
+            static_params (dict): Dictionary of parameters to keep constant (not optimized).
+            param_space (list): List of skopt Dimensions (Integer/Real) for parameters to optimize.
+            metric (tuple[str, str]): Metric to minimize/maximize (e.g., ('stats', 'sharpe_ratio')).
+            opt_start (str): Start date for optimization period.
+            opt_end (str): End date for optimization period.
+            beta_opt_start (str): Start date beta and Z-score window calculation.
+            n_iter (int, optional): Number of optimization iterations.
+            random_state (int, optional): Seed for reproducibility.
+            replicates (int, optional): Number of runs per param set to average results (reduces noise).
+            penalty_bad (int, optional): Score assigned to failed/invalid runs.
 
-        # Max win / Max lose
-        winning_trades = trade_pnl[trade_pnl > 0]
-        losing_trades = trade_pnl[trade_pnl < 0]
-        max_win_pct = winning_trades.max() / initial_cash if len(winning_trades) > 0 else None
-        max_lose_pct = losing_trades.min() / initial_cash if len(losing_trades) > 0 else None
+        Returns:
+            tuple[dict, float]: Best parameters found and the corresponding score.
+        """
 
-        # Avg win / Avg lose / Avg trade return
-        avg_win_trade_pct = winning_trades.mean() / initial_cash if total_wins > 0 else 0
-        avg_lose_trade_pct = losing_trades.mean() / initial_cash if total_losses > 0 else 0
-        avg_trade_ret_pct = np.mean(trade_pnl) / initial_cash if total_trades > 0 else 0
+        if self.beta_hedge == "dynamic":
+            beta_hedge = "static"
+        else:
+            beta_hedge = None
 
-        # Volatility
-        period_volatility = returns.std() or 0.0
-        annualized_volatility = period_volatility * np.sqrt(periods_per_year)
+        def objective_wrapper(
+            window_factor: float | int,
+            entry_threshold: float,
+            exit_threshold: float,
+            stop_loss: float,
+            **_kwargs,
+        ) -> float:
+            try:
+                result = self.run_strategy(
+                    window_factor=window_factor,
+                    entry_threshold=entry_threshold,
+                    exit_threshold=exit_threshold,
+                    stop_loss=stop_loss,
+                    test_start=opt_start,
+                    test_end=opt_end,
+                    beta_test_start=beta_opt_start,
+                    beta_hedge=beta_hedge,
+                )
 
-        # CAGR (Compound Annual Growth Rate)
-        years = len(df) / periods_per_year if len(df) > 0 else 0
-        cagr = ((equity_curve.iloc[-1] / equity_curve.iloc[0]) ** (1 / years) - 1) if years > 0 and equity_curve.iloc[
-            0] > 0 else 0.0
+                score = result.stats.loc[metric]
 
-        # Sharpe ratio
-        period_rf = (1 + RISK_FREE_ANNUAL) ** (1 / periods_per_year) - 1
-        sharpe_ratio = (returns.mean() - period_rf) / period_volatility if period_volatility != 0 else None
-        sharpe_ratio_annual = (cagr - RISK_FREE_ANNUAL) / annualized_volatility if annualized_volatility != 0 else None
+                if isinstance(score, pd.Series):
+                    score = score.iloc[0]
+                if pd.isna(score):
+                    return penalty_bad
+                return score
 
-        # Sortino ratio
-        downside_returns = returns[returns < 0]
-        downside_std = downside_returns.std()
-        sortino_ratio = returns.mean() / downside_std if downside_std and not pd.isna(downside_std) else None
-        sortino_ratio_annual = sortino_ratio * np.sqrt(periods_per_year) if sortino_ratio is not None else None
+            except Exception as e:
+                print(f"Error in optimization run: {e}")
+                return penalty_bad
 
-        # Maximum drawdown
-        cumulative_max = equity_curve.cummax()
-        drawdown = (equity_curve - cumulative_max) / cumulative_max
-        max_drawdown = drawdown.min()
+        best_params, best_score = bayesian_search(
+            strategy_func=objective_wrapper,
+            param_space=param_space,
+            static_params=static_params,
+            metric=metric,
+            n_iter=n_iter,
+            random_state=random_state,
+            replicates=replicates,
+            penalty_bad=penalty_bad,
+        )
 
-        # Calmar ratio
-        calmar_ratio = total_return / abs(max_drawdown) if max_drawdown != 0 else None
-        calmar_ratio_annual = cagr / abs(max_drawdown) if max_drawdown != 0 else None
-
-        return {
-            "total_return": total_return,
-            "cagr": cagr,
-            "volatility": period_volatility,
-            "volatility_annual": annualized_volatility,
-            "max_drawdown": max_drawdown,
-            "win_count": total_wins,
-            "lose_count": total_losses,
-            "win_rate": win_rate,
-            "max_win": max_win_pct,
-            "max_lose": max_lose_pct,
-            "avg_win_return": avg_win_trade_pct,
-            "avg_lose_return": avg_lose_trade_pct,
-            "avg_trade_return": avg_trade_ret_pct,
-            "sharpe_ratio": sharpe_ratio,
-            "sharpe_ratio_annual": sharpe_ratio_annual,
-            "sortino_ratio": sortino_ratio,
-            "sortino_ratio_annual": sortino_ratio_annual,
-            "calmar_ratio": calmar_ratio,
-            "calmar_ratio_annual": calmar_ratio_annual,
-        }
-
-    brutto_stats = compute_stats(df["total_return"])
-    netto_stats = compute_stats(df["net_return"])
-
-    metrics_order = [
-        "total_return", "cagr", "volatility", "volatility_annual", "max_drawdown", "win_count", "lose_count",
-        "win_rate", "max_win", "max_lose", "avg_win_return", "avg_lose_return", "avg_trade_return", "sharpe_ratio",
-        "sharpe_ratio_annual", "sortino_ratio", "sortino_ratio_annual", "calmar_ratio", "calmar_ratio_annual"
-    ]
-
-    stats_df = pd.DataFrame({
-        "metric": metrics_order,
-        "0% fee": [brutto_stats[m] for m in metrics_order],
-        f"{fee_rate * 100}% fee": [netto_stats[m] for m in metrics_order]
-    }).set_index("metric")
-
-    stats_df = stats_df.round(4)
-    return stats_df
-
-
-def run_single_pair_strategy(rolling_window: int, entry_threshold: float, exit_threshold: float, stop_loss: float,
-                             ticker_x: str, ticker_y: str, fee_rate: float, initial_cash: float, position_size: float,
-                             pre_trading_start: str, trading_start: str, trading_end: str, interval: str,
-                             beta_hedge: bool, is_spread: bool) -> Pair:
-    pair = load_pair(x=ticker_x, y=ticker_y, start=pre_trading_start, end=trading_end, interval=interval)
-    add_returns(pair)
-    pair.test_start = trading_start
-    pair.fee_rate = fee_rate
-    pair.initial_cash = initial_cash
-    single_pair_strategy(
-        pair, rolling_window, entry_threshold, exit_threshold, stop_loss, position_size, beta_hedge, is_spread
-    )
-    pair.stats = calculate_stats(pair)
-    return pair
-
-
-def strategy_wrapper(rolling_window: int, entry_threshold: float, exit_threshold: float, stop_loss: float,
-                     ticker_x: str, ticker_y: str, fee_rate: float, initial_cash: float, position_size: float,
-                     pre_trading_start: str, trading_start: str, trading_end: str, interval: str, metric: tuple,
-                     beta_hedge: bool, is_spread: bool) -> float:
-    try:
-        pair = run_single_pair_strategy(rolling_window, entry_threshold, exit_threshold, stop_loss, ticker_x, ticker_y,
-                                        fee_rate, initial_cash, position_size, pre_trading_start, trading_start,
-                                        trading_end, interval, beta_hedge, is_spread)
-        score = pair.stats.loc[metric]
-
-        if isinstance(score, pd.Series):
-            score = score.iloc[0]
-        if pd.isna(score):
-            return 0.0
-        return score
-
-    except Exception as e:
-        print("Error in strategy run:", e)
-        return -1e9
-
-
-def optimize_params(ticker_x: str, ticker_y: str, fee_rate: float, initial_cash: float, position_size: float,
-                    pre_training_start: str, training_start: str, training_end: str, interval: str,
-                    beta_hedge: bool, is_spread: bool, param_space: list,
-                    metric: tuple = ("sortino_ratio_annual", "0.05% fee")) -> tuple[dict, float]:
-    static_params = {
-        "ticker_x": ticker_x,
-        "ticker_y": ticker_y,
-        "fee_rate": fee_rate,
-        "initial_cash": initial_cash,
-        "position_size": position_size,
-        "pre_trading_start": pre_training_start,
-        "trading_start": training_start,
-        "trading_end": training_end,
-        "interval": interval,
-    }
-
-    wrapped_strategy = partial(
-        strategy_wrapper,
-        beta_hedge=beta_hedge,
-        is_spread=is_spread,
-    )
-
-    best_params, best_score = random_search(
-        strategy_func=wrapped_strategy,
-        param_space=param_space,
-        static_params=static_params,
-        metric=metric,
-    )
-    return best_params, best_score
+        return best_params, best_score
