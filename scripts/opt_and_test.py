@@ -1,4 +1,5 @@
 import logging
+import os
 import hydra
 from omegaconf import DictConfig, OmegaConf
 from skopt.space import Real
@@ -12,6 +13,8 @@ logger = logging.getLogger(__name__)
 
 @hydra.main(version_base=None, config_path="../conf", config_name="config")
 def opt_and_test(cfg: DictConfig) -> None:
+    output_dir = os.getcwd()
+    logger.info(f"Saving results to: {output_dir}")
     logger.info("CONFIG:\n%s", OmegaConf.to_yaml(cfg))
 
     interval = cfg.market.interval
@@ -25,9 +28,11 @@ def opt_and_test(cfg: DictConfig) -> None:
 
     pair_selection_start = cfg.pair_selection.start
 
+    beta_opt_start = cfg.performance.optimization.beta_start
     opt_start = cfg.performance.optimization.start
     opt_end = cfg.performance.optimization.end
 
+    beta_test_start = cfg.performance.test.beta_start
     test_start = cfg.performance.test.start
     test_end = cfg.performance.test.end
 
@@ -70,7 +75,7 @@ def opt_and_test(cfg: DictConfig) -> None:
         metric=metric,
         opt_start=opt_start,
         opt_end=opt_end,
-        pair_selection_start=pair_selection_start,
+        beta_opt_start=beta_opt_start,
         n_iter=cfg.performance.optimization.n_iter,
         random_state=cfg.performance.optimization.random_state,
         replicates=cfg.performance.optimization.replicates,
@@ -92,19 +97,23 @@ def opt_and_test(cfg: DictConfig) -> None:
         stop_loss=stop_loss,
         test_start=opt_start,
         test_end=opt_end,
-        pair_selection_start=pair_selection_start,
+        beta_test_start=beta_opt_start,
     )
 
-    save_strategy_result(result=result_opt, file_name=f"opt_{ticker_x}_{ticker_y}", overwrite=cfg.overwrite)
+    save_strategy_result(
+        result=result_opt,
+        file_name=f"opt_{ticker_x}_{ticker_y}",
+        directory=output_dir,
+    )
 
-    plot_positions(result_opt, directory="opt", save=True, overwrite=cfg.overwrite)
+    plot_positions(result_opt, directory=output_dir, save=True, show=True)
     btc_data = load_btc_benchmark(
         test_start=opt_start,
         test_end=opt_end,
         interval=interval,
     )
-    plot_pnl(result_opt, btc_data, directory="opt", save=True, overwrite=cfg.overwrite)
-    plot_zscore(result_opt, directory="opt", save=True, overwrite=cfg.overwrite)
+    plot_pnl(result_opt, btc_data, directory=output_dir, save=True, show=True)
+    plot_zscore(result_opt, directory=output_dir, save=True, show=True)
 
     # === TEST ===
 
@@ -115,19 +124,19 @@ def opt_and_test(cfg: DictConfig) -> None:
         stop_loss=stop_loss,
         test_start=test_start,
         test_end=test_end,
-        pair_selection_start=pair_selection_start,
+        beta_test_start=beta_test_start,
     )
 
-    save_strategy_result(result=result_test, file_name=f"test_{ticker_x}_{ticker_y}", overwrite=cfg.overwrite)
+    save_strategy_result(result=result_test, file_name=f"test_{ticker_x}_{ticker_y}", directory=output_dir)
 
-    plot_positions(result_test, directory="test", save=True, overwrite=cfg.overwrite)
+    plot_positions(result_test, directory=output_dir, save=True, show=True)
     btc_data = load_btc_benchmark(
         test_start=test_start,
         test_end=test_end,
         interval=interval,
     )
-    plot_pnl(result_test, btc_data, directory="test", save=True, overwrite=cfg.overwrite)
-    plot_zscore(result_test, directory="test", save=True, overwrite=cfg.overwrite)
+    plot_pnl(result_test, btc_data, directory=output_dir, save=True, show=True)
+    plot_zscore(result_test, directory=output_dir, save=True, show=True)
 
 
 if __name__ == "__main__":

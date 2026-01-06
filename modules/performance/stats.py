@@ -131,18 +131,8 @@ def calculate_stats(
         calmar_ratio = total_return / abs(max_drawdown) if max_drawdown != 0 else None
         calmar_ratio_annual = cagr / abs(max_drawdown) if max_drawdown != 0 else None
 
-        if len(trade_pnl) > 0:
-            avg_trade = np.mean(trade_pnl)
-            std_trade = np.std(trade_pnl)
-
-            # SQN = sqrt(N) * (Mean / Std)
-            if std_trade != 0:
-                sqn = np.sqrt(len(trade_pnl)) * (avg_trade / std_trade)
-            else:
-                # Jeśli std=0 to znaczy że wszystkie trade'y były identyczne (mało realne, ale możliwe)
-                sqn = 0
-        else:
-            sqn = 0
+        # Objective
+        objective = -100 if total_trades < 10 else sortino_ratio_annual
 
         return {
             "total_return": total_return,
@@ -164,7 +154,7 @@ def calculate_stats(
             "sortino_ratio_annual": sortino_ratio_annual,
             "calmar_ratio": calmar_ratio,
             "calmar_ratio_annual": calmar_ratio_annual,
-            "sqn": sqn,
+            "objective": objective,
         }
 
     gross_stats = compute_stats(df["total_return"])
@@ -190,7 +180,7 @@ def calculate_stats(
         "sortino_ratio_annual",
         "calmar_ratio",
         "calmar_ratio_annual",
-        "sqn",
+        "objective",
     ]
 
     stats_df = pd.DataFrame(

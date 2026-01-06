@@ -11,24 +11,6 @@ from modules.core.models import StrategyResult
 from modules.data_services.data_loaders import load_data, get_project_root
 
 
-def _unique_path(path: Path, overwrite: bool = False) -> Path:
-    path.parent.mkdir(parents=True, exist_ok=True)
-
-    if overwrite or not path.exists():
-        return path
-
-    stem = path.stem
-    suffix = path.suffix
-    parent = path.parent
-
-    i = 1
-    while True:
-        candidate = parent / f"{stem} ({i}){suffix}"
-        if not candidate.exists():
-            return candidate
-        i += 1
-
-
 def get_steps(
     interval: Literal["1d", "4h", "1h", "30m", "15m", "5m", "3m", "1m"],
 ) -> int:
@@ -81,18 +63,24 @@ def load_btc_benchmark(test_start: str, test_end: str, interval: str) -> pd.Data
     return btc_data
 
 
-def save_dataframe(df: pd.DataFrame, file_name: str, overwrite: bool = False) -> None:
-    path = get_project_root() / "results" / f"{file_name}.parquet"
-    path = _unique_path(path, overwrite)
+def save_dataframe(df: pd.DataFrame, file_name: str, directory: str | Path = None) -> None:
+    if directory:
+        target_dir = Path(directory)
+    else:
+        target_dir = get_project_root() / "results"
+    target_dir.mkdir(parents=True, exist_ok=True)
+    path = target_dir / f"{file_name}.parquet"
 
     df.to_parquet(path, engine="pyarrow", index=False)
 
 
-def save_strategy_result(result: StrategyResult, file_name: str, overwrite: bool = False) -> None:
-    PARQUET_DIR = get_project_root() / "results"
-
-    path = PARQUET_DIR / f"{file_name}.parquet"
-    path = _unique_path(path, overwrite)
+def save_strategy_result(result: StrategyResult, file_name: str, directory: str | Path = None) -> None:
+    if directory:
+        target_dir = Path(directory)
+    else:
+        target_dir = get_project_root() / "results"
+    target_dir.mkdir(parents=True, exist_ok=True)
+    path = target_dir / f"{file_name}.parquet"
 
     table = pa.Table.from_pandas(df=result.data) # noqa
     metadata = {
@@ -102,7 +90,7 @@ def save_strategy_result(result: StrategyResult, file_name: str, overwrite: bool
         "end": result.end,
         "interval": result.interval,
         "fee_rate": float(result.fee_rate),
-        "rolling_window": int(result.rolling_window),
+        "window_factor": int(result.window_factor),
         "stats_json": result.stats.to_json(),
     }
 
@@ -116,9 +104,12 @@ def save_strategy_result(result: StrategyResult, file_name: str, overwrite: bool
     pq.write_table(table, path)
 
 
-def load_dataframe(file_name: str) -> pd.DataFrame:
+def load_dataframe(file_name: str, directory: str | None = None) -> pd.DataFrame:
     PARQUET_DIR = get_project_root() / "results"
-    path = PARQUET_DIR / f"{file_name}.parquet"
+    if directory:
+        path = PARQUET_DIR / f"{directory}/{file_name}.parquet"
+    else:
+        path = PARQUET_DIR / f"{file_name}.parquet"
 
     table = pq.read_table(path)
     df = table.to_pandas()
@@ -126,9 +117,12 @@ def load_dataframe(file_name: str) -> pd.DataFrame:
     return df
 
 
-def load_strategy_result(file_name: str) -> StrategyResult:
+def load_strategy_result(file_name: str, directory: str | None = None) -> StrategyResult:
     PARQUET_DIR = get_project_root() / "results"
-    path = PARQUET_DIR / f"{file_name}.parquet"
+    if directory:
+        path = PARQUET_DIR / f"{directory}/{file_name}.parquet"
+    else:
+        path = PARQUET_DIR / f"{file_name}.parquet"
 
     table = pq.read_table(path)
     df = table.to_pandas()
@@ -144,7 +138,7 @@ def load_strategy_result(file_name: str) -> StrategyResult:
         end=meta["end"],
         interval=meta["interval"],
         fee_rate=float(meta["fee_rate"]),
-        rolling_window=meta["rolling_window"],
+        window_factor=meta["window_factor"],
         stats=pd.read_json(StringIO(meta["stats_json"])),
     )
 
