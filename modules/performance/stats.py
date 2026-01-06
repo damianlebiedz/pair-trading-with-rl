@@ -194,4 +194,75 @@ def calculate_stats(
     return stats_df.round(4)
 
 
-def calculate_multi_pair_stats(): ...
+def calculate_multi_pair_stats(
+        merged_df: pd.DataFrame,
+        individual_stats_dfs: list[pd.DataFrame],
+        total_initial_cash: float,
+        interval: str,
+        risk_free_rate_annual: float,
+        number_of_pairs: int
+) -> pd.DataFrame:
+    """
+    Calculates statistics for a multi-pair portfolio.
+    Hybrid approach:
+    - Time-series metrics (Sharpe, DD, CAGR) are calculated on the merged equity curve.
+    - Trade metrics (Win rate, Counts) are aggregated from individual results.
+    """
+
+    merged_df_for_calc = merged_df.copy()
+    if "position" not in merged_df_for_calc.columns:
+        merged_df_for_calc["position"] = 0
+
+    portfolio_stats = calculate_stats(
+        df=merged_df_for_calc,
+        initial_cash=total_initial_cash,
+        interval=interval,
+        risk_free_rate_annual=risk_free_rate_annual
+    )
+
+    agg_stats = {
+        "gross": {},
+        "net": {}
+    }
+
+    for col in ["gross", "net"]:
+        ind_series = [stats_df[col] for stats_df in individual_stats_dfs]
+
+        total_wins = sum(s["win_count"] for s in ind_series)
+        total_losses = sum(s["lose_count"] for s in ind_series)
+        total_trades = total_wins + total_losses
+
+        win_rate = total_wins / total_trades if total_trades > 0 else None
+
+        avg_win_return = np.mean([s["avg_win_return"] for s in ind_series]) / number_of_pairs
+        avg_lose_return = np.mean([s["avg_lose_return"] for s in ind_series]) / number_of_pairs
+        avg_trade_return = np.mean([s["avg_trade_return"] for s in ind_series]) / number_of_pairs
+        max_win = np.max([s["max_win"] for s in ind_series]) / number_of_pairs
+        max_lose = np.min([s["max_lose"] for s in ind_series]) / number_of_pairs
+
+        current_stats = portfolio_stats[col].to_dict()
+        current_stats.update({
+            "win_count": total_wins,
+            "lose_count": total_losses,
+            "win_rate": win_rate,
+            "avg_win_return": avg_win_return,
+            "avg_lose_return": avg_lose_return,
+            "avg_trade_return": avg_trade_return,
+            "max_win": max_win,
+            "max_lose": max_lose,
+            "objective": -100 if total_trades < 10 else current_stats["sortino_ratio_annual"]
+        })
+
+        agg_stats[col] = current_stats
+
+    metrics_order = portfolio_stats.index
+
+    final_df = pd.DataFrame(
+        {
+            "metric": metrics_order,
+            "gross": [agg_stats["gross"].get(m) for m in metrics_order],
+            "net": [agg_stats["net"].get(m) for m in metrics_order],
+        }
+    ).set_index("metric")
+
+    return final_df.round(4)

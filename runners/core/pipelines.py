@@ -19,6 +19,7 @@ from modules.data_services.data_utils import (
     merge_by_pair,
     save_dataframe,
 )
+from modules.performance.stats import calculate_multi_pair_stats
 from modules.performance.strategy import Strategy
 from modules.visualization.plots import plot_positions, plot_pnl, plot_zscore
 
@@ -135,7 +136,7 @@ def execute_testing(
     return result
 
 
-def execute_pair_selection(cfg, output_dir) -> pd.DataFrame:
+def execute_pair_selection(cfg: DictConfig, output_dir: str) -> pd.DataFrame:
     df = load_data(
         tickers=cfg.tickers,
         start=cfg.pair_selection.start,
@@ -165,3 +166,82 @@ def execute_pair_selection(cfg, output_dir) -> pd.DataFrame:
     logger.info("Pair Selection completed, returning DataFrame.")
 
     return merged_df
+
+
+def merge_multi_pair_results(
+        cfg: DictConfig,
+        output_dir: str,
+        results: list[StrategyResult],
+        individual_stats_dfs: list[pd.DataFrame],
+        total_initial_cash: float,
+        risk_free_rate_annual: float,
+        test_start: str,
+        test_end: str,
+) -> StrategyResult:
+    """Merges multiple StrategyResult objects into one aggregate result, saves it and shows PnL plot."""
+    if not results:
+        raise ValueError("No results to merge")
+
+    base_df = results[0].data.copy()
+
+    total_return_sum = pd.Series(0.0, index=base_df.index)
+    net_return_sum = pd.Series(0.0, index=base_df.index)
+    fees_sum = pd.Series(0.0, index=base_df.index)
+
+    for res in results:
+        df = res.data
+        total_return_sum = total_return_sum.add(df["total_return"], fill_value=0)
+        net_return_sum = net_return_sum.add(df["net_return"], fill_value=0)
+        if "fees" in df.columns:
+            fees_sum = fees_sum.add(df["fees"], fill_value=0)
+
+    merged_df = pd.DataFrame(index=base_df.index)
+    merged_df["total_return"] = total_return_sum
+    merged_df["net_return"] = net_return_sum
+    merged_df["fees"] = fees_sum
+
+    merged_df["total_return_pct"] = merged_df["total_return"] / total_initial_cash
+    merged_df["net_return_pct"] = merged_df["net_return"] / total_initial_cash
+
+    merged_df["position"] = 0
+    merged_df["z_score"] = 0
+    merged_df["entry_thr"] = 0
+    merged_df["exit_thr"] = 0
+
+    stats = calculate_multi_pair_stats(
+        merged_df=merged_df,
+        individual_stats_dfs=individual_stats_dfs,
+        total_initial_cash=total_initial_cash,
+        interval=results[0].interval,
+        risk_free_rate_annual=risk_free_rate_annual,
+        number_of_pairs=len(results),
+    )
+
+    final_result = StrategyResult(
+        data=merged_df,
+        ticker_x="multi",
+        ticker_y="pair",
+        start=test_start,
+        end=test_end,
+        interval=results[0].interval,
+        fee_rate=results[0].fee_rate,
+        window_factor=results[0].window_factor,
+        stats=stats,
+    )
+
+    save_strategy_result(
+        result=final_result,
+        file_name=f"test_multi_pair_{test_start}_{test_end}",
+        directory=output_dir,
+    )
+
+    btc_data = load_btc_benchmark(
+        test_start=test_start,
+        test_end=test_end,
+        interval=cfg.market.interval,
+    )
+    plot_pnl(final_result, btc_data, directory=output_dir, save=True, show=True)
+
+    logger.info("Merge Multi-Pair Results completed, returning StrategyResult.")
+
+    return final_result

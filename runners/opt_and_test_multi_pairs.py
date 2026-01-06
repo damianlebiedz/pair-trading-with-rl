@@ -8,7 +8,7 @@ from runners.core.pipelines import (
     execute_pair_selection,
     execute_optimization,
     execute_testing,
-    setup_run_environment,
+    setup_run_environment, merge_multi_pair_results,
 )
 
 logger = logging.getLogger(__name__)
@@ -17,14 +17,14 @@ output_dir = setup_run_environment(__file__)
 # =======================================================
 number_of_pairs = 5
 static_params = {
-    "window_factor": 1,
-    "stop_loss": 2,
+    # "window_factor": 1,
+    # "stop_loss": 2,
 }
 param_space = [
-    # Real(0.5, 2, name="window_factor"),
-    Real(1.01, 4.00, name="entry_threshold"),
+    Real(0.5, 2, name="window_factor"),
+    Real(1.01, 3.00, name="entry_threshold"),
     Real(0.0, 1.00, name="exit_threshold"),
-    # Real(1.01, 2.00, name="stop_loss"),
+    Real(1.01, 2.00, name="stop_loss"),
 ]
 metric = ("objective", "net")
 # =======================================================
@@ -36,6 +36,9 @@ logger.info(f"Saving results to: {output_dir}")
 logger.info("CONFIG:\n%s", OmegaConf.to_yaml(cfg))
 
 ps_df = execute_pair_selection(cfg, output_dir)
+
+all_results = []
+all_stats = []
 
 for i in range(number_of_pairs):
     ticker_x = ps_df["pair"][i].split("-")[0]
@@ -85,3 +88,21 @@ for i in range(number_of_pairs):
         cfg.performance.test.start,
         cfg.performance.test.end,
     )
+
+    all_results.append(result_test)
+    all_stats.append(result_test.stats)
+
+logger.info("--- Merging Multi-Pair Results ---")
+
+total_cash_portfolio = cfg.market.initial_cash * number_of_pairs
+
+summary = merge_multi_pair_results(
+    cfg,
+    output_dir,
+    all_results,
+    all_stats,
+    total_cash_portfolio,
+    cfg.market.risk_free_rate_annual,
+    cfg.performance.test.start,
+    cfg.performance.test.end,
+)

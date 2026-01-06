@@ -147,6 +147,3 @@ def load_strategy_result(
         window_factor=meta["window_factor"],
         stats=pd.read_json(StringIO(meta["stats_json"])),
     )
-
-
-def merge_multi_pair_results(): ...
