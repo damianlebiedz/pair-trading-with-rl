@@ -53,16 +53,8 @@ def calculate_half_life_window(
     df: pd.DataFrame,
     window_factor: float,
 ) -> int | None:
-    """
-    Oblicza Half-Life DOKŁADNIE TEGO spreadu, którym handlujesz.
-    Wymaga podania bety używanej w strategii.
-    """
-    # Budujemy spread tak samo jak w strategii
+    """Calculate Half-Life Window size with provided beta and window_factor."""
     series = df[x_col] - (beta * df[y_col])
-
-    # Zabezpieczenie: minimum danych
-    if len(series) < 10:
-        raise Exception("len(series) < 10")
 
     lag = series.shift(1)
     ret = series - lag
@@ -70,21 +62,14 @@ def calculate_half_life_window(
     lag = lag.iloc[1:]
     ret = ret.iloc[1:]
 
-    try:
-        X = sm.add_constant(lag)
-        model = sm.OLS(ret, X, missing="drop").fit()
-        lam = model.params.iloc[1]
+    X = sm.add_constant(lag)
+    model = sm.OLS(ret, X, missing="drop").fit()
+    lam = model.params.iloc[1]
 
-        # Jeśli lambda >= 0, Twój spread trenduje (nawet jeśli inna beta byłaby lepsza,
-        # to Twoja obecna beta nie daje mean-reversion) -> Nie handluj.
-        if lam >= 0:
-            return None
-
-        half_life = -np.log(2) / lam
-        window = int(half_life * window_factor)
-
-        return max(5, window)
-
-    except Exception as e:
-        print(e)
+    if lam >= 0:
         return None
+
+    half_life = -np.log(2) / lam
+    window = int(half_life * window_factor)
+
+    return window

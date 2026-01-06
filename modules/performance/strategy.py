@@ -173,7 +173,7 @@ class Strategy:
                     window_factor=window_factor,
                 )
 
-            if win is not None and beta > 0 and win <= i:
+            if win is not None and beta > 0 and 2 <= win <= i:
                 z_score = calculate_z_score(
                     x_col=source_x_col,
                     y_col=source_y_col,
