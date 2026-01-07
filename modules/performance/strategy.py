@@ -178,7 +178,7 @@ class Strategy:
                     x_col=source_x_col,
                     y_col=source_y_col,
                     beta=beta,
-                    df=df.iloc[i - win : i],
+                    df=df.iloc[i - win : i + 1],
                 )
                 signal = generate_signal(
                     entry_threshold=entry_threshold, z_score=z_score
@@ -270,7 +270,7 @@ class Strategy:
                     Example: `2.5` means the window size is calculated as `2.5 * Half_Life`.
             entry_threshold (float): Z-score threshold to open a position.
             exit_threshold (float): Z-score threshold to close a position.
-            stop_loss (float): Stop loss percentage (e.g., 0.05 for 5%).
+            stop_loss (float): Stop loss multiplier (e.g., 1.05 for 5% from current Z-score).
             test_start (str): Start date for the backtest loop.
             test_end (str): End date for the backtest loop.
             beta_test_start (str): Start date for beta and Z-score window calculation.
@@ -349,7 +349,7 @@ class Strategy:
         >>> ]
 
         Scenario C: Locking parameters (static_params)
-        >>> static_params = {'stop_loss': 1.5}         # 'stop_loss' will be constant 0.05 for all iterations.
+        >>> static_params = {'stop_loss': 1.05}         # 'stop_loss' will be constant 1.05 for all iterations.
 
         Args:
             static_params (dict): Dictionary of parameters to keep constant (not optimized).

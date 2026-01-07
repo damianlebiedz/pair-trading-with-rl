@@ -21,10 +21,10 @@ static_params = {
     # "stop_loss": 2,
 }
 param_space = [
-    Real(0.5, 2, name="window_factor"),
-    Real(1.01, 3.00, name="entry_threshold"),
+    Real(1.00, 3.00, name="window_factor"),
+    Real(1.10, 3.00, name="entry_threshold"),
     Real(0.0, 1.00, name="exit_threshold"),
-    Real(1.01, 2.00, name="stop_loss"),
+    Real(1.10, 2.00, name="stop_loss"),
 ]
 metric = ("objective", "net")
 # =======================================================

@@ -44,7 +44,7 @@ class TradeExecutor:
                 and (
                     z_score <= exit_threshold
                     or (
-                        position_state.stop_loss_threshold is not None
+                        position_state.stop_loss_threshold is not None # TODO
                         and z_score >= position_state.stop_loss_threshold
                     )
                 )
@@ -53,7 +53,7 @@ class TradeExecutor:
                 and (
                     z_score >= -exit_threshold
                     or (
-                        position_state.stop_loss_threshold is not None
+                        position_state.stop_loss_threshold is not None # TODO
                         and z_score <= -position_state.stop_loss_threshold
                     )
                 )
@@ -119,8 +119,8 @@ class TradeExecutor:
         total_fees,
         stop_loss,
     ) -> tuple[float, float]:
-        wx = beta / (beta + 1)
-        wy = 1 / (beta + 1)
+        wx = 1 / (beta + 1)
+        wy = beta / (beta + 1)
 
         x_spread, y_spread = cls.get_spread(
             ctx.ticker_x, ctx.ticker_y, position_state.position

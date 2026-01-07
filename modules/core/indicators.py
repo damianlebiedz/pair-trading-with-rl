@@ -36,9 +36,13 @@ def calculate_z_score(
 ) -> float | None:
     """Calculate z-score with provided beta."""
     spread_series = df[x_col] - (beta * df[y_col])
-    mean = spread_series.mean()
-    std = spread_series.std()
+
+    historical = spread_series.iloc[:-1]
     spread = spread_series.iloc[-1]
+
+    mean = historical.mean()
+    std = historical.std()
+
     if std == 0:
         return None
     z_score = (spread - mean) / std

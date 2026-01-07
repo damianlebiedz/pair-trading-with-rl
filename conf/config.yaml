@@ -1,16 +1,16 @@
 pair_selection:
   start: "2024-01-01"
-  end: "2024-03-01"
+  end: "2024-07-01"
 
 performance:
   window: "static" # "rolling", "static" or "fixed"
   source: "log" # "log", "c_returns", "c_log_returns", "c_norm_returns"
-  beta_hedge: # "dynamic", "static", None (exactly nothing -> 'beta_hedge: ')
+  beta_hedge: "static" # "dynamic", "static", None (exactly nothing -> 'beta_hedge: ')
 
   optimization:
     beta_start: "2024-01-01"
-    start: "2024-02-01"
-    end: "2024-03-01"
+    start: "2024-05-01"
+    end: "2024-07-01"
 
     # Bayesian-Search parameters
     n_iter: 100
@@ -20,5 +20,5 @@ performance:
 
   test:
     beta_start: "2024-01-01"
-    start: "2024-03-01"
-    end: "2024-04-01"
+    start: "2024-07-01"
+    end: "2024-09-01"

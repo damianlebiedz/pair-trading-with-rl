@@ -14,17 +14,17 @@ logger = logging.getLogger(__name__)
 output_dir = setup_run_environment(__file__)
 
 # =======================================================
-ticker_x = "BNBUSDT"
-ticker_y = "UNIUSDT"
+ticker_x = "XRPUSDT"
+ticker_y = "DOTUSDT"
 static_params = {
     # "window_factor": 1,
     # "stop_loss": 2,
 }
 param_space = [
-    Real(0.5, 2, name="window_factor"),
-    Real(1.01, 3.00, name="entry_threshold"),
-    Real(0.0, 1.00, name="exit_threshold"),
-    Real(1.01, 2.00, name="stop_loss"),
+    Real(1.00, 3.00, name="window_factor"),
+    Real(1.10, 3.00, name="entry_threshold"),
+    Real(0.00, 1.00, name="exit_threshold"),
+    Real(1.10, 2.00, name="stop_loss"),
 ]
 metric = ("objective", "net")
 # =======================================================

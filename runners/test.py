@@ -9,8 +9,8 @@ logger = logging.getLogger(__name__)
 output_dir = setup_run_environment(__file__)
 
 # =======================================================
-ticker_x = "BNBUSDT"
-ticker_y = "UNIUSDT"
+ticker_x = "XRPUSDT"
+ticker_y = "DOTUSDT"
 best_params = {
     "window_factor": 1,
     "entry_threshold": 2,
