@@ -15,7 +15,7 @@ from modules.data_services.data_preparation import (
     add_c_returns,
     add_c_log_returns,
 )
-from modules.performance.optimization import bayesian_search
+from modules.performance.optimization import random_search
 from modules.core.models import PositionState, ExecutionContext, StrategyResult
 from modules.performance.stats import calculate_stats
 
@@ -323,12 +323,11 @@ class Strategy:
         opt_end: str,
         beta_opt_start: str,
         n_iter: int | None = None,
-        random_state: int | None = None,
         replicates: int | None = None,
         penalty_bad: int | None = None,
     ) -> tuple[dict, float]:
         """
-        Runs Bayesian optimization to find the best parameter combination for the strategy.
+        Runs optimization to find the best parameter combination for the strategy.
 
         Scenario A: Fixed Window Size (window="fixed")
         -> 'window_factor' represents the exact window length (int)
@@ -359,7 +358,6 @@ class Strategy:
             opt_end (str): End date for optimization period.
             beta_opt_start (str): Start date beta and Z-score window calculation.
             n_iter (int, optional): Number of optimization iterations.
-            random_state (int, optional): Seed for reproducibility.
             replicates (int, optional): Number of runs per param set to average results (reduces noise).
             penalty_bad (int, optional): Score assigned to failed/invalid runs.
 
@@ -403,13 +401,12 @@ class Strategy:
                 print(f"Error in optimization run: {e}")
                 return penalty_bad
 
-        best_params, best_score = bayesian_search(
+        best_params, best_score = random_search(
             strategy_func=objective_wrapper,
             param_space=param_space,
             static_params=static_params,
             metric=metric,
             n_iter=n_iter,
-            random_state=random_state,
             replicates=replicates,
             penalty_bad=penalty_bad,
         )

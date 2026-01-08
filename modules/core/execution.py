@@ -22,8 +22,8 @@ class TradeExecutor:
         position_state: PositionState,
         price_x: float,
         price_y: float,
-        z_score: float,
-        prev_z_score: float,
+        z_score: float | None,
+        prev_z_score: float | None,
         beta: float,
         total_fees: float,
         entry_threshold: float,
@@ -35,7 +35,7 @@ class TradeExecutor:
         if position_state.prev_position != 0:
             # CLOSE POSITION (STOP LOSS OR TAKE PROFIT)
             if z_score is None:
-                # NO MEAN-REVERSION (FROM HALF-LIFE WINDOW CALCULATION)
+                # NO MEAN-REVERSION (FROM HALF-LIFE WINDOW CALCULATION) OR BETA < 0
                 return cls._close_position(
                     ctx, position_state, price_x, price_y, total_fees
                 )

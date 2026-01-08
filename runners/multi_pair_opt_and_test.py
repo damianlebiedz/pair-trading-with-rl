@@ -6,16 +6,15 @@ from skopt.space import Real
 from modules.performance.strategy import Strategy
 from runners.core.pipelines import (
     execute_pair_selection,
-    execute_optimization,
     execute_testing,
-    setup_run_environment, merge_multi_pair_results,
+    setup_run_environment,
+    merge_multi_pair_results, execute_multi_pair_optimization,
 )
 
 logger = logging.getLogger(__name__)
 output_dir = setup_run_environment(__file__)
 
 # =======================================================
-number_of_pairs = 5
 static_params = {
     # "window_factor": 1,
     # "stop_loss": 2,
@@ -36,15 +35,14 @@ logger.info(f"Saving results to: {output_dir}")
 logger.info("CONFIG:\n%s", OmegaConf.to_yaml(cfg))
 
 ps_df = execute_pair_selection(cfg, output_dir)
+logger.info(ps_df)
+selected_pairs_names = ps_df["pair"].tolist()
 
-all_results = []
-all_stats = []
+strategies = []
+strategies_map = {}
 
-for i in range(number_of_pairs):
-    ticker_x = ps_df["pair"][i].split("-")[0]
-    ticker_y = ps_df["pair"][i].split("-")[1]
-
-    logger.info(f"{ticker_x}-{ticker_y}")
+for pair_name in selected_pairs_names:
+    ticker_x, ticker_y = pair_name.split("-")
 
     bt = Strategy(
         ticker_x,
@@ -59,9 +57,24 @@ for i in range(number_of_pairs):
         cfg.performance.source,
         cfg.performance.beta_hedge,
     )
+    strategies.append(bt)
+    strategies_map[pair_name] = bt
 
-    logger.info("--- Starting Optimization ---")
-    best_params = execute_optimization(cfg, bt, static_params, param_space, metric)
+logger.info("--- Starting Multi-Pair Optimization ---")
+best_params = execute_multi_pair_optimization(
+    cfg, strategies, static_params, param_space, metric
+)
+
+all_results = []
+all_stats = []
+
+logger.info("--- Running Tests with Optimized Parameters ---")
+
+for pair_name in selected_pairs_names:
+    ticker_x, ticker_y = pair_name.split("-")
+    bt = strategies_map[pair_name]
+
+    logger.info(f"Testing pair: {pair_name}")
 
     logger.info("--- Starting Test of Optimization ---")
     result_opt = execute_testing(
@@ -94,7 +107,7 @@ for i in range(number_of_pairs):
 
 logger.info("--- Merging Multi-Pair Results ---")
 
-total_cash_portfolio = cfg.market.initial_cash * number_of_pairs
+total_cash_portfolio = cfg.market.initial_cash * len(selected_pairs_names)
 
 summary = merge_multi_pair_results(
     cfg,

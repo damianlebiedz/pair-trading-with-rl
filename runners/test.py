@@ -12,10 +12,10 @@ output_dir = setup_run_environment(__file__)
 ticker_x = "XRPUSDT"
 ticker_y = "DOTUSDT"
 best_params = {
-    "window_factor": 1,
-    "entry_threshold": 2,
-    "exit_threshold": 0,
-    "stop_loss": 2,
+    "window_factor": 3,
+    "entry_threshold": 1.674664587784339,
+    "exit_threshold": 0.8039961137276792,
+    "stop_loss": 1.5139881477947832,
 }
 # =======================================================
 

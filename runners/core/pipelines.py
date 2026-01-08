@@ -7,21 +7,17 @@ import pandas as pd
 from omegaconf import DictConfig
 
 from modules.core.models import StrategyResult
-from modules.core.statistical_tests import (
-    ssd_cumulative_returns,
-    pearson_correlation,
-    engle_granger_cointegration,
-)
+from modules.core.statistical_tests import engle_granger_cointegration
 from modules.data_services.data_loaders import load_data
 from modules.data_services.data_utils import (
     save_strategy_result,
     load_btc_benchmark,
-    merge_by_pair,
     save_dataframe,
 )
-from modules.performance.stats import calculate_multi_pair_stats
+from modules.performance.optimization import MultiPairOptimizer
+from modules.performance.stats import calculate_multi_pair_stats, aggregate_strategy_results
 from modules.performance.strategy import Strategy
-from modules.visualization.plots import plot_positions, plot_pnl, plot_zscore
+from modules.visualization.plots import plot_positions, plot_returns, plot_zscore
 
 logger = logging.getLogger(__name__)
 
@@ -77,9 +73,32 @@ def execute_optimization(
         opt_end=opt_end,
         beta_opt_start=beta_opt_start,
         n_iter=cfg.performance.optimization.n_iter,
-        random_state=cfg.performance.optimization.random_state,
         replicates=cfg.performance.optimization.replicates,
         penalty_bad=cfg.performance.optimization.penalty_bad,
+    )
+
+    best_params.update(static_params)
+    log = (best_params, best_score)
+    logger.info(log)
+
+    return best_params
+
+
+def execute_multi_pair_optimization(
+        cfg: DictConfig,
+        strategies: list[Strategy],
+        static_params: dict[str, Any],
+        param_space: list[Any],
+        metric: tuple[str, str],
+) -> dict[str, Any]:
+    logger.info(f"Starting Multi-Pair Optimization on {len(strategies)} pairs...")
+
+    optimizer = MultiPairOptimizer(strategies, cfg)
+
+    best_params, best_score = optimizer.run(
+        static_params=static_params,
+        param_space=param_space,
+        metric=metric
     )
 
     best_params.update(static_params)
@@ -122,13 +141,19 @@ def execute_testing(
         directory=output_dir,
     )
 
+    save_dataframe(
+        df=result.stats,
+        file_name=f"test_stats_{ticker_x}_{ticker_y}_{test_start}_{test_end}",
+        directory=output_dir,
+    )
+
     plot_positions(result, directory=output_dir, save=True, show=True)
     btc_data = load_btc_benchmark(
         test_start=test_start,
         test_end=test_end,
         interval=cfg.market.interval,
     )
-    plot_pnl(result, btc_data, directory=output_dir, save=True, show=True)
+    plot_returns(result, btc_data, directory=output_dir, save=True, show=True)
     plot_zscore(result, directory=output_dir, save=True, show=True)
 
     logger.info("Testing completed, returning StrategyResult.")
@@ -137,35 +162,61 @@ def execute_testing(
 
 
 def execute_pair_selection(cfg: DictConfig, output_dir: str) -> pd.DataFrame:
-    df = load_data(
+    df_opt = load_data(
         tickers=cfg.tickers,
-        start=cfg.pair_selection.start,
-        end=cfg.pair_selection.end,
+        start=cfg.pair_selection.optimization.start,
+        end=cfg.pair_selection.optimization.end,
         interval=cfg.market.interval,
     )
 
-    ssd_c_returns_df = ssd_cumulative_returns(df)
-    corr_log_returns_df = pearson_correlation(df, source="log_returns")
-    eg_log_prices_df = engle_granger_cointegration(df, source="log_prices")
-
-    merged_df = (
-        merge_by_pair(
-            dfs=[ssd_c_returns_df, corr_log_returns_df, eg_log_prices_df],
-            keep_cols=[["ssd"], ["corr_log_returns"], ["eg_p_value"]],
-        )
-        .sort_values("eg_p_value", ascending=True)
-        .reset_index(drop=True)
+    df_test = load_data(
+        tickers=cfg.tickers,
+        start=cfg.pair_selection.test.start,
+        end=cfg.pair_selection.test.end,
+        interval=cfg.market.interval,
     )
 
+    eg_df_opt = engle_granger_cointegration(df_opt, source="log_prices")
+    eg_df_test = engle_granger_cointegration(df_test, source="log_prices")
+
+    eg_factor = cfg.pair_selection.eg_factor
+    selection_method = cfg.pair_selection.method
+    if selection_method not in ["both", "second"]:
+        raise ValueError("'method' must be 'both' or 'second'")
+
+    merged_df = pd.merge(
+        eg_df_opt,
+        eg_df_test,
+        on='pair',
+        how='inner',
+        suffixes=('_opt', '_test')
+    )
+
+    if selection_method == "second":
+        condition = (merged_df['eg_p_value_test'] <= eg_factor)
+        sort_column = "eg_p_value_test"
+        logger.info(f"Selection method: 'second' (filtering by test set only).")
+
+    else:
+        condition = (
+                (merged_df['eg_p_value_opt'] <= eg_factor) &
+                (merged_df['eg_p_value_test'] <= eg_factor)
+        )
+        sort_column = "eg_p_value_opt"
+        logger.info(f"Selection method: 'both' (filtering by optimization AND test sets).")
+
+    final_df = merged_df[condition].sort_values(sort_column).reset_index(drop=True)
+
     save_dataframe(
-        df=merged_df,
-        file_name=f"pair_selection_{cfg.pair_selection.start}_{cfg.pair_selection.end}",
+        df=final_df,
+        file_name=f"pair_selection_{selection_method}_{cfg.pair_selection.optimization.start}_{cfg.pair_selection.test.end}",
         directory=output_dir,
     )
 
-    logger.info("Pair Selection completed, returning DataFrame.")
+    logger.info(
+        f"Pair Selection completed. Selected {len(final_df)} pairs using method '{selection_method}' with eg_factor <= {eg_factor}.")
 
-    return merged_df
+    return final_df
 
 
 def merge_multi_pair_results(
@@ -182,31 +233,7 @@ def merge_multi_pair_results(
     if not results:
         raise ValueError("No results to merge")
 
-    base_df = results[0].data.copy()
-
-    total_return_sum = pd.Series(0.0, index=base_df.index)
-    net_return_sum = pd.Series(0.0, index=base_df.index)
-    fees_sum = pd.Series(0.0, index=base_df.index)
-
-    for res in results:
-        df = res.data
-        total_return_sum = total_return_sum.add(df["total_return"], fill_value=0)
-        net_return_sum = net_return_sum.add(df["net_return"], fill_value=0)
-        if "fees" in df.columns:
-            fees_sum = fees_sum.add(df["fees"], fill_value=0)
-
-    merged_df = pd.DataFrame(index=base_df.index)
-    merged_df["total_return"] = total_return_sum
-    merged_df["net_return"] = net_return_sum
-    merged_df["fees"] = fees_sum
-
-    merged_df["total_return_pct"] = merged_df["total_return"] / total_initial_cash
-    merged_df["net_return_pct"] = merged_df["net_return"] / total_initial_cash
-
-    merged_df["position"] = 0
-    merged_df["z_score"] = 0
-    merged_df["entry_thr"] = 0
-    merged_df["exit_thr"] = 0
+    merged_df = aggregate_strategy_results(results, total_initial_cash)
 
     stats = calculate_multi_pair_stats(
         merged_df=merged_df,
@@ -235,12 +262,18 @@ def merge_multi_pair_results(
         directory=output_dir,
     )
 
+    save_dataframe(
+        df=final_result.stats,
+        file_name=f"test_stats_multi_pair_{test_start}_{test_end}",
+        directory=output_dir,
+    )
+
     btc_data = load_btc_benchmark(
         test_start=test_start,
         test_end=test_end,
         interval=cfg.market.interval,
     )
-    plot_pnl(final_result, btc_data, directory=output_dir, save=True, show=True)
+    plot_returns(final_result, btc_data, directory=output_dir, save=True, show=True)
 
     logger.info("Merge Multi-Pair Results completed, returning StrategyResult.")
 

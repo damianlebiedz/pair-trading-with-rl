@@ -57,23 +57,39 @@ def calculate_half_life_window(
     df: pd.DataFrame,
     window_factor: float,
 ) -> int | None:
-    """Calculate Half-Life Window size with provided beta and window_factor."""
+    """
+    Estimate OU process half-life for a spread and derive a rolling window size.
+
+    Returns:
+        int: window size based on half-life * window_factor
+        None: if spread is not mean-reverting or window is invalid
+    """
+    # Construct spread using pre-estimated hedge ratio
     series = df[x_col] - (beta * df[y_col])
 
+    # OU process discretization: ΔX_t = λ X_{t-1} + ε_t
     lag = series.shift(1)
     ret = series - lag
 
+    # Align time series
     lag = lag.iloc[1:]
     ret = ret.iloc[1:]
 
+    # Regress spread changes on lagged level to estimate mean reversion speed (λ)
     X = sm.add_constant(lag)
     model = sm.OLS(ret, X, missing="drop").fit()
     lam = model.params.iloc[1]
 
+    # Reject non-mean-reverting spreads (λ >= 0)
     if lam >= 0:
         return None
 
+    # OU half-life
     half_life = -np.log(2) / lam
     window = int(half_life * window_factor)
+
+    # Reject windows larger than available data
+    if window > len(df):
+        return None
 
     return window
