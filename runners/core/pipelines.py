@@ -15,9 +15,12 @@ from modules.data_services.data_utils import (
     save_dataframe,
 )
 from modules.performance.optimization import MultiPairOptimizer
-from modules.performance.stats import calculate_multi_pair_stats, aggregate_strategy_results
+from modules.performance.stats import (
+    calculate_multi_pair_stats,
+    aggregate_strategy_results,
+)
 from modules.performance.strategy import Strategy
-from modules.visualization.plots import plot_positions, plot_returns, plot_zscore
+from modules.visualization.plots import plot_returns, plot_zscore_pos
 
 logger = logging.getLogger(__name__)
 
@@ -85,20 +88,18 @@ def execute_optimization(
 
 
 def execute_multi_pair_optimization(
-        cfg: DictConfig,
-        strategies: list[Strategy],
-        static_params: dict[str, Any],
-        param_space: list[Any],
-        metric: tuple[str, str],
+    cfg: DictConfig,
+    strategies: list[Strategy],
+    static_params: dict[str, Any],
+    param_space: list[Any],
+    metric: tuple[str, str],
 ) -> dict[str, Any]:
     logger.info(f"Starting Multi-Pair Optimization on {len(strategies)} pairs...")
 
     optimizer = MultiPairOptimizer(strategies, cfg)
 
     best_params, best_score = optimizer.run(
-        static_params=static_params,
-        param_space=param_space,
-        metric=metric
+        static_params=static_params, param_space=param_space, metric=metric
     )
 
     best_params.update(static_params)
@@ -147,14 +148,13 @@ def execute_testing(
         directory=output_dir,
     )
 
-    plot_positions(result, directory=output_dir, save=True, show=True)
+    plot_zscore_pos(result, directory=output_dir, save=True, show=True)
     btc_data = load_btc_benchmark(
         test_start=test_start,
         test_end=test_end,
         interval=cfg.market.interval,
     )
     plot_returns(result, btc_data, directory=output_dir, save=True, show=True)
-    plot_zscore(result, directory=output_dir, save=True, show=True)
 
     logger.info("Testing completed, returning StrategyResult.")
 
@@ -185,25 +185,22 @@ def execute_pair_selection(cfg: DictConfig, output_dir: str) -> pd.DataFrame:
         raise ValueError("'method' must be 'both' or 'second'")
 
     merged_df = pd.merge(
-        eg_df_opt,
-        eg_df_test,
-        on='pair',
-        how='inner',
-        suffixes=('_opt', '_test')
+        eg_df_opt, eg_df_test, on="pair", how="inner", suffixes=("_opt", "_test")
     )
 
     if selection_method == "second":
-        condition = (merged_df['eg_p_value_test'] <= eg_factor)
+        condition = merged_df["eg_p_value_test"] <= eg_factor
         sort_column = "eg_p_value_test"
-        logger.info(f"Selection method: 'second' (filtering by test set only).")
+        logger.info("Selection method: 'second' (filtering by test set only).")
 
     else:
-        condition = (
-                (merged_df['eg_p_value_opt'] <= eg_factor) &
-                (merged_df['eg_p_value_test'] <= eg_factor)
+        condition = (merged_df["eg_p_value_opt"] <= eg_factor) & (
+            merged_df["eg_p_value_test"] <= eg_factor
         )
         sort_column = "eg_p_value_opt"
-        logger.info(f"Selection method: 'both' (filtering by optimization AND test sets).")
+        logger.info(
+            "Selection method: 'both' (filtering by optimization AND test sets)."
+        )
 
     final_df = merged_df[condition].sort_values(sort_column).reset_index(drop=True)
 
@@ -214,20 +211,21 @@ def execute_pair_selection(cfg: DictConfig, output_dir: str) -> pd.DataFrame:
     )
 
     logger.info(
-        f"Pair Selection completed. Selected {len(final_df)} pairs using method '{selection_method}' with eg_factor <= {eg_factor}.")
+        f"Pair Selection completed. Selected {len(final_df)} pairs using method '{selection_method}' with eg_factor <= {eg_factor}."
+    )
 
     return final_df
 
 
 def merge_multi_pair_results(
-        cfg: DictConfig,
-        output_dir: str,
-        results: list[StrategyResult],
-        individual_stats_dfs: list[pd.DataFrame],
-        total_initial_cash: float,
-        risk_free_rate_annual: float,
-        test_start: str,
-        test_end: str,
+    cfg: DictConfig,
+    output_dir: str,
+    results: list[StrategyResult],
+    individual_stats_dfs: list[pd.DataFrame],
+    total_initial_cash: float,
+    risk_free_rate_annual: float,
+    test_start: str,
+    test_end: str,
 ) -> StrategyResult:
     """Merges multiple StrategyResult objects into one aggregate result, saves it and shows PnL plot."""
     if not results:

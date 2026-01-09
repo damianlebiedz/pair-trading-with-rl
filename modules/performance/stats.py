@@ -196,12 +196,12 @@ def calculate_stats(
 
 
 def calculate_multi_pair_stats(
-        merged_df: pd.DataFrame,
-        individual_stats_dfs: list[pd.DataFrame],
-        total_initial_cash: float,
-        interval: str,
-        risk_free_rate_annual: float,
-        number_of_pairs: int
+    merged_df: pd.DataFrame,
+    individual_stats_dfs: list[pd.DataFrame],
+    total_initial_cash: float,
+    interval: str,
+    risk_free_rate_annual: float,
+    number_of_pairs: int,
 ) -> pd.DataFrame:
     """
     Calculates statistics for a multi-pair portfolio.
@@ -218,13 +218,10 @@ def calculate_multi_pair_stats(
         df=merged_df_for_calc,
         initial_cash=total_initial_cash,
         interval=interval,
-        risk_free_rate_annual=risk_free_rate_annual
+        risk_free_rate_annual=risk_free_rate_annual,
     )
 
-    agg_stats = {
-        "gross": {},
-        "net": {}
-    }
+    agg_stats = {"gross": {}, "net": {}}
 
     for col in ["gross", "net"]:
         ind_series = [stats_df[col] for stats_df in individual_stats_dfs]
@@ -235,24 +232,32 @@ def calculate_multi_pair_stats(
 
         win_rate = total_wins / total_trades if total_trades > 0 else None
 
-        avg_win_return = np.mean([s["avg_win_return"] for s in ind_series]) / number_of_pairs
-        avg_lose_return = np.mean([s["avg_lose_return"] for s in ind_series]) / number_of_pairs
-        avg_trade_return = np.mean([s["avg_trade_return"] for s in ind_series]) / number_of_pairs
+        avg_win_return = (
+            np.mean([s["avg_win_return"] for s in ind_series]) / number_of_pairs
+        )
+        avg_lose_return = (
+            np.mean([s["avg_lose_return"] for s in ind_series]) / number_of_pairs
+        )
+        avg_trade_return = (
+            np.mean([s["avg_trade_return"] for s in ind_series]) / number_of_pairs
+        )
         max_win = np.max([s["max_win"] for s in ind_series]) / number_of_pairs
         max_lose = np.min([s["max_lose"] for s in ind_series]) / number_of_pairs
 
         current_stats = portfolio_stats[col].to_dict()
-        current_stats.update({
-            "win_count": total_wins,
-            "lose_count": total_losses,
-            "win_rate": win_rate,
-            "avg_win_return": avg_win_return,
-            "avg_lose_return": avg_lose_return,
-            "avg_trade_return": avg_trade_return,
-            "max_win": max_win,
-            "max_lose": max_lose,
-            "objective": current_stats["sortino_ratio_annual"]
-        })
+        current_stats.update(
+            {
+                "win_count": total_wins,
+                "lose_count": total_losses,
+                "win_rate": win_rate,
+                "avg_win_return": avg_win_return,
+                "avg_lose_return": avg_lose_return,
+                "avg_trade_return": avg_trade_return,
+                "max_win": max_win,
+                "max_lose": max_lose,
+                "objective": current_stats["sortino_ratio_annual"],
+            }
+        )
 
         agg_stats[col] = current_stats
 
@@ -270,8 +275,7 @@ def calculate_multi_pair_stats(
 
 
 def aggregate_strategy_results(
-    results: list[StrategyResult],
-    total_initial_cash: float
+    results: list[StrategyResult], total_initial_cash: float
 ) -> pd.DataFrame:
     if not results:
         raise ValueError("No results to aggregate")

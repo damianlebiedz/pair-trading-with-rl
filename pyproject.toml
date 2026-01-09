@@ -13,8 +13,6 @@ dependencies = [
     "python-binance>=1.0.0",
     "tqdm>=4.66.0",
     "numpy<2.0.0",
-    "seaborn>=0.13.0",
-    "matplotlib>=3.8.0",
     "statsmodels>=0.14.0",
     "scikit-optimize>=0.9.0",
     "scipy<1.14.0",

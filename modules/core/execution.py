@@ -44,7 +44,7 @@ class TradeExecutor:
                 and (
                     z_score <= exit_threshold
                     or (
-                        position_state.stop_loss_threshold is not None # TODO
+                        position_state.stop_loss_threshold is not None  # TODO
                         and z_score >= position_state.stop_loss_threshold
                     )
                 )
@@ -53,7 +53,7 @@ class TradeExecutor:
                 and (
                     z_score >= -exit_threshold
                     or (
-                        position_state.stop_loss_threshold is not None # TODO
+                        position_state.stop_loss_threshold is not None  # TODO
                         and z_score <= -position_state.stop_loss_threshold
                     )
                 )

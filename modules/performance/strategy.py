@@ -8,6 +8,7 @@ from modules.core.indicators import (
     calculate_beta,
     calculate_half_life_window,
 )
+from modules.core.search_methods import random_search
 from modules.data_services.data_loaders import load_pair
 from modules.data_services.data_preparation import (
     add_log_prices,
@@ -15,7 +16,6 @@ from modules.data_services.data_preparation import (
     add_c_returns,
     add_c_log_returns,
 )
-from modules.performance.optimization import random_search
 from modules.core.models import PositionState, ExecutionContext, StrategyResult
 from modules.performance.stats import calculate_stats
 
@@ -126,8 +126,9 @@ class Strategy:
         test_start_pos = df.index.get_loc(pd.to_datetime(test_start))
         start_pos = df.index.get_loc(pd.to_datetime(beta_test_start))
 
-        beta = 1.0
-        if beta_hedge == "static":
+        if beta_hedge is None:
+            beta = 1.0
+        else:
             beta = calculate_beta(
                 x_col=source_x_col,
                 y_col=source_y_col,

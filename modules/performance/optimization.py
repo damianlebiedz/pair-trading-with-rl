@@ -1,14 +1,14 @@
 import logging
-from typing import Callable, Any
+from typing import Any
 import pandas as pd
 from omegaconf import DictConfig
-from skopt import gp_minimize
-from skopt.space import Integer, Real
 import numpy as np
-from random import uniform, randint
-from joblib import Parallel, delayed
 
-from modules.performance.stats import aggregate_strategy_results, calculate_multi_pair_stats
+from modules.core.search_methods import random_search
+from modules.performance.stats import (
+    aggregate_strategy_results,
+    calculate_multi_pair_stats,
+)
 from modules.performance.strategy import Strategy
 
 logger = logging.getLogger(__name__)
@@ -29,10 +29,7 @@ class MultiPairOptimizer:
         self.number_of_pairs = len(strategies)
 
     def objective(
-            self,
-            static_params: dict,
-            param_dict: dict,
-            metric: tuple[str, str]
+        self, static_params: dict, param_dict: dict, metric: tuple[str, str]
     ) -> float:
         """Calculates the objective score for a given set of parameters across all pairs."""
         try:
@@ -57,7 +54,7 @@ class MultiPairOptimizer:
                     test_start=self.opt_start,
                     test_end=self.opt_end,
                     beta_test_start=self.beta_opt_start,
-                    beta_hedge=beta_hedge_mode
+                    beta_hedge=beta_hedge_mode,
                 )
                 results.append(res)
                 individual_stats_dfs.append(res.stats)
@@ -70,7 +67,7 @@ class MultiPairOptimizer:
                 total_initial_cash=self.total_initial_cash,
                 interval=self.interval,
                 risk_free_rate_annual=self.risk_free_rate_annual,
-                number_of_pairs=self.number_of_pairs
+                number_of_pairs=self.number_of_pairs,
             )
 
             score = stats.loc[metric]
@@ -87,16 +84,18 @@ class MultiPairOptimizer:
             return self.penalty_bad
 
     def run(
-            self,
-            static_params: dict[str, Any],
-            param_space: list[Any],
-            metric: tuple[str, str]
+        self,
+        static_params: dict[str, Any],
+        param_space: list[Any],
+        metric: tuple[str, str],
     ) -> tuple[dict, float]:
 
         def wrapper_func(**kwargs) -> float:
             metric_arg = kwargs.pop("metric", metric)
 
-            return self.objective(static_params={}, param_dict=kwargs, metric=metric_arg)
+            return self.objective(
+                static_params={}, param_dict=kwargs, metric=metric_arg
+            )
 
         best_params, best_score = random_search(
             strategy_func=wrapper_func,
@@ -109,93 +108,3 @@ class MultiPairOptimizer:
         )
 
         return best_params, best_score
-
-
-def random_search(
-    strategy_func: Callable,
-    param_space: list,
-    static_params: dict,
-    metric: tuple[str, str],
-    n_iter: int = 1000,
-    replicates: int = 1,
-    penalty_bad: float = -100,
-) -> tuple[dict, float]:
-    def evaluate_point(p, idx) -> tuple[float, dict]:
-        scores = []
-        for _ in range(replicates):
-            try:
-                val = strategy_func(**{**static_params, **p}, metric=metric)
-                if val is None or np.isnan(val) or val == 0 or np.isinf(val):
-                    scores.append(penalty_bad)
-                else:
-                    scores.append(float(val))
-            except Exception as e:
-                print(f"[Opt Error] Iter {idx}: {e}")
-                scores.append(penalty_bad)
-
-        avg_score = float(np.mean(scores))
-        print(f"Iteration {idx + 1}/{n_iter}")
-        return avg_score, p
-
-    pdicts = []
-    for _ in range(n_iter):
-        pdict = {}
-        for dim in param_space:
-            if isinstance(dim, Integer):
-                pdict[dim.name] = randint(dim.low, dim.high)
-            elif isinstance(dim, Real):
-                pdict[dim.name] = uniform(dim.low, dim.high)
-        pdicts.append(pdict)
-
-    results = Parallel(n_jobs=-1, backend="loky")(
-        delayed(evaluate_point)(p, i) for i, p in enumerate(pdicts)
-    )
-
-    best_score, best_params = max(results, key=lambda x: x[0])
-    return best_params, best_score
-
-
-def bayesian_search(
-    strategy_func: Callable,
-    param_space: list,
-    static_params: dict,
-    metric: tuple[str, str],
-    n_iter: int = 50,
-    random_state: int = 42,
-    replicates: int = 1,
-    penalty_bad: int = -100,
-) -> tuple[dict, float]:
-    def objective(params_values):
-        pdict = {dim.name: val for dim, val in zip(param_space, params_values)}
-
-        scores = []
-        for _ in range(replicates):
-            try:
-                val = strategy_func(**{**static_params, **pdict}, metric=metric)
-                if val is None or np.isnan(val) or val == 0 or np.isinf(val):
-                    scores.append(penalty_bad)
-                else:
-                    scores.append(float(val))
-            except Exception as e:
-                print(f"[Opt Error] Params {pdict}: {e}")
-                scores.append(penalty_bad)
-
-        avg_score = float(np.mean(scores))
-
-        return -avg_score
-
-    result = gp_minimize(
-        func=objective,
-        dimensions=param_space,
-        n_calls=n_iter,
-        random_state=random_state,
-        verbose=True,
-    )
-
-    best_params_values = result.x
-    best_score_inverted = result.fun
-
-    best_params = {dim.name: val for dim, val in zip(param_space, best_params_values)}
-    best_score = -best_score_inverted
-
-    return best_params, best_score

@@ -8,7 +8,8 @@ from runners.core.pipelines import (
     execute_pair_selection,
     execute_optimization,
     execute_testing,
-    setup_run_environment, merge_multi_pair_results,
+    setup_run_environment,
+    merge_multi_pair_results,
 )
 
 logger = logging.getLogger(__name__)
