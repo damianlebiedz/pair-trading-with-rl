@@ -44,8 +44,6 @@ class MultiPairOptimizer:
             individual_stats_dfs = []
 
             for strat in self.strategies:
-                beta_hedge_mode = "static" if strat.beta_hedge == "dynamic" else None
-
                 res = strat.run_strategy(
                     window_factor=window_factor,
                     entry_threshold=entry_threshold,
@@ -54,7 +52,6 @@ class MultiPairOptimizer:
                     test_start=self.opt_start,
                     test_end=self.opt_end,
                     beta_test_start=self.beta_opt_start,
-                    beta_hedge=beta_hedge_mode,
                 )
                 results.append(res)
                 individual_stats_dfs.append(res.stats)

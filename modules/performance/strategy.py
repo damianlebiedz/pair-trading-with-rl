@@ -33,9 +33,9 @@ class Strategy:
         fee_rate (float): Transaction fee rate (e.g., 0.001 for 0.1%).
         initial_cash (float): Starting capital (the same for every trade).
         risk_free_rate_annual (float): Annual risk-free rate.
-        window (str): Window mode: "fixed" (manual size), "rolling" (dynamic half-life), "static" (initial half-life).
+        window (str): Window mode: "fixed" (manual size), "rolling" (rolling half-life), "static" (initial half-life).
         source (str): Data source type for beta or/and Z-score calculation.
-        beta_hedge (str, optional): Hedge ratio mode: "dynamic", "static" or None.
+        beta_hedge (str): Hedge ratio mode: "rolling", "static" or "no_hedge".
     """
 
     def __init__(
@@ -50,7 +50,7 @@ class Strategy:
         risk_free_rate_annual: float,
         window: Literal["rolling", "static", "fixed"],
         source: Literal["log", "c_returns", "c_log_returns", "c_norm_returns"],
-        beta_hedge: Literal["dynamic", "static", None],
+        beta_hedge: Literal["rolling", "static", "no_hedge"],
     ):
 
         if window not in ["rolling", "static", "fixed"]:
@@ -61,9 +61,9 @@ class Strategy:
                 "Invalid source: should be 'log', 'c_returns', 'c_log_returns', or 'c_norm_returns'"
             )
 
-        if beta_hedge not in ["dynamic", "static", None]:
+        if beta_hedge not in ["rolling", "static", "no_hedge"]:
             raise ValueError(
-                "Invalid beta_hedge: should be 'dynamic', 'static' or None"
+                "Invalid beta_hedge: should be 'rolling', 'static' or 'no_hedge'"
             )
 
         self.ticker_x = ticker_x
@@ -109,7 +109,6 @@ class Strategy:
         window: Literal["rolling", "static", "fixed"],
         window_factor: float | int,
         beta_test_start: str,
-        beta_hedge: Literal["dynamic", "static", None] | None = None,
     ) -> pd.DataFrame:
         df = df.copy()
 
@@ -118,37 +117,57 @@ class Strategy:
         source_x_col = f"{x_col}_{self.source}"
         source_y_col = f"{y_col}_{self.source}"
 
+        beta_hedge = self.beta_hedge
+
+        test_start_pos = df.index.get_loc(pd.to_datetime(test_start))
+        start_pos = df.index.get_loc(pd.to_datetime(beta_test_start))
+        end_pos = df.index.get_loc(pd.to_datetime(test_end))
+
+        if beta_hedge == "no_hedge":
+            initial_beta = 1.0
+        else:
+            initial_beta = calculate_beta(
+                x_col=source_x_col,
+                y_col=source_y_col,
+                df=df.iloc[start_pos:test_start_pos],
+            )
+
+        if window == "fixed":
+            initial_win = int(window_factor)
+        else:
+            initial_win = calculate_half_life_window(
+                x_col=source_x_col,
+                y_col=source_y_col,
+                beta=initial_beta,
+                df=df.iloc[start_pos:test_start_pos],
+                window_factor=window_factor,
+            )
+
+        start_z_score = 0.0
+        if (
+            initial_win is not None
+            and initial_beta > 0
+            and 2 <= initial_win <= (test_start_pos - start_pos)
+        ):
+            start_z_score = calculate_z_score(
+                x_col=source_x_col,
+                y_col=source_y_col,
+                beta=initial_beta,
+                df=df.iloc[test_start_pos - initial_win : test_start_pos],
+            )
+            if pd.isna(start_z_score):
+                start_z_score = 0.0
+
         total_fees = 0.0
         total_pnl = 0.0
         prev_pnl = 0.0
         position_state = PositionState()
 
-        test_start_pos = df.index.get_loc(pd.to_datetime(test_start))
-        start_pos = df.index.get_loc(pd.to_datetime(beta_test_start))
+        prev_z_score = start_z_score
+        beta = initial_beta
+        win = initial_win
 
-        if beta_hedge is None:
-            beta = 1.0
-        else:
-            beta = calculate_beta(
-                x_col=source_x_col,
-                y_col=source_y_col,
-                df=df.iloc[start_pos:test_start_pos],
-            )
-
-        win = 0
-        if window == "fixed":
-            win = int(window_factor)
-        elif window == "static":
-            win = calculate_half_life_window(
-                x_col=source_x_col,
-                y_col=source_y_col,
-                beta=beta,
-                df=df.iloc[start_pos:test_start_pos],
-                window_factor=window_factor,
-            )
-
-        end_pos = df.index.get_loc(pd.to_datetime(test_end))
-        df["z_score"] = None
+        results_buffer = []
 
         for i in range(test_start_pos, len(df)):
             if total_pnl == -self.initial_cash:
@@ -158,7 +177,7 @@ class Strategy:
             price_x = df[x_col].iloc[i]
             price_y = df[y_col].iloc[i]
 
-            if beta_hedge == "dynamic":
+            if beta_hedge == "rolling":
                 beta = calculate_beta(
                     x_col=source_x_col,
                     y_col=source_y_col,
@@ -190,9 +209,6 @@ class Strategy:
 
             position_state.signal = signal
             idx = df.index[i]
-            prev_z_score = (
-                0.0 if pd.isna(df.iloc[i - 1]["z_score"]) else df.iloc[i - 1]["z_score"]
-            )
 
             pnl, total_fees = TradeExecutor.execute(
                 ctx=self.exec_ctx,
@@ -208,6 +224,8 @@ class Strategy:
                 stop_loss=stop_loss,
             )
 
+            prev_z_score = 0.0 if z_score is None or pd.isna(z_score) else z_score
+
             if pnl != 0:
                 total_pnl = pnl + prev_pnl
                 if (
@@ -221,30 +239,47 @@ class Strategy:
             if total_pnl <= -self.initial_cash:
                 total_pnl = -self.initial_cash
 
-            df.at[idx, "z_score"] = z_score
-            df.at[idx, "window"] = win
-            df.at[idx, "beta"] = beta
-            df.at[idx, "entry_thr"] = entry_threshold
-            df.at[idx, "exit_thr"] = exit_threshold
-            df.at[idx, "sl_thr"] = position_state.stop_loss_threshold
-            df.at[idx, "q_x"] = position_state.q_x
-            df.at[idx, "q_y"] = position_state.q_y
-            df.at[idx, "w_x"] = position_state.w_x
-            df.at[idx, "w_y"] = position_state.w_y
-            df.at[idx, "signal"] = position_state.signal
-            df.at[idx, "position"] = position_state.position
-            df.at[idx, "total_return"] = total_pnl
-            df.at[idx, "total_fees"] = total_fees
-            df.at[idx, "net_return"] = total_pnl - total_fees
+            results_buffer.append(
+                {
+                    "index": idx,
+                    "z_score": z_score,
+                    "window": win,
+                    "beta": beta,
+                    "entry_thr": entry_threshold,
+                    "exit_thr": exit_threshold,
+                    "sl_thr": position_state.stop_loss_threshold,
+                    "q_x": position_state.q_x,
+                    "q_y": position_state.q_y,
+                    "w_x": position_state.w_x,
+                    "w_y": position_state.w_y,
+                    "signal": position_state.signal,
+                    "position": position_state.position,
+                    "total_return": total_pnl,
+                    "total_fees": total_fees,
+                    "net_return": total_pnl - total_fees,
+                }
+            )
 
             position_state.prev_position = position_state.position
+
+        if results_buffer:
+            results_df = pd.DataFrame(results_buffer)
+            results_df.set_index("index", inplace=True)
+
+            df.loc[results_df.index, results_df.columns] = results_df
 
         df["total_return_pct"] = df["total_return"] / self.initial_cash
         df["net_return_pct"] = df["net_return"] / self.initial_cash
 
-        df = df.iloc[test_start_pos : end_pos + 1].copy()
+        if results_buffer:
+            last_processed_idx = results_buffer[-1]["index"]
+            last_pos_loc = df.index.get_loc(last_processed_idx)
+            final_slice_end = min(last_pos_loc, end_pos)
+            df = df.iloc[test_start_pos : final_slice_end + 1].copy()
+        else:
+            df = df.iloc[test_start_pos : end_pos + 1].copy()
 
-        return df.drop(columns=[source_x_col, source_y_col])
+        return df.drop(columns=[source_x_col, source_y_col], errors="ignore")
 
     def run_strategy(
         self,
@@ -255,7 +290,6 @@ class Strategy:
         test_start: str,
         test_end: str,
         beta_test_start: str,
-        beta_hedge: str | None = None,
     ) -> StrategyResult:
         """
         Executes the strategy backtest with specific parameters.
@@ -275,13 +309,10 @@ class Strategy:
             test_start (str): Start date for the backtest loop.
             test_end (str): End date for the backtest loop.
             beta_test_start (str): Start date for beta and Z-score window calculation.
-            beta_hedge (str, optional): Override for beta_hedge mode.
 
         Returns:
             StrategyResult: Object containing backtest data and performance statistics.
         """
-        if beta_hedge is None:
-            beta_hedge = self.beta_hedge
 
         data = self._execute_loop(
             df=self.data,
@@ -293,7 +324,6 @@ class Strategy:
             window=self.window,
             window_factor=window_factor,
             beta_test_start=beta_test_start,
-            beta_hedge=beta_hedge,
         )
 
         stats = calculate_stats(
@@ -366,11 +396,6 @@ class Strategy:
             tuple[dict, float]: Best parameters found and the corresponding score.
         """
 
-        if self.beta_hedge == "dynamic":
-            beta_hedge = "static"
-        else:
-            beta_hedge = None
-
         def objective_wrapper(
             window_factor: float | int,
             entry_threshold: float,
@@ -387,7 +412,6 @@ class Strategy:
                     test_start=opt_start,
                     test_end=opt_end,
                     beta_test_start=beta_opt_start,
-                    beta_hedge=beta_hedge,
                 )
 
                 score = result.stats.loc[metric]

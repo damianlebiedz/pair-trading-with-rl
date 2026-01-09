@@ -15,22 +15,40 @@ from runners.core.pipelines import (
 logger = logging.getLogger(__name__)
 output_dir = setup_run_environment(__file__)
 
-# =======================================================
+with hydra.initialize(version_base=None, config_path="../conf"):
+    cfg = hydra.compose(config_name="base")
+
 static_params = {
     # "window_factor": 1,
     # "stop_loss": 2,
 }
+
+if cfg.performance.window == "fixed":
+    window_factor_min = cfg.performance.optimization.fixed_window_factor_min
+    window_factor_max = cfg.performance.optimization.fixed_window_factor_max
+else:
+    window_factor_min = cfg.performance.optimization.window_factor_min
+    window_factor_max = cfg.performance.optimization.window_factor_max
+
 param_space = [
-    Real(1.00, 3.00, name="window_factor"),
-    Real(1.10, 3.00, name="entry_threshold"),
-    Real(0.0, 1.00, name="exit_threshold"),
-    Real(1.10, 2.00, name="stop_loss"),
+    Real(window_factor_min, window_factor_max, name="window_factor"),
+    Real(
+        cfg.performance.optimization.entry_threshold_min,
+        cfg.performance.optimization.entry_threshold_min,
+        name="entry_threshold",
+    ),
+    Real(
+        cfg.performance.optimization.exit_threshold_min,
+        cfg.performance.optimization.exit_threshold_max,
+        name="exit_threshold",
+    ),
+    Real(
+        cfg.performance.optimization.stop_loss_min,
+        cfg.performance.optimization.stop_loss_max,
+        name="stop_loss",
+    ),
 ]
 metric = ("objective", "net")
-# =======================================================
-
-with hydra.initialize(version_base=None, config_path="../conf"):
-    cfg = hydra.compose(config_name="base")
 
 logger.info(f"Saving results to: {output_dir}")
 logger.info("CONFIG:\n%s", OmegaConf.to_yaml(cfg))

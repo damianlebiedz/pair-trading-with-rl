@@ -1,5 +1,6 @@
 pair_selection:
-  eg_factor: 0.05
+  eg_factor_both: 0.05
+  eg_factor_second: 0.01
   method: "both" # "both" or "second"
 
   optimization:
@@ -13,7 +14,7 @@ pair_selection:
 performance:
   window: "static" # "rolling", "static" or "fixed"
   source: "log" # "log", "c_returns", "c_log_returns", "c_norm_returns"
-  beta_hedge: "static" # "dynamic", "static", None (exactly nothing -> 'beta_hedge: ')
+  beta_hedge: "static" # "rolling", "static", "no_hedge"
 
   optimization:
     beta_start: "2024-01-01"
@@ -22,8 +23,24 @@ performance:
 
     # Bayesian-Search parameters
     n_iter: 1000
-    replicates: 2
+    replicates: 1
     penalty_bad: -100
+
+    # Parameters space
+    window_factor_min: 1.00
+    window_factor_max: 3.00
+
+    fixed_window_factor_min: 10
+    fixed_window_factor_max: 1000
+
+    entry_threshold_min: 1.10
+    entry_threshold_max: 3.00
+
+    exit_threshold_min: 0.00
+    exit_threshold_max: 1.00
+
+    stop_loss_min: 1.10
+    stop_loss_max: 2.00
 
   test:
     beta_start: "2024-03-01"

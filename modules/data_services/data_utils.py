@@ -73,7 +73,12 @@ def save_dataframe(
     target_dir.mkdir(parents=True, exist_ok=True)
     path = target_dir / f"{file_name}.parquet"
 
-    df.to_parquet(path, engine="pyarrow", index=False)
+    df_to_save = df
+
+    if df.index.name is not None:
+        df_to_save = df.reset_index()
+
+    df_to_save.to_parquet(path, engine="pyarrow", index=False)
 
 
 def save_strategy_result(

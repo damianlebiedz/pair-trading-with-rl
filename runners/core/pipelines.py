@@ -144,7 +144,7 @@ def execute_testing(
 
     save_dataframe(
         df=result.stats,
-        file_name=f"test_stats_{ticker_x}_{ticker_y}_{test_start}_{test_end}",
+        file_name=f"stats_{ticker_x}_{ticker_y}_{test_start}_{test_end}",
         directory=output_dir,
     )
 
@@ -179,7 +179,6 @@ def execute_pair_selection(cfg: DictConfig, output_dir: str) -> pd.DataFrame:
     eg_df_opt = engle_granger_cointegration(df_opt, source="log_prices")
     eg_df_test = engle_granger_cointegration(df_test, source="log_prices")
 
-    eg_factor = cfg.pair_selection.eg_factor
     selection_method = cfg.pair_selection.method
     if selection_method not in ["both", "second"]:
         raise ValueError("'method' must be 'both' or 'second'")
@@ -189,13 +188,14 @@ def execute_pair_selection(cfg: DictConfig, output_dir: str) -> pd.DataFrame:
     )
 
     if selection_method == "second":
-        condition = merged_df["eg_p_value_test"] <= eg_factor
+        condition = merged_df["eg_p_value_test"] <= cfg.pair_selection.eg_factor_second
         sort_column = "eg_p_value_test"
         logger.info("Selection method: 'second' (filtering by test set only).")
 
     else:
-        condition = (merged_df["eg_p_value_opt"] <= eg_factor) & (
-            merged_df["eg_p_value_test"] <= eg_factor
+        eg_factor_both = cfg.pair_selection.eg_factor_both
+        condition = (merged_df["eg_p_value_opt"] <= eg_factor_both) & (
+            merged_df["eg_p_value_test"] <= eg_factor_both
         )
         sort_column = "eg_p_value_opt"
         logger.info(
@@ -204,15 +204,15 @@ def execute_pair_selection(cfg: DictConfig, output_dir: str) -> pd.DataFrame:
 
     final_df = merged_df[condition].sort_values(sort_column).reset_index(drop=True)
 
+    final_df = final_df.round(4)
+
     save_dataframe(
         df=final_df,
         file_name=f"pair_selection_{selection_method}_{cfg.pair_selection.optimization.start}_{cfg.pair_selection.test.end}",
         directory=output_dir,
     )
 
-    logger.info(
-        f"Pair Selection completed. Selected {len(final_df)} pairs using method '{selection_method}' with eg_factor <= {eg_factor}."
-    )
+    logger.info(f"Pair Selection completed. Selected {len(final_df)} pairs.")
 
     return final_df
 
