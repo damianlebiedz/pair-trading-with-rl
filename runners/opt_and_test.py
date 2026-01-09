@@ -37,7 +37,7 @@ param_space = [
     Real(window_factor_min, window_factor_max, name="window_factor"),
     Real(
         cfg.performance.optimization.entry_threshold_min,
-        cfg.performance.optimization.entry_threshold_min,
+        cfg.performance.optimization.entry_threshold_max,
         name="entry_threshold",
     ),
     Real(
