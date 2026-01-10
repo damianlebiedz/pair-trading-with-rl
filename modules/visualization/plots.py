@@ -42,7 +42,6 @@ def plot_zscore_pos(
     result,
     directory: str | None = None,
     save: bool = False,
-    show: bool = True,
 ) -> None:
     df = result.data.copy()
 
@@ -231,16 +230,12 @@ def plot_zscore_pos(
         results_dir.mkdir(parents=True, exist_ok=True)
         fig.write_html(results_dir / filename)
 
-    if show:
-        fig.show()
-
 
 def plot_returns(
     result,
     btc_data: pd.DataFrame | None = None,
     directory: str | None = None,
-    save: bool = False,
-    show: bool = False,
+    save: bool = True,
 ) -> None:
     df = result.data.copy()
 
@@ -362,6 +357,3 @@ def plot_returns(
     if save:
         results_dir.mkdir(parents=True, exist_ok=True)
         fig.write_html(results_dir / filename)
-
-    if show:
-        fig.show()

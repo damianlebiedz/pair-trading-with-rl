@@ -148,13 +148,13 @@ def execute_testing(
         directory=output_dir,
     )
 
-    plot_zscore_pos(result, directory=output_dir, save=True, show=True)
+    plot_zscore_pos(result, directory=output_dir, save=True)
     btc_data = load_btc_benchmark(
         test_start=test_start,
         test_end=test_end,
         interval=cfg.market.interval,
     )
-    plot_returns(result, btc_data, directory=output_dir, save=True, show=True)
+    plot_returns(result, btc_data, directory=output_dir, save=True)
 
     logger.info("Testing completed, returning StrategyResult.")
 
@@ -227,7 +227,7 @@ def merge_multi_pair_results(
     test_start: str,
     test_end: str,
 ) -> StrategyResult:
-    """Merges multiple StrategyResult objects into one aggregate result, saves it and shows PnL plot."""
+    """Merges multiple StrategyResult objects into one aggregate result and saves it."""
     if not results:
         raise ValueError("No results to merge")
 
@@ -272,7 +272,7 @@ def merge_multi_pair_results(
         test_end=test_end,
         interval=cfg.market.interval,
     )
-    plot_returns(final_result, btc_data, directory=output_dir, save=True, show=True)
+    plot_returns(final_result, btc_data, directory=output_dir, save=True)
 
     logger.info("Merge Multi-Pair Results completed, returning StrategyResult.")
 
