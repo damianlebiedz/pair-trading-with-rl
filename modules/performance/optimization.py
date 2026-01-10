@@ -24,6 +24,7 @@ class MultiPairOptimizer:
         self.penalty_bad = cfg.performance.optimization.penalty_bad
         self.interval = strategies[0].interval
         self.risk_free_rate_annual = strategies[0].risk_free_rate_annual
+        self.min_trades_per_pair = cfg.performance.optimization.min_trades_per_pair
 
         self.total_initial_cash = sum(s.initial_cash for s in strategies)
         self.number_of_pairs = len(strategies)
@@ -65,6 +66,7 @@ class MultiPairOptimizer:
                 interval=self.interval,
                 risk_free_rate_annual=self.risk_free_rate_annual,
                 number_of_pairs=self.number_of_pairs,
+                min_trades_per_pair=self.min_trades_per_pair,
             )
 
             score = stats.loc[metric]

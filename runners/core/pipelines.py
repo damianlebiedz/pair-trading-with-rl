@@ -240,6 +240,7 @@ def merge_multi_pair_results(
         interval=results[0].interval,
         risk_free_rate_annual=risk_free_rate_annual,
         number_of_pairs=len(results),
+        min_trades_per_pair=cfg.performance.optimization.min_trades_per_pair,
     )
 
     final_result = StrategyResult(
@@ -262,7 +263,7 @@ def merge_multi_pair_results(
 
     save_dataframe(
         df=final_result.stats,
-        file_name=f"test_stats_multi_pair_{test_start}_{test_end}",
+        file_name=f"stats_multi_pair_{test_start}_{test_end}",
         directory=output_dir,
     )
 

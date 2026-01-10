@@ -33,14 +33,17 @@ performance:
     fixed_window_factor_min: 10
     fixed_window_factor_max: 1000
 
-    entry_threshold_min: 1.10
-    entry_threshold_max: 3.00
+    entry_threshold_min: 2.00
+    entry_threshold_max: 4.00
 
     exit_threshold_min: 0.00
     exit_threshold_max: 1.00
 
-    stop_loss_min: 1.10
-    stop_loss_max: 2.00
+    stop_loss_min: 2.00
+    stop_loss_max: 4.00
+
+    # Objective parameters
+    min_trades_per_pair: 15
 
   test:
     beta_start: "2024-03-01"

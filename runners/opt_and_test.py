@@ -65,6 +65,7 @@ bt = Strategy(
     cfg.market.fee_rate,
     cfg.market.initial_cash,
     cfg.market.risk_free_rate_annual,
+    cfg.performance.optimization.min_trades_per_pair,
     cfg.performance.window,
     cfg.performance.source,
     cfg.performance.beta_hedge,

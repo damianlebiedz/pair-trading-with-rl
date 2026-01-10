@@ -33,6 +33,7 @@ class Strategy:
         fee_rate (float): Transaction fee rate (e.g., 0.001 for 0.1%).
         initial_cash (float): Starting capital (the same for every trade).
         risk_free_rate_annual (float): Annual risk-free rate.
+        min_trades_per_pair (int): Minimum number of trades per pair for the objective.
         window (str): Window mode: "fixed" (manual size), "rolling" (rolling half-life), "static" (initial half-life).
         source (str): Data source type for beta or/and Z-score calculation.
         beta_hedge (str): Hedge ratio mode: "rolling", "static" or "no_hedge".
@@ -48,6 +49,7 @@ class Strategy:
         fee_rate: float,
         initial_cash: float,
         risk_free_rate_annual: float,
+        min_trades_per_pair: int,
         window: Literal["rolling", "static", "fixed"],
         source: Literal["log", "c_returns", "c_log_returns", "c_norm_returns"],
         beta_hedge: Literal["rolling", "static", "no_hedge"],
@@ -74,6 +76,7 @@ class Strategy:
         self.fee_rate = fee_rate
         self.initial_cash = initial_cash
         self.risk_free_rate_annual = risk_free_rate_annual
+        self.min_trades_per_pair = min_trades_per_pair
         self.window = window
         self.source = source
         self.beta_hedge = beta_hedge
@@ -331,6 +334,7 @@ class Strategy:
             initial_cash=self.initial_cash,
             interval=self.interval,
             risk_free_rate_annual=self.risk_free_rate_annual,
+            min_trades_per_pair=self.min_trades_per_pair,
         )
 
         return StrategyResult(

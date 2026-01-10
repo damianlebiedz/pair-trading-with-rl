@@ -11,7 +11,7 @@ def calculate_stats(
     initial_cash: float,
     interval: Literal["1d", "4h", "1h", "30m", "15m", "5m", "3m", "1m"],
     risk_free_rate_annual: float,
-    number_of_pairs: int = 1,
+    min_trades_per_pair: int,
 ) -> pd.DataFrame:
     steps_per_day = get_steps(interval)
     periods_per_year = steps_per_day * 365
@@ -134,8 +134,7 @@ def calculate_stats(
         calmar_ratio_annual = cagr / abs(max_drawdown) if max_drawdown != 0 else None
 
         # Objective
-        min_trades = 30
-        objective = -100 if total_trades < min_trades * number_of_pairs else sortino_ratio_annual
+        objective = -100 if total_trades < min_trades_per_pair else sortino_ratio_annual
 
         return {
             "total_return": total_return,
@@ -204,6 +203,7 @@ def calculate_multi_pair_stats(
     interval: str,
     risk_free_rate_annual: float,
     number_of_pairs: int,
+    min_trades_per_pair: int,
 ) -> pd.DataFrame:
     """
     Calculates statistics for a multi-pair portfolio.
@@ -221,10 +221,12 @@ def calculate_multi_pair_stats(
         initial_cash=total_initial_cash,
         interval=interval,
         risk_free_rate_annual=risk_free_rate_annual,
-        number_of_pairs=number_of_pairs,
+        min_trades_per_pair=min_trades_per_pair,
     )
 
     agg_stats = {"gross": {}, "net": {}}
+
+    min_total_trades = min_trades_per_pair * number_of_pairs
 
     for col in ["gross", "net"]:
         ind_series = [stats_df[col] for stats_df in individual_stats_dfs]
@@ -248,6 +250,13 @@ def calculate_multi_pair_stats(
         max_lose = np.min([s["max_lose"] for s in ind_series]) / number_of_pairs
 
         current_stats = portfolio_stats[col].to_dict()
+        raw_objective = current_stats["sortino_ratio_annual"]
+
+        if total_trades < min_total_trades:
+            objective = -100.0
+        else:
+            objective = raw_objective
+
         current_stats.update(
             {
                 "win_count": total_wins,
@@ -258,7 +267,7 @@ def calculate_multi_pair_stats(
                 "avg_trade_return": avg_trade_return,
                 "max_win": max_win,
                 "max_lose": max_lose,
-                "objective": current_stats["sortino_ratio_annual"],
+                "objective": objective,
             }
         )
 
