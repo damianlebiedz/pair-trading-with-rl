@@ -12,17 +12,17 @@ pair_selection:
     end: "2024-09-01"
 
 performance:
-  window: "static" # "rolling", "static" or "fixed"
+  window: "rolling" # "rolling", "static" or "fixed"
   source: "log" # "log", "c_returns", "c_log_returns", "c_norm_returns"
-  beta_hedge: "static" # "rolling", "static", "no_hedge"
+  beta_hedge: "rolling" # "rolling", "static", "no_hedge"
 
   optimization:
     beta_start: "2024-01-01"
     start: "2024-07-01"
     end: "2024-09-01"
 
-    # Bayesian-Search parameters
-    n_iter: 1000
+    # Search parameters
+    n_iter: 300
     replicates: 1
     penalty_bad: -100
 

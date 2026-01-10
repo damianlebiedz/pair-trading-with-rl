@@ -77,7 +77,6 @@ def main(cfg: DictConfig):
         strategies.append(bt)
         strategies_map[pair_name] = bt
 
-    logger.info("--- Starting Multi-Pair Optimization ---")
     best_params = execute_multi_pair_optimization(
         cfg, strategies, static_params, param_space, metric
     )
