@@ -231,23 +231,54 @@ def calculate_multi_pair_stats(
     for col in ["gross", "net"]:
         ind_series = [stats_df[col] for stats_df in individual_stats_dfs]
 
-        total_wins = sum(s["win_count"] for s in ind_series)
-        total_losses = sum(s["lose_count"] for s in ind_series)
+        valid_series = [
+            s for s in ind_series
+            if s["win_count"] + s["lose_count"] > 0
+        ]
+
+        if not valid_series:
+            agg_stats[col] = portfolio_stats[col].to_dict()
+            agg_stats[col]["objective"] = -100.0
+            continue
+
+        total_wins = sum(s["win_count"] for s in valid_series)
+        total_losses = sum(s["lose_count"] for s in valid_series)
         total_trades = total_wins + total_losses
 
         win_rate = total_wins / total_trades if total_trades > 0 else None
 
-        avg_win_return = (
-            np.mean([s["avg_win_return"] for s in ind_series]) / number_of_pairs
+        def weighted_avg(values, weights):
+            return (
+                np.average(values, weights=weights)
+                if sum(weights) > 0
+                else np.nan
+            )
+
+        trade_counts = [
+            s["win_count"] + s["lose_count"]
+            for s in valid_series
+        ]
+
+        avg_win_return = weighted_avg(
+            [s["avg_win_return"] for s in valid_series],
+            trade_counts
         )
-        avg_lose_return = (
-            np.mean([s["avg_lose_return"] for s in ind_series]) / number_of_pairs
+
+        avg_lose_return = weighted_avg(
+            [s["avg_lose_return"] for s in valid_series],
+            trade_counts
         )
-        avg_trade_return = (
-            np.mean([s["avg_trade_return"] for s in ind_series]) / number_of_pairs
+
+        avg_trade_return = weighted_avg(
+            [s["avg_trade_return"] for s in valid_series],
+            trade_counts
         )
-        max_win = np.max([s["max_win"] for s in ind_series]) / number_of_pairs
-        max_lose = np.min([s["max_lose"] for s in ind_series]) / number_of_pairs
+
+        wins = [s["max_win"] for s in valid_series if not np.isnan(s["max_win"])]
+        losses = [s["max_lose"] for s in valid_series if not np.isnan(s["max_lose"])]
+
+        max_win = max(wins) if wins else np.nan
+        max_lose = min(losses) if losses else np.nan
 
         current_stats = portfolio_stats[col].to_dict()
         raw_objective = current_stats["sortino_ratio_annual"]

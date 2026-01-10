@@ -14,8 +14,8 @@ logger = logging.getLogger(__name__)
 output_dir = setup_run_environment(__file__)
 
 # =======================================================
-ticker_x = "XRPUSDT"
-ticker_y = "DOTUSDT"
+ticker_x = "BTCUSDT"
+ticker_y = "LINKUSDT"
 # =======================================================
 
 with hydra.initialize(version_base=None, config_path="../conf"):
