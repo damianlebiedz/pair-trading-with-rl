@@ -14,23 +14,44 @@ logger = logging.getLogger(__name__)
 output_dir = setup_run_environment(__file__)
 
 # =======================================================
-ticker_x = "BNBUSDT"
-ticker_y = "UNIUSDT"
-static_params = {
-    "window_factor": 1,
-    "stop_loss": 2,
-}
-param_space = [
-    # Real(0.5, 2, name="window_factor"),
-    Real(1.01, 4.00, name="entry_threshold"),
-    Real(0.0, 1.00, name="exit_threshold"),
-    # Real(1.01, 2.00, name="stop_loss"),
-]
-metric = ("objective", "net")
+ticker_x = "BTCUSDT"
+ticker_y = "LINKUSDT"
 # =======================================================
 
 with hydra.initialize(version_base=None, config_path="../conf"):
     cfg = hydra.compose(config_name="base")
+
+static_params = {
+    # "window_factor": 1,
+    # "stop_loss": 2,
+}
+
+if cfg.performance.window == "fixed":
+    window_factor_min = cfg.performance.optimization.fixed_window_factor_min
+    window_factor_max = cfg.performance.optimization.fixed_window_factor_max
+else:
+    window_factor_min = cfg.performance.optimization.window_factor_min
+    window_factor_max = cfg.performance.optimization.window_factor_max
+
+param_space = [
+    Real(window_factor_min, window_factor_max, name="window_factor"),
+    Real(
+        cfg.performance.optimization.entry_threshold_min,
+        cfg.performance.optimization.entry_threshold_max,
+        name="entry_threshold",
+    ),
+    Real(
+        cfg.performance.optimization.exit_threshold_min,
+        cfg.performance.optimization.exit_threshold_max,
+        name="exit_threshold",
+    ),
+    Real(
+        cfg.performance.optimization.stop_loss_min,
+        cfg.performance.optimization.stop_loss_max,
+        name="stop_loss",
+    ),
+]
+metric = ("objective", "net")
 
 logger.info(f"Saving results to: {output_dir}")
 logger.info("CONFIG:\n%s", OmegaConf.to_yaml(cfg))
@@ -44,6 +65,7 @@ bt = Strategy(
     cfg.market.fee_rate,
     cfg.market.initial_cash,
     cfg.market.risk_free_rate_annual,
+    cfg.performance.optimization.min_trades_per_pair,
     cfg.performance.window,
     cfg.performance.source,
     cfg.performance.beta_hedge,

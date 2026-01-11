@@ -71,7 +71,6 @@ def engle_granger_cointegration(
             {
                 "pair": f"{x}-{y}",
                 "eg_p_value": p_value,
-                "adf_stat": score,
             }
         )
 

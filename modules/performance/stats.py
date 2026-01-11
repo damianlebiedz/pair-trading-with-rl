@@ -2,6 +2,7 @@ from typing import Literal
 import numpy as np
 import pandas as pd
 
+from modules.core.models import StrategyResult
 from modules.data_services.data_utils import get_steps
 
 
@@ -10,6 +11,7 @@ def calculate_stats(
     initial_cash: float,
     interval: Literal["1d", "4h", "1h", "30m", "15m", "5m", "3m", "1m"],
     risk_free_rate_annual: float,
+    min_trades_per_pair: int,
 ) -> pd.DataFrame:
     steps_per_day = get_steps(interval)
     periods_per_year = steps_per_day * 365
@@ -132,7 +134,7 @@ def calculate_stats(
         calmar_ratio_annual = cagr / abs(max_drawdown) if max_drawdown != 0 else None
 
         # Objective
-        objective = -100 if total_trades < 10 else sortino_ratio_annual
+        objective = -100 if total_trades < min_trades_per_pair else sortino_ratio_annual
 
         return {
             "total_return": total_return,
@@ -194,4 +196,164 @@ def calculate_stats(
     return stats_df.round(4)
 
 
-def calculate_multi_pair_stats(): ...
+def calculate_multi_pair_stats(
+    merged_df: pd.DataFrame,
+    individual_stats_dfs: list[pd.DataFrame],
+    total_initial_cash: float,
+    interval: str,
+    risk_free_rate_annual: float,
+    number_of_pairs: int,
+    min_trades_per_pair: int,
+) -> pd.DataFrame:
+    """
+    Calculates statistics for a multi-pair portfolio.
+    Hybrid approach:
+    - Time-series metrics (Sharpe, DD, CAGR) are calculated on the merged equity curve.
+    - Trade metrics (Win rate, Counts) are aggregated from individual results.
+    """
+
+    merged_df_for_calc = merged_df.copy()
+    if "position" not in merged_df_for_calc.columns:
+        merged_df_for_calc["position"] = 0
+
+    portfolio_stats = calculate_stats(
+        df=merged_df_for_calc,
+        initial_cash=total_initial_cash,
+        interval=interval,
+        risk_free_rate_annual=risk_free_rate_annual,
+        min_trades_per_pair=min_trades_per_pair,
+    )
+
+    agg_stats = {"gross": {}, "net": {}}
+
+    min_total_trades = min_trades_per_pair * number_of_pairs
+
+    for col in ["gross", "net"]:
+        ind_series = [stats_df[col] for stats_df in individual_stats_dfs]
+
+        valid_series = [s for s in ind_series if s["win_count"] + s["lose_count"] > 0]
+
+        if not valid_series:
+            agg_stats[col] = portfolio_stats[col].to_dict()
+            agg_stats[col]["objective"] = -100.0
+            continue
+
+        total_wins = sum(s["win_count"] for s in valid_series)
+        total_losses = sum(s["lose_count"] for s in valid_series)
+        total_trades = total_wins + total_losses
+
+        win_rate = total_wins / total_trades if total_trades > 0 else None
+
+        def weighted_avg(values, weights):
+            valid_data = [(v, w) for v, w in zip(values, weights) if not pd.isna(v)]
+
+            if not valid_data:
+                return None
+
+            clean_vals = [x[0] for x in valid_data]
+            clean_wgts = [x[1] for x in valid_data]
+
+            if sum(clean_wgts) == 0:
+                return None
+
+            return np.average(clean_vals, weights=clean_wgts)
+
+        trade_counts = [s["win_count"] + s["lose_count"] for s in valid_series]
+
+        avg_win_return = weighted_avg(
+            [s["avg_win_return"] for s in valid_series], trade_counts
+        )
+
+        avg_lose_return = weighted_avg(
+            [s["avg_lose_return"] for s in valid_series], trade_counts
+        )
+
+        avg_trade_return = weighted_avg(
+            [s["avg_trade_return"] for s in valid_series], trade_counts
+        )
+
+        wins = [
+            s["max_win"]
+            for s in valid_series
+            if s["max_win"] is not None and not np.isnan(s["max_win"])
+        ]
+        losses = [
+            s["max_lose"]
+            for s in valid_series
+            if s["max_lose"] is not None and not np.isnan(s["max_lose"])
+        ]
+
+        max_win = max(wins) if wins else None
+        max_lose = min(losses) if losses else None
+
+        current_stats = portfolio_stats[col].to_dict()
+        raw_objective = current_stats["sortino_ratio_annual"]
+
+        if total_trades < min_total_trades:
+            objective = -100.0
+        else:
+            objective = raw_objective
+
+        current_stats.update(
+            {
+                "win_count": total_wins,
+                "lose_count": total_losses,
+                "win_rate": win_rate,
+                "avg_win_return": avg_win_return,
+                "avg_lose_return": avg_lose_return,
+                "avg_trade_return": avg_trade_return,
+                "max_win": max_win,
+                "max_lose": max_lose,
+                "objective": objective,
+            }
+        )
+
+        agg_stats[col] = current_stats
+
+    metrics_order = portfolio_stats.index
+
+    final_df = pd.DataFrame(
+        {
+            "metric": metrics_order,
+            "gross": [agg_stats["gross"].get(m) for m in metrics_order],
+            "net": [agg_stats["net"].get(m) for m in metrics_order],
+        }
+    ).set_index("metric")
+
+    return final_df.round(4)
+
+
+def aggregate_strategy_results(
+    results: list[StrategyResult], total_initial_cash: float
+) -> pd.DataFrame:
+    if not results:
+        raise ValueError("No results to aggregate")
+
+    base_df = results[0].data.copy()
+    base_index = base_df.index
+
+    total_return_sum = pd.Series(0.0, index=base_index)
+    net_return_sum = pd.Series(0.0, index=base_index)
+    fees_sum = pd.Series(0.0, index=base_index)
+
+    for res in results:
+        df = res.data
+        total_return_sum = total_return_sum.add(df["total_return"], fill_value=0)
+        net_return_sum = net_return_sum.add(df["net_return"], fill_value=0)
+        if "fees" in df.columns:
+            fees_sum = fees_sum.add(df["fees"], fill_value=0)
+
+    merged_df = pd.DataFrame(index=base_index)
+    merged_df["total_return"] = total_return_sum
+    merged_df["net_return"] = net_return_sum
+    merged_df["fees"] = fees_sum
+
+    merged_df["total_return_pct"] = merged_df["total_return"] / total_initial_cash
+    merged_df["net_return_pct"] = merged_df["net_return"] / total_initial_cash
+
+    merged_df["position"] = 0
+    merged_df["z_score"] = 0
+    merged_df["entry_thr"] = 0
+    merged_df["exit_thr"] = 0
+
+    return merged_df

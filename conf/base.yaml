@@ -8,6 +8,9 @@ hydra:
     dir: results/${now:%Y-%m-%d_%H-%M-%S}
   output_subdir: null
 
+paths:
+  models_dir: models
+
 tickers: [ "BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT", "ADAUSDT", "AVAXUSDT", "DOGEUSDT", "TRXUSDT",
            "DOTUSDT", "LINKUSDT", "SHIBUSDT", "LTCUSDT", "BCHUSDT", "UNIUSDT" ]
   

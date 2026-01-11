@@ -9,13 +9,13 @@ logger = logging.getLogger(__name__)
 output_dir = setup_run_environment(__file__)
 
 # =======================================================
-ticker_x = "BNBUSDT"
-ticker_y = "UNIUSDT"
+ticker_x = "XRPUSDT"
+ticker_y = "DOTUSDT"
 best_params = {
-    "window_factor": 1,
+    "window_factor": 2,
     "entry_threshold": 2,
     "exit_threshold": 0,
-    "stop_loss": 2,
+    "stop_loss": 1.2,
 }
 # =======================================================
 
@@ -34,6 +34,7 @@ bt = Strategy(
     cfg.market.fee_rate,
     cfg.market.initial_cash,
     cfg.market.risk_free_rate_annual,
+    cfg.performance.optimization.min_trades_per_pair,
     cfg.performance.window,
     cfg.performance.source,
     cfg.performance.beta_hedge,
