@@ -248,11 +248,21 @@ def calculate_multi_pair_stats(
         win_rate = total_wins / total_trades if total_trades > 0 else None
 
         def weighted_avg(values, weights):
-            return (
-                np.average(values, weights=weights)
-                if sum(weights) > 0
-                else np.nan
-            )
+            valid_data = [
+                (v, w) for v, w in zip(values, weights)
+                if not pd.isna(v)
+            ]
+
+            if not valid_data:
+                return None
+
+            clean_vals = [x[0] for x in valid_data]
+            clean_wgts = [x[1] for x in valid_data]
+
+            if sum(clean_wgts) == 0:
+                return None
+
+            return np.average(clean_vals, weights=clean_wgts)
 
         trade_counts = [
             s["win_count"] + s["lose_count"]
@@ -274,11 +284,11 @@ def calculate_multi_pair_stats(
             trade_counts
         )
 
-        wins = [s["max_win"] for s in valid_series if not np.isnan(s["max_win"])]
-        losses = [s["max_lose"] for s in valid_series if not np.isnan(s["max_lose"])]
+        wins = [s["max_win"] for s in valid_series if s["max_win"] is not None and not np.isnan(s["max_win"])]
+        losses = [s["max_lose"] for s in valid_series if s["max_lose"] is not None and not np.isnan(s["max_lose"])]
 
-        max_win = max(wins) if wins else np.nan
-        max_lose = min(losses) if losses else np.nan
+        max_win = max(wins) if wins else None
+        max_lose = min(losses) if losses else None
 
         current_stats = portfolio_stats[col].to_dict()
         raw_objective = current_stats["sortino_ratio_annual"]

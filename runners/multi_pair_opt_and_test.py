@@ -82,9 +82,6 @@ def main(cfg: DictConfig):
         cfg, strategies, static_params, param_space, metric
     )
 
-    opt_results = []
-    opt_stats = []
-
     test_results = []
     test_stats = []
 
@@ -97,7 +94,7 @@ def main(cfg: DictConfig):
         logger.info(f"Testing pair: {pair_name}")
 
         logger.info("--- Starting Test of Optimization ---")
-        result_opt = execute_testing(
+        execute_testing(
             cfg,
             bt,
             best_params,
@@ -121,8 +118,6 @@ def main(cfg: DictConfig):
             cfg.performance.test.start,
             cfg.performance.test.end,
         )
-        opt_results.append(result_opt)
-        opt_stats.append(result_opt.stats)
 
         test_results.append(result_test)
         test_stats.append(result_test.stats)
@@ -130,17 +125,6 @@ def main(cfg: DictConfig):
     logger.info("--- Merging Multi-Pair Results ---")
 
     total_cash_portfolio = cfg.market.initial_cash * len(selected_pairs_names)
-
-    merge_multi_pair_results(
-        cfg,
-        output_dir,
-        opt_results,
-        opt_stats,
-        total_cash_portfolio,
-        cfg.market.risk_free_rate_annual,
-        cfg.performance.test.start,
-        cfg.performance.test.end,
-    )
 
     merge_multi_pair_results(
         cfg,
