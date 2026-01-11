@@ -137,5 +137,6 @@ def main(cfg: DictConfig):
         cfg.performance.test.end,
     )
 
+
 if __name__ == "__main__":
     main()

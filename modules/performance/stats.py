@@ -231,10 +231,7 @@ def calculate_multi_pair_stats(
     for col in ["gross", "net"]:
         ind_series = [stats_df[col] for stats_df in individual_stats_dfs]
 
-        valid_series = [
-            s for s in ind_series
-            if s["win_count"] + s["lose_count"] > 0
-        ]
+        valid_series = [s for s in ind_series if s["win_count"] + s["lose_count"] > 0]
 
         if not valid_series:
             agg_stats[col] = portfolio_stats[col].to_dict()
@@ -248,10 +245,7 @@ def calculate_multi_pair_stats(
         win_rate = total_wins / total_trades if total_trades > 0 else None
 
         def weighted_avg(values, weights):
-            valid_data = [
-                (v, w) for v, w in zip(values, weights)
-                if not pd.isna(v)
-            ]
+            valid_data = [(v, w) for v, w in zip(values, weights) if not pd.isna(v)]
 
             if not valid_data:
                 return None
@@ -264,28 +258,30 @@ def calculate_multi_pair_stats(
 
             return np.average(clean_vals, weights=clean_wgts)
 
-        trade_counts = [
-            s["win_count"] + s["lose_count"]
-            for s in valid_series
-        ]
+        trade_counts = [s["win_count"] + s["lose_count"] for s in valid_series]
 
         avg_win_return = weighted_avg(
-            [s["avg_win_return"] for s in valid_series],
-            trade_counts
+            [s["avg_win_return"] for s in valid_series], trade_counts
         )
 
         avg_lose_return = weighted_avg(
-            [s["avg_lose_return"] for s in valid_series],
-            trade_counts
+            [s["avg_lose_return"] for s in valid_series], trade_counts
         )
 
         avg_trade_return = weighted_avg(
-            [s["avg_trade_return"] for s in valid_series],
-            trade_counts
+            [s["avg_trade_return"] for s in valid_series], trade_counts
         )
 
-        wins = [s["max_win"] for s in valid_series if s["max_win"] is not None and not np.isnan(s["max_win"])]
-        losses = [s["max_lose"] for s in valid_series if s["max_lose"] is not None and not np.isnan(s["max_lose"])]
+        wins = [
+            s["max_win"]
+            for s in valid_series
+            if s["max_win"] is not None and not np.isnan(s["max_win"])
+        ]
+        losses = [
+            s["max_lose"]
+            for s in valid_series
+            if s["max_lose"] is not None and not np.isnan(s["max_lose"])
+        ]
 
         max_win = max(wins) if wins else None
         max_lose = min(losses) if losses else None
