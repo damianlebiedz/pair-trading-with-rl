@@ -13,32 +13,63 @@ project_root = current_file.parent.parent
 sys.path.append(str(project_root))
 
 SELECTED_METRICS = [
-    "total_return", "cagr", "volatility_annual", "max_drawdown",
-    "win_count", "lose_count", "win_rate", "max_win", "max_lose",
-    "avg_win_return", "avg_lose_return", "avg_trade_return",
-    "sharpe_ratio_annual", "sortino_ratio_annual", "calmar_ratio_annual",
+    "total_return",
+    "cagr",
+    "volatility_annual",
+    "max_drawdown",
+    "win_count",
+    "lose_count",
+    "win_rate",
+    "max_win",
+    "max_lose",
+    "avg_win_return",
+    "avg_lose_return",
+    "avg_trade_return",
+    "sharpe_ratio_annual",
+    "sortino_ratio_annual",
+    "calmar_ratio_annual",
 ]
 
 FORMAT_MAP = {
-    "total_return": "{:.2%}", "cagr": "{:.2%}", "volatility_annual": "{:.2%}",
-    "max_drawdown": "{:.2%}", "win_rate": "{:.2%}",
-    "max_win": "{:.2%}", "max_lose": "{:.2%}", "avg_win_return": "{:.2%}",
-    "avg_lose_return": "{:.2%}", "avg_trade_return": "{:.2%}",
-    "sharpe_ratio_annual": "{:.4f}", "sortino_ratio_annual": "{:.4f}",
-    "calmar_ratio_annual": "{:.4f}", "win_count": "{:.0f}", "lose_count": "{:.0f}"
+    "total_return": "{:.2%}",
+    "cagr": "{:.2%}",
+    "volatility_annual": "{:.2%}",
+    "max_drawdown": "{:.2%}",
+    "win_rate": "{:.2%}",
+    "max_win": "{:.2%}",
+    "max_lose": "{:.2%}",
+    "avg_win_return": "{:.2%}",
+    "avg_lose_return": "{:.2%}",
+    "avg_trade_return": "{:.2%}",
+    "sharpe_ratio_annual": "{:.4f}",
+    "sortino_ratio_annual": "{:.4f}",
+    "calmar_ratio_annual": "{:.4f}",
+    "win_count": "{:.0f}",
+    "lose_count": "{:.0f}",
 }
 
 RENAME_MAP = {
-    "total_return": "Total Return", "cagr": "CAGR", "volatility_annual": "Annual Volatility",
-    "max_drawdown": "Max Drawdown", "win_count": "Win Count", "lose_count": "Lose Count",
-    "win_rate": "Win Rate", "max_win": "Max Win", "max_lose": "Max Lose",
-    "avg_win_return": "Avg Win", "avg_lose_return": "Avg Loss",
-    "avg_trade_return": "Avg Trade Return", "sharpe_ratio_annual": "Sharpe Ratio",
-    "sortino_ratio_annual": "Sortino Ratio", "calmar_ratio_annual": "Calmar Ratio",
+    "total_return": "Total Return",
+    "cagr": "CAGR",
+    "volatility_annual": "Annual Volatility",
+    "max_drawdown": "Max Drawdown",
+    "win_count": "Win Count",
+    "lose_count": "Lose Count",
+    "win_rate": "Win Rate",
+    "max_win": "Max Win",
+    "max_lose": "Max Lose",
+    "avg_win_return": "Avg Win",
+    "avg_lose_return": "Avg Loss",
+    "avg_trade_return": "Avg Trade Return",
+    "sharpe_ratio_annual": "Sharpe Ratio",
+    "sortino_ratio_annual": "Sortino Ratio",
+    "calmar_ratio_annual": "Calmar Ratio",
 }
 
 
-def load_strategy_data(base_dir: Path, strategy_name: str) -> tuple[pd.DataFrame, pd.DataFrame]:
+def load_strategy_data(
+    base_dir: Path, strategy_name: str
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     strat_dir = base_dir / strategy_name
 
     if not strat_dir.exists():
@@ -77,7 +108,7 @@ def load_pair_selections(base_dir: Path, strategy_name: str) -> pd.Series:
             df = pd.read_parquet(files[0])
             counts[1] = len(df)
 
-    return pd.Series(counts, dtype='int')
+    return pd.Series(counts, dtype="int")
 
 
 def generate_comparison_report(strategies_input: dict | list) -> None:
@@ -133,17 +164,25 @@ def generate_comparison_report(strategies_input: dict | list) -> None:
         global_start = min(all_dates).strftime("%Y-%m-%d")
         global_end = max(all_dates).strftime("%Y-%m-%d")
 
-        btc_data = load_btc_benchmark(test_start=global_start, test_end=global_end, interval="1h")
+        btc_data = load_btc_benchmark(
+            test_start=global_start, test_end=global_end, interval="1h"
+        )
 
         fig = go.Figure()
         colors = ["#1f77b4", "#2ca02c", "#d62728", "#9467bd", "#ff7f0e"]
         first_df = list(strategies_returns.values())[0]
-        custom_ticks = _get_custom_tickvals(first_df.index) if hasattr(first_df, 'index') else []
+        custom_ticks = (
+            _get_custom_tickvals(first_df.index) if hasattr(first_df, "index") else []
+        )
 
         color_idx = 0
         for name, df in strategies_returns.items():
-            y_col = "net_return_pct" if "net_return_pct" in df.columns else df.columns[0]
-            y_col_gross = "total_return_pct" if "total_return_pct" in df.columns else None
+            y_col = (
+                "net_return_pct" if "net_return_pct" in df.columns else df.columns[0]
+            )
+            y_col_gross = (
+                "total_return_pct" if "total_return_pct" in df.columns else None
+            )
 
             fig.add_trace(
                 go.Scatter(
@@ -163,7 +202,9 @@ def generate_comparison_report(strategies_input: dict | list) -> None:
                         y=df[y_col_gross],
                         mode="lines",
                         name=f"{name} (Gross)",
-                        line=dict(color=colors[color_idx % len(colors)], width=2, dash="dot"),
+                        line=dict(
+                            color=colors[color_idx % len(colors)], width=2, dash="dot"
+                        ),
                         hovertemplate=f"<b>Date</b>: %{{x|%Y-%m-%d %H:%M}}<br><b>{name}</b>: %{{y:.2%}}<extra></extra>",
                         visible="legendonly",
                     )
@@ -185,18 +226,22 @@ def generate_comparison_report(strategies_input: dict | list) -> None:
                         name="BTC Benchmark",
                         line=dict(color="grey", width=1.5, dash="dot"),
                         opacity=0.6,
-                        hovertemplate=f"<b>Date</b>: %{{x|%Y-%m-%d %H:%M}}<br><b>BTC</b>: %{{y:.2%}}<extra></extra>",
+                        hovertemplate="<b>Date</b>: %{{x|%Y-%m-%d %H:%M}}<br><b>BTC</b>: %{{y:.2%}}<extra></extra>",
                         visible="legendonly",
                     )
                 )
 
         fig.update_layout(
-            title=dict(text="Comparison of Multi-Pair Strategies", x=0.5, font=dict(color="black", size=20)),
+            title=dict(
+                text="Comparison of Multi-Pair Strategies",
+                x=0.5,
+                font=dict(color="black", size=20),
+            ),
             template="plotly_white",
             hovermode="closest",
             legend=dict(orientation="h", y=1.05, x=0.5, xanchor="center"),
             margin=dict(t=80),
-            height=800
+            height=800,
         )
 
         fig.update_yaxes(title="Total Return (%)", tickformat=".1%", fixedrange=True)
@@ -235,9 +280,7 @@ def generate_comparison_report(strategies_input: dict | list) -> None:
         formatted_df = formatted_df.rename(columns={"index": ""})
 
         main_table_html = formatted_df.to_html(
-            classes="academic-table",
-            border=0,
-            index=False
+            classes="academic-table", border=0, index=False
         )
     else:
         main_table_html = "<p>No stats data available.</p>"

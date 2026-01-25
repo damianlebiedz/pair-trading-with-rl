@@ -4,7 +4,8 @@ from modules.core.models import StrategyResult
 
 
 def aggregate_strategy_results(
-    results: list[StrategyResult], total_initial_cash: float,
+    results: list[StrategyResult],
+    total_initial_cash: float,
 ) -> pd.DataFrame:
     if not results:
         raise ValueError("No results to aggregate")

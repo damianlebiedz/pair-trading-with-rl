@@ -14,7 +14,8 @@ from modules.data_services.data_utils import (
     save_strategy_result,
     load_btc_benchmark,
     save_dataframe,
-    load_strategy_result, load_dataframe,
+    load_strategy_result,
+    load_dataframe,
 )
 from modules.multi_pair.multi_pair_optimizer import MultiPairOptimizer
 from modules.multi_pair.multi_pair_utils import aggregate_strategy_results
@@ -291,12 +292,12 @@ def merge_multi_pair_results(
 
 
 def merge_multi_period_results(
-        cfg: DictConfig,
-        output_dir: str,
-        ticker_x: str,
-        ticker_y: str,
-        initial_cash: float,
-        risk_free_rate_annual: float,
+    cfg: DictConfig,
+    output_dir: str,
+    ticker_x: str,
+    ticker_y: str,
+    initial_cash: float,
+    risk_free_rate_annual: float,
 ) -> StrategyResult | None:
     """
     Checks for multiple iteration folders (1, 2, ...) and merges results for a specific pair
@@ -306,13 +307,17 @@ def merge_multi_period_results(
     base_path = Path(output_dir)
 
     if not (base_path / "1").exists():
-        raise ValueError(f"Cannot perform multi-period merge when there is no multi periods in {output_dir}")
+        raise ValueError(
+            f"Cannot perform multi-period merge when there is no multi periods in {output_dir}"
+        )
 
-    logger.info(f"Detected multi-period structure in {output_dir}. Merging results for {ticker_x}-{ticker_y}...")
+    logger.info(
+        f"Detected multi-period structure in {output_dir}. Merging results for {ticker_x}-{ticker_y}..."
+    )
 
     iter_dirs = sorted(
         [d for d in base_path.iterdir() if d.is_dir() and d.name.isdigit()],
-        key=lambda x: int(x.name)
+        key=lambda x: int(x.name),
     )
 
     results = []
