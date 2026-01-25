@@ -1,16 +1,31 @@
 import logging
 import hydra
-from omegaconf import OmegaConf
+from omegaconf import OmegaConf, DictConfig
 
 from runners.core.pipelines import execute_pair_selection, setup_run_environment
 
 logger = logging.getLogger(__name__)
-output_dir = setup_run_environment(__file__)
 
-with hydra.initialize(version_base=None, config_path="../conf"):
-    cfg = hydra.compose(config_name="base")
 
-logger.info(f"Saving results to: {output_dir}")
-logger.info("CONFIG:\n%s", OmegaConf.to_yaml(cfg))
+@hydra.main(version_base=None, config_path="../conf", config_name="base")
+def pair_selection(cfg: DictConfig):
+    output_dir = setup_run_environment(__file__)
 
-df = execute_pair_selection(cfg, output_dir)
+    logger.info(f"Saving results to: {output_dir}")
+    logger.info("CONFIG:\n%s", OmegaConf.to_yaml(cfg))
+
+    execute_pair_selection(
+        cfg.tickers,
+        cfg.pair_selection.optimization.start,
+        cfg.pair_selection.optimization.end,
+        cfg.pair_selection.test.start,
+        cfg.pair_selection.test.end,
+        cfg.market.interval,
+        cfg.pair_selection.method,
+        cfg.pair_selection.eg_factor,
+        output_dir,
+    )
+
+
+if __name__ == "__main__":
+    pair_selection()

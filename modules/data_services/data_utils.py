@@ -2,6 +2,7 @@ from functools import reduce
 from io import StringIO
 from pathlib import Path
 from typing import Literal
+import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -35,6 +36,12 @@ def get_steps(
         raise ValueError(
             f"Wrong interval '{interval}', should be one of: '1d', '4h', '1h', '30m', '15m', '5m', '3m', '1m'."
         )
+
+
+def add_log_prices(df: pd.DataFrame, ticker_x: str, ticker_y: str) -> None:
+    """Add log prices to DataFrame."""
+    df[f"{ticker_x}_log"] = np.log(df[ticker_x])
+    df[f"{ticker_y}_log"] = np.log(df[ticker_y])
 
 
 def merge_by_pair(dfs: list[pd.DataFrame], keep_cols: list[list[str]]) -> pd.DataFrame:
@@ -99,7 +106,6 @@ def save_strategy_result(
         "end": result.end,
         "interval": result.interval,
         "fee_rate": float(result.fee_rate),
-        "window_factor": int(result.window_factor),
         "stats_json": result.stats.to_json(),
     }
 
@@ -149,6 +155,5 @@ def load_strategy_result(
         end=meta["end"],
         interval=meta["interval"],
         fee_rate=float(meta["fee_rate"]),
-        window_factor=meta["window_factor"],
         stats=pd.read_json(StringIO(meta["stats_json"])),
     )

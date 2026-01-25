@@ -2,7 +2,6 @@ from typing import Literal
 import numpy as np
 import pandas as pd
 
-from modules.core.models import StrategyResult
 from modules.data_services.data_utils import get_steps
 
 
@@ -43,7 +42,7 @@ def calculate_stats(
 
     def compute_stats(pnl_series: pd.Series) -> dict:
         equity_curve = pnl_series + initial_cash
-        returns = equity_curve.pct_change().dropna()
+        returns = equity_curve.pct_change(fill_method=None).dropna()
 
         total_pnl = pnl_series.iloc[-1]
         total_return = total_pnl / initial_cash
@@ -98,8 +97,9 @@ def calculate_stats(
         else:
             cagr = None
 
-        # Sharpe ratio
         period_rf = (1 + risk_free_rate_annual) ** (1 / periods_per_year) - 1
+
+        # Sharpe ratio
         if period_volatility not in (None, 0, np.nan):
             sharpe_ratio = (returns.mean() - period_rf) / period_volatility
         else:
@@ -113,14 +113,21 @@ def calculate_stats(
         # Sortino ratio
         downside_returns = returns[returns < 0]
         downside_std = downside_returns.std()
-        sortino_ratio = (
-            returns.mean() / downside_std
+
+        if downside_std not in (None, 0, np.nan):
+            sortino_ratio = (returns.mean() - period_rf) / downside_std
+        else:
+            sortino_ratio = None
+
+        annual_downside_std = (
+            downside_std * np.sqrt(periods_per_year)
             if downside_std not in (None, 0, np.nan)
             else None
         )
+
         sortino_ratio_annual = (
-            sortino_ratio * np.sqrt(periods_per_year)
-            if sortino_ratio is not None
+            (cagr - risk_free_rate_annual) / annual_downside_std
+            if annual_downside_std not in (0, None) and annual_downside_std is not None
             else None
         )
 
@@ -321,39 +328,3 @@ def calculate_multi_pair_stats(
     ).set_index("metric")
 
     return final_df.round(4)
-
-
-def aggregate_strategy_results(
-    results: list[StrategyResult], total_initial_cash: float
-) -> pd.DataFrame:
-    if not results:
-        raise ValueError("No results to aggregate")
-
-    base_df = results[0].data.copy()
-    base_index = base_df.index
-
-    total_return_sum = pd.Series(0.0, index=base_index)
-    net_return_sum = pd.Series(0.0, index=base_index)
-    fees_sum = pd.Series(0.0, index=base_index)
-
-    for res in results:
-        df = res.data
-        total_return_sum = total_return_sum.add(df["total_return"], fill_value=0)
-        net_return_sum = net_return_sum.add(df["net_return"], fill_value=0)
-        if "fees" in df.columns:
-            fees_sum = fees_sum.add(df["fees"], fill_value=0)
-
-    merged_df = pd.DataFrame(index=base_index)
-    merged_df["total_return"] = total_return_sum
-    merged_df["net_return"] = net_return_sum
-    merged_df["fees"] = fees_sum
-
-    merged_df["total_return_pct"] = merged_df["total_return"] / total_initial_cash
-    merged_df["net_return_pct"] = merged_df["net_return"] / total_initial_cash
-
-    merged_df["position"] = 0
-    merged_df["z_score"] = 0
-    merged_df["entry_thr"] = 0
-    merged_df["exit_thr"] = 0
-
-    return merged_df

@@ -10,12 +10,7 @@ from modules.core.indicators import (
 )
 from modules.core.search_methods import random_search
 from modules.data_services.data_loaders import load_pair
-from modules.data_services.data_preparation import (
-    add_log_prices,
-    add_c_norm_returns,
-    add_c_returns,
-    add_c_log_returns,
-)
+from modules.data_services.data_utils import add_log_prices
 from modules.core.models import PositionState, ExecutionContext, StrategyResult
 from modules.performance.stats import calculate_stats
 
@@ -35,7 +30,6 @@ class Strategy:
         risk_free_rate_annual (float): Annual risk-free rate.
         min_trades_per_pair (int): Minimum number of trades per pair for the objective.
         window (str): Window mode: "fixed" (manual size), "rolling" (rolling half-life), "static" (initial half-life).
-        source (str): Data source type for beta or/and Z-score calculation.
         beta_hedge (str): Hedge ratio mode: "rolling", "static" or "no_hedge".
     """
 
@@ -51,17 +45,11 @@ class Strategy:
         risk_free_rate_annual: float,
         min_trades_per_pair: int,
         window: Literal["rolling", "static", "fixed"],
-        source: Literal["log", "c_returns", "c_log_returns", "c_norm_returns"],
         beta_hedge: Literal["rolling", "static", "no_hedge"],
     ):
 
         if window not in ["rolling", "static", "fixed"]:
             raise ValueError("Invalid window: should be 'rolling', 'static' or 'fixed'")
-
-        if source not in ["log", "c_returns", "c_log_returns", "c_norm_returns"]:
-            raise ValueError(
-                "Invalid source: should be 'log', 'c_returns', 'c_log_returns', or 'c_norm_returns'"
-            )
 
         if beta_hedge not in ["rolling", "static", "no_hedge"]:
             raise ValueError(
@@ -78,7 +66,6 @@ class Strategy:
         self.risk_free_rate_annual = risk_free_rate_annual
         self.min_trades_per_pair = min_trades_per_pair
         self.window = window
-        self.source = source
         self.beta_hedge = beta_hedge
 
         self.exec_ctx = ExecutionContext(
@@ -92,14 +79,7 @@ class Strategy:
             x=ticker_x, y=ticker_y, start=start, end=end, interval=interval
         )
 
-        source_map = {
-            "c_norm_returns": add_c_norm_returns,
-            "c_returns": add_c_returns,
-            "c_log_returns": add_c_log_returns,
-            "log": add_log_prices,
-        }
-        func_to_call = source_map[self.source]
-        func_to_call(self.data, self.ticker_x, self.ticker_y)
+        add_log_prices(self.data, self.ticker_x, self.ticker_y)
 
     def _execute_loop(
         self,
@@ -117,8 +97,8 @@ class Strategy:
 
         x_col = self.ticker_x
         y_col = self.ticker_y
-        source_x_col = f"{x_col}_{self.source}"
-        source_y_col = f"{y_col}_{self.source}"
+        source_x_col = f"{x_col}_log"
+        source_y_col = f"{y_col}_log"
 
         beta_hedge = self.beta_hedge
 
@@ -181,13 +161,17 @@ class Strategy:
             price_y = df[y_col].iloc[i]
 
             if beta_hedge == "rolling":
+                prev_beta = beta
                 beta = calculate_beta(
                     x_col=source_x_col,
                     y_col=source_y_col,
                     df=df.iloc[start_pos + i - test_start_pos : i],
                 )
+                if beta <= 0:
+                    beta = prev_beta
 
             if window == "rolling":
+                prev_win = win
                 win = calculate_half_life_window(
                     x_col=source_x_col,
                     y_col=source_y_col,
@@ -195,20 +179,17 @@ class Strategy:
                     df=df.iloc[start_pos + i - test_start_pos : i],
                     window_factor=window_factor,
                 )
+                if win is None or win > i or win < 2:
+                    win = prev_win
 
-            if win is not None and beta > 0 and 2 <= win <= i:
-                z_score = calculate_z_score(
-                    x_col=source_x_col,
-                    y_col=source_y_col,
-                    beta=beta,
-                    df=df.iloc[i - win : i + 1],
-                )
-                signal = generate_signal(
-                    entry_threshold=entry_threshold, z_score=z_score
-                )
-            else:
-                z_score = None
-                signal = 0
+            z_score = calculate_z_score(
+                x_col=source_x_col,
+                y_col=source_y_col,
+                beta=beta,
+                df=df.iloc[i - win : i + 1],
+            )
+
+            signal = generate_signal(entry_threshold=entry_threshold, z_score=z_score)
 
             position_state.signal = signal
             idx = df.index[i]
@@ -282,6 +263,8 @@ class Strategy:
         else:
             df = df.iloc[test_start_pos : end_pos + 1].copy()
 
+        df.iloc[-1, df.columns == "position"] = 0
+
         return df.drop(columns=[source_x_col, source_y_col], errors="ignore")
 
     def run_strategy(
@@ -308,7 +291,7 @@ class Strategy:
                     Example: `2.5` means the window size is calculated as `2.5 * Half_Life`.
             entry_threshold (float): Z-score threshold to open a position.
             exit_threshold (float): Z-score threshold to close a position.
-            stop_loss (float): Stop loss multiplier (e.g., 1.05 for 5% from current Z-score).
+            stop_loss (float): Stop loss multiplier (e.g., 1.05 for 5% from current Z-score), None if trade without SL.
             test_start (str): Start date for the backtest loop.
             test_end (str): End date for the backtest loop.
             beta_test_start (str): Start date for beta and Z-score window calculation.
@@ -345,7 +328,6 @@ class Strategy:
             end=test_end,
             interval=self.interval,
             fee_rate=self.fee_rate,
-            window_factor=window_factor,
             stats=stats,
         )
 
@@ -384,6 +366,7 @@ class Strategy:
 
         Scenario C: Locking parameters (static_params)
         >>> static_params = {'stop_loss': 1.05}         # 'stop_loss' will be constant 1.05 for all iterations.
+            static_params = {'stop_loss': None}         # Trade without 'stop_loss'.
 
         Args:
             static_params (dict): Dictionary of parameters to keep constant (not optimized).
