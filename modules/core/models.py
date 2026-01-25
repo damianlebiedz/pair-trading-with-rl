@@ -61,5 +61,4 @@ class StrategyResult:
     end: str
     interval: str
     fee_rate: float
-    window_factor: float
-    stats: pd.DataFrame
+    stats: pd.DataFrame | None = None

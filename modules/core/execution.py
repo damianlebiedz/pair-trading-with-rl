@@ -44,7 +44,7 @@ class TradeExecutor:
                 and (
                     z_score <= exit_threshold
                     or (
-                        position_state.stop_loss_threshold is not None  # TODO
+                        position_state.stop_loss_threshold is not None
                         and z_score >= position_state.stop_loss_threshold
                     )
                 )
@@ -53,7 +53,7 @@ class TradeExecutor:
                 and (
                     z_score >= -exit_threshold
                     or (
-                        position_state.stop_loss_threshold is not None  # TODO
+                        position_state.stop_loss_threshold is not None
                         and z_score <= -position_state.stop_loss_threshold
                     )
                 )
@@ -127,7 +127,9 @@ class TradeExecutor:
         )
 
         if position_state.signal > 0:
-            qx = ctx.initial_cash * wx / (price_x * x_spread)
+            qx = (
+                ctx.initial_cash * wx / (price_x * x_spread)
+            )  # TODO: tutaj initial_cash * position jeśli position != |1|
             qy = -(ctx.initial_cash * wy) / (price_y * y_spread)
         elif position_state.signal < 0:
             qx = -(ctx.initial_cash * wx) / (price_x * x_spread)

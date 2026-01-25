@@ -5,10 +5,8 @@ from omegaconf import DictConfig
 import numpy as np
 
 from modules.core.search_methods import random_search
-from modules.performance.stats import (
-    aggregate_strategy_results,
-    calculate_multi_pair_stats,
-)
+from modules.multi_pair.multi_pair_utils import aggregate_strategy_results
+from modules.performance.stats import calculate_multi_pair_stats
 from modules.performance.strategy import Strategy
 
 logger = logging.getLogger(__name__)

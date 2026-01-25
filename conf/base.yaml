@@ -2,20 +2,23 @@ defaults:
   - _self_
   - config
   - a2c_baseline
+  - override hydra/job_logging: none
 
 hydra:
   run:
-    dir: results/${now:%Y-%m-%d_%H-%M-%S}
+    dir: .
   output_subdir: null
 
 paths:
   models_dir: models
 
 tickers: [ "BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT", "ADAUSDT", "AVAXUSDT", "DOGEUSDT", "TRXUSDT",
-           "DOTUSDT", "LINKUSDT", "SHIBUSDT", "LTCUSDT", "BCHUSDT", "UNIUSDT" ]
-  
+           "DOTUSDT", "LINKUSDT", "SHIBUSDT", "LTCUSDT", "BCHUSDT", "UNIUSDT", "XLMUSDT", "ATOMUSDT", "ICPUSDT",
+           "FILUSDT", "LDOUSDT", "APTUSDT", "QNTUSDT", "ARBUSDT", "VETUSDT", "MKRUSDT", "OPUSDT", "NEARUSDT",
+           "GRTUSDT", "AAVEUSDT", "ALGOUSDT" ]
+
 market:
   initial_cash: 100000
-  fee_rate: 0.0005
-  risk_free_rate_annual: 0.01
+  fee_rate: 0.001
+  risk_free_rate_annual: 0.00
   interval: "1h"

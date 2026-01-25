@@ -1,28 +1,28 @@
 pair_selection:
-  eg_factor_both: 0.05
-  eg_factor_second: 0.01
-  method: "second" # "both" or "second"
+  eg_factor: 0.01
+  method: "both" # "both" or "second"
 
   optimization:
-    start: "2024-01-01"
-    end: "2024-03-01"
+    start: "2023-09-01"
+    end: "2023-11-01"
 
   test:
-    start: "2024-02-01"
-    end: "2024-04-01"
+    start: "2023-10-01"
+    end: "2023-12-01"
 
 performance:
-  window: "rolling" # "rolling", "static" or "fixed"
-  source: "log" # "log", "c_returns", "c_log_returns", "c_norm_returns"
-  beta_hedge: "rolling" # "rolling", "static", "no_hedge"
+  window: "static" # "rolling", "static" or "fixed"
+  beta_hedge: "static" # "rolling", "static", "no_hedge"
+
+  iterations: 12 # integer >= 1
 
   optimization:
-    beta_start: "2024-02-01"
-    start: "2024-03-01"
-    end: "2024-04-01"
+    beta_start: "2023-11-01"
+    start: "2023-12-01"
+    end: "2024-01-01"
 
     # Search parameters
-    n_iter: 500
+    n_iter: 1000
     replicates: 1
     penalty_bad: -100
 
@@ -30,7 +30,7 @@ performance:
     window_factor_min: 1.50
     window_factor_max: 3.00
 
-    fixed_window_factor_min: 10
+    fixed_window_factor_min: 1
     fixed_window_factor_max: 1000
 
     entry_threshold_min: 2.00
@@ -46,6 +46,6 @@ performance:
     min_trades_per_pair: 5
 
   test:
-    beta_start: "2024-03-01"
-    start: "2024-04-01"
-    end: "2024-05-01"
+    beta_start: "2023-12-01"
+    start: "2024-01-01"
+    end: "2024-02-01"
