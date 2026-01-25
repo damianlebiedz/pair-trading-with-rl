@@ -22,8 +22,8 @@ class TradeExecutor:
         position_state: PositionState,
         price_x: float,
         price_y: float,
-        z_score: float,
-        prev_z_score: float,
+        z_score: float | None,
+        prev_z_score: float | None,
         beta: float,
         total_fees: float,
         entry_threshold: float,
@@ -35,7 +35,7 @@ class TradeExecutor:
         if position_state.prev_position != 0:
             # CLOSE POSITION (STOP LOSS OR TAKE PROFIT)
             if z_score is None:
-                # NO MEAN-REVERSION (FROM HALF-LIFE WINDOW CALCULATION)
+                # NO MEAN-REVERSION (FROM HALF-LIFE WINDOW CALCULATION) OR BETA < 0
                 return cls._close_position(
                     ctx, position_state, price_x, price_y, total_fees
                 )
@@ -44,7 +44,7 @@ class TradeExecutor:
                 and (
                     z_score <= exit_threshold
                     or (
-                        position_state.stop_loss_threshold is not None
+                        position_state.stop_loss_threshold is not None  # TODO
                         and z_score >= position_state.stop_loss_threshold
                     )
                 )
@@ -53,7 +53,7 @@ class TradeExecutor:
                 and (
                     z_score >= -exit_threshold
                     or (
-                        position_state.stop_loss_threshold is not None
+                        position_state.stop_loss_threshold is not None  # TODO
                         and z_score <= -position_state.stop_loss_threshold
                     )
                 )
@@ -119,8 +119,8 @@ class TradeExecutor:
         total_fees,
         stop_loss,
     ) -> tuple[float, float]:
-        wx = beta / (beta + 1)
-        wy = 1 / (beta + 1)
+        wx = 1 / (beta + 1)
+        wy = beta / (beta + 1)
 
         x_spread, y_spread = cls.get_spread(
             ctx.ticker_x, ctx.ticker_y, position_state.position

@@ -1,13 +1,10 @@
 import pandas as pd
-import seaborn as sns
-import matplotlib.pyplot as plt
 from pathlib import Path
-
-from modules.core.models import StrategyResult
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 
 def get_project_root() -> Path:
-    """Returns the absolute path to the project root directory."""
     return Path(__file__).resolve().parents[2]
 
 
@@ -15,7 +12,7 @@ def _resolve_results_dir(directory: str | None) -> Path:
     if directory and (Path(directory).is_absolute() or "results" in str(directory)):
         path = Path(directory)
     else:
-        path = get_project_root() / "results" / "plots"
+        path = get_project_root() / "results"
         if directory:
             path = path / directory
 
@@ -23,161 +20,340 @@ def _resolve_results_dir(directory: str | None) -> Path:
     return path
 
 
-def plot_zscore(
-    result: StrategyResult,
+def _get_custom_tickvals(index: pd.Index, target_ticks: int = 8):
+    n = len(index)
+    if n <= target_ticks:
+        return index
+
+    step = n // (target_ticks - 1)
+
+    indices = list(range(0, n, step))
+
+    if indices[-1] != n - 1:
+        if n - 1 - indices[-1] < (step * 0.3):
+            indices[-1] = n - 1
+        else:
+            indices.append(n - 1)
+
+    return index[indices]
+
+
+def plot_zscore_pos(
+    result,
     directory: str | None = None,
     save: bool = False,
-    show: bool = False,
-    sl_thr: bool = False,
 ) -> None:
-    x, y = result.ticker_x, result.ticker_y
-    start, end = result.start, result.end
-    df = result.data
-    results_dir = _resolve_results_dir(directory)
+    df = result.data.copy()
 
-    plt.figure(figsize=(12, 6))
-    sns.lineplot(x=df.index, y=df["z_score"], color="grey")
+    for col in ["entry_thr", "exit_thr", "sl_thr", "z_score", "position"]:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
 
-    plt.plot(
-        df.index, df["entry_thr"].astype(float), color="red", label="Entry Threshold"
+    results_dir = Path(directory) if directory else Path(".")
+
+    custom_ticks = _get_custom_tickvals(df.index)
+
+    fig = make_subplots(
+        rows=2,
+        cols=1,
+        shared_xaxes=True,
+        vertical_spacing=0.05,
+        row_heights=[0.7, 0.3],
+        subplot_titles=(f"Z-Score: {result.ticker_x}/{result.ticker_y}", "Positions"),
     )
-    plt.plot(df.index, -df["entry_thr"].astype(float), color="red")
-    plt.plot(
-        df.index, df["exit_thr"].astype(float), color="green", label="Exit Threshold"
+
+    fig.add_trace(
+        go.Scatter(
+            x=df.index,
+            y=df["z_score"],
+            mode="lines",
+            name="Z-Score",
+            line=dict(color="black", width=1.5),
+            hovertemplate="<b>Date</b>: %{x|%Y-%m-%d %H:%M}<br><b>Z-Score</b>: %{y:.4f}<extra></extra>",
+        ),
+        row=1,
+        col=1,
     )
-    plt.plot(df.index, -df["exit_thr"].astype(float), color="green")
 
-    if sl_thr:
-        plt.plot(
-            df.index,
-            df["sl_thr"].astype(float),
-            color="red",
-            linestyle="--",
-            label="SL Threshold",
-            zorder=10,
-            marker="o",
-            markersize=1,
+    fig.add_trace(
+        go.Scatter(
+            x=df.index,
+            y=df["entry_thr"],
+            mode="lines",
+            name="Entry Threshold",
+            line=dict(color="darkred", width=1.5),
+            legendgroup="entry",
+            hoverinfo="skip",
+        ),
+        row=1,
+        col=1,
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=df.index,
+            y=-df["entry_thr"],
+            mode="lines",
+            name="-Entry Threshold",
+            line=dict(color="darkred", width=1.5),
+            legendgroup="entry",
+            showlegend=False,
+            hoverinfo="skip",
+        ),
+        row=1,
+        col=1,
+    )
+
+    fig.add_trace(
+        go.Scatter(
+            x=df.index,
+            y=df["exit_thr"],
+            mode="lines",
+            name="Exit Threshold",
+            line=dict(color="green", width=1.5),
+            legendgroup="exit",
+            hoverinfo="skip",
+        ),
+        row=1,
+        col=1,
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=df.index,
+            y=-df["exit_thr"],
+            mode="lines",
+            name="-Exit Threshold",
+            line=dict(color="green", width=1.5),
+            legendgroup="exit",
+            showlegend=False,
+            hoverinfo="skip",
+        ),
+        row=1,
+        col=1,
+    )
+
+    if "sl_thr" in df.columns and not df["sl_thr"].isna().all():
+        fig.add_trace(
+            go.Scatter(
+                x=df.index,
+                y=df["sl_thr"],
+                mode="lines",
+                name="Stop Loss Threshold",
+                line=dict(color="red", width=1.5),
+                connectgaps=False,
+                legendgroup="sl",
+                hoverinfo="skip",
+            ),
+            row=1,
+            col=1,
         )
-        plt.plot(
-            df.index,
-            -df["sl_thr"].astype(float),
-            color="red",
-            linestyle="--",
-            zorder=10,
-            marker="o",
-            markersize=1,
+        fig.add_trace(
+            go.Scatter(
+                x=df.index,
+                y=-df["sl_thr"],
+                mode="lines",
+                name="-Stop Loss Threshold",
+                line=dict(color="red", width=1.5),
+                connectgaps=False,
+                legendgroup="sl",
+                showlegend=False,
+                hoverinfo="skip",
+            ),
+            row=1,
+            col=1,
         )
 
-    plt.title(f"Z-Score: {x}/{y}")
-    plt.ylabel("Z-Score")
-    plt.xlabel("Date")
-    plt.grid(True, alpha=0.3)
-    plt.xlim(df.index.min(), df.index.max())
-    plt.legend(loc="lower right", fontsize="small")
+    fig.add_trace(
+        go.Scatter(
+            x=df.index,
+            y=df["position"],
+            mode="lines",
+            name="Position",
+            line=dict(color="grey", width=1.5, shape="hv"),
+            fill="tozeroy",
+            opacity=0.5,
+            hoverinfo="skip",
+        ),
+        row=2,
+        col=1,
+    )
+
+    fig.update_layout(
+        template="plotly_white",
+        hovermode="closest",
+        height=750,
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.15,
+            xanchor="right",
+            x=1,
+        ),
+        margin=dict(t=100),
+    )
+
+    fig.for_each_annotation(lambda a: a.update(font=dict(color="black")))
+
+    fig.update_yaxes(
+        title=dict(text="Z-Score", font=dict(color="black")),
+        tickfont=dict(color="black"),
+        row=1,
+        col=1,
+    )
+
+    fig.update_yaxes(
+        title=dict(text="Position", font=dict(color="black")),
+        tickfont=dict(color="black"),
+        tickvals=[-1, 0, 1],
+        range=[-1.2, 1.2],
+        row=2,
+        col=1,
+    )
+
+    fig.update_xaxes(
+        title=dict(text="Date", font=dict(color="black")),
+        tickfont=dict(color="black"),
+        tickvals=custom_ticks,
+        tickformat="%Y-%m-%d",
+        row=2,
+        col=1,
+    )
+    fig.update_xaxes(tickvals=custom_ticks, row=1, col=1)
+
+    fig.update_xaxes(fixedrange=True)
+    fig.update_yaxes(fixedrange=True)
+
+    filename = f"zscore_pos_{result.ticker_x}_{result.ticker_y}_{result.start}_{result.end}.html".replace(
+        ":", "_"
+    )
 
     if save:
-        filename = f"z_score_{x}_{y}_{start}_{end}.png".replace(":", "-")
-        save_path = results_dir / filename
-        plt.savefig(save_path, dpi=150)
-    if show:
-        plt.show()
-    plt.close()
+        results_dir.mkdir(parents=True, exist_ok=True)
+        fig.write_html(results_dir / filename)
 
 
-def plot_positions(
-    result: StrategyResult,
-    directory: str | None = None,
-    save: bool = False,
-    show: bool = False,
-) -> None:
-    x, y, start, end = (
-        result.ticker_x,
-        result.ticker_y,
-        result.start,
-        result.end,
-    )
-    df = result.data
-    results_dir = _resolve_results_dir(directory)
-
-    fig, ax = plt.subplots(figsize=(12, 4))
-    ax.plot(df.index, df["position"], color="grey", linewidth=1.6)
-    ax.set_ylabel("Position")
-    ax.set_yticks([-1, 0, 1])
-    ax.tick_params(axis="y")
-    ax.set_ylim(-1.2, 1.2)
-    ax.set_xlabel("Date")
-    ax.set_title(f"Position Over Time: {x}/{y}")
-    ax.grid(True, alpha=0.3)
-    ax.set_xlim(df.index.min(), df.index.max())
-
-    if save:
-        filename = f"positions_{x}_{y}_{start}_{end}.png".replace(":", "-")
-        save_path = results_dir / filename
-        plt.savefig(save_path, dpi=150)
-    if show:
-        plt.show()
-    plt.close()
-
-
-def plot_pnl(
-    result: StrategyResult,
+def plot_returns(
+    result,
     btc_data: pd.DataFrame | None = None,
     directory: str | None = None,
-    save: bool = False,
-    show: bool = False,
+    save: bool = True,
 ) -> None:
-    x, y, start, end = (
-        result.ticker_x,
-        result.ticker_y,
-        result.start,
-        result.end,
-    )
-    fee_rate = result.fee_rate
-    df = result.data
-    results_dir = _resolve_results_dir(directory)
+    df = result.data.copy()
 
-    fig, ax1 = plt.subplots(figsize=(12, 6))
-    ax1.plot(
-        df.index,
-        df["total_return_pct"],
-        label="Total Return (Gross)",
-        color="red",
-        linewidth=1.6,
-        zorder=3,
+    if result.ticker_x in df.columns:
+        df[f"return_{result.ticker_x}"] = (
+            df[result.ticker_x] / df[result.ticker_x].iloc[0]
+        ) - 1
+    if result.ticker_y in df.columns:
+        df[f"return_{result.ticker_y}"] = (
+            df[result.ticker_y] / df[result.ticker_y].iloc[0]
+        ) - 1
+
+    results_dir = Path(directory) if directory else Path(".")
+
+    custom_ticks = _get_custom_tickvals(df.index)
+
+    fig = go.Figure()
+
+    fig.add_trace(
+        go.Scatter(
+            x=df.index,
+            y=df["net_return_pct"],
+            mode="lines",
+            name="Total Return (Net)",
+            line=dict(color="black", width=1.5),
+            hovertemplate="<b>Date</b>: %{x|%Y-%m-%d %H:%M}<br><b>Total Return (Net)</b>: %{y:.4f}<extra></extra>",
+        )
     )
-    ax1.plot(
-        df.index,
-        df["net_return_pct"],
-        label=f"Total Return (Net, fee: {fee_rate * 100}%)",
-        linewidth=1.2,
-        linestyle="--",
-        color="red",
-        zorder=3,
+
+    fig.add_trace(
+        go.Scatter(
+            x=df.index,
+            y=df["total_return_pct"],
+            mode="lines",
+            name="Total Return (Gross)",
+            line=dict(color="grey", width=1.5),
+            visible="legendonly",
+            hovertemplate="<b>Date</b>: %{x|%Y-%m-%d %H:%M}<br><b>Total Return (Gross)</b>: %{y:.4f}<extra></extra>",
+        )
     )
-    ax1.set_xlabel("Date")
-    ax1.set_ylabel("Total Return")
-    ax1.tick_params(axis="y")
-    plt.grid(True, alpha=0.3)
 
     if btc_data is not None:
-        ax1.plot(
-            btc_data.index,
-            btc_data["BTC_c_return"],
-            label="BTCUSDT total return",
-            linewidth=1,
-            linestyle="--",
-            color="grey",
-            zorder=1,
+        fig.add_trace(
+            go.Scatter(
+                x=btc_data.index,
+                y=btc_data["BTC_c_return"],
+                mode="lines",
+                name="BTC Return",
+                line=dict(color="red", width=1, dash="dot"),
+                visible="legendonly",
+                hovertemplate="<b>Date</b>: %{x|%Y-%m-%d %H:%M}<br><b>BTC Return</b>: %{y:.4f}<extra></extra>",
+            )
         )
 
-    plt.xlim(df.index.min(), df.index.max())
-    ax1.legend(loc="lower right", fontsize="small")
-    ax1.set_title(f"Total Return: {x}/{y}")
+    if result.ticker_x in df.columns:
+        fig.add_trace(
+            go.Scatter(
+                x=df.index,
+                y=df[f"return_{result.ticker_x}"],
+                name=f"{result.ticker_x} Return",
+                line=dict(color="blue", width=1, dash="dot"),
+                opacity=0.6,
+                visible="legendonly",
+                hovertemplate=f"<b>Date</b>: %{{x|%Y-%m-%d %H:%M}}<br><b>{result.ticker_x} Return</b>: %{{y:.4f}}<extra></extra>",
+            )
+        )
+    if result.ticker_y in df.columns:
+        fig.add_trace(
+            go.Scatter(
+                x=df.index,
+                y=df[f"return_{result.ticker_y}"],
+                name=f"{result.ticker_y} Return",
+                line=dict(color="green", width=1, dash="dot"),
+                opacity=0.6,
+                visible="legendonly",
+                hovertemplate=f"<b>Date</b>: %{{x|%Y-%m-%d %H:%M}}<br><b>{result.ticker_y} Return</b>: %{{y:.4f}}<extra></extra>",
+            )
+        )
+
+    fig.update_layout(
+        title=dict(
+            text=f"Performance: {result.ticker_x} / {result.ticker_y}",
+            x=0.5,
+            y=0.9,
+            xanchor="center",
+            yanchor="top",
+            font=dict(color="black"),
+        ),
+        template="plotly_white",
+        hovermode="closest",
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.15,
+            xanchor="right",
+            x=1,
+        ),
+        margin=dict(t=100),
+    )
+
+    fig.update_yaxes(
+        title=dict(text="Cumulative Return", font=dict(color="black")),
+        tickfont=dict(color="black"),
+        fixedrange=True,
+    )
+
+    fig.update_xaxes(
+        title=dict(text="Date", font=dict(color="black")),
+        tickfont=dict(color="black"),
+        tickvals=custom_ticks,
+        tickformat="%Y-%m-%d",
+        fixedrange=True,
+    )
+
+    filename = f"returns_{result.ticker_x}_{result.ticker_y}_{result.start}_{result.end}.html".replace(
+        ":", "_"
+    )
 
     if save:
-        filename = f"return_{x}_{y}_{start}_{end}.png".replace(":", "-")
-        save_path = results_dir / filename
-        plt.savefig(save_path, dpi=150)
-    if show:
-        plt.show()
-    plt.close()
+        results_dir.mkdir(parents=True, exist_ok=True)
+        fig.write_html(results_dir / filename)

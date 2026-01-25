@@ -1,24 +1,51 @@
 pair_selection:
-  start: "2024-01-01"
-  end: "2024-03-01"
-
-performance:
-  window: "static" # "rolling", "static" or "fixed"
-  source: "log" # "log", "c_returns", "c_log_returns", "c_norm_returns"
-  beta_hedge: # "dynamic", "static", None (exactly nothing -> 'beta_hedge: ')
+  eg_factor_both: 0.05
+  eg_factor_second: 0.01
+  method: "second" # "both" or "second"
 
   optimization:
-    beta_start: "2024-01-01"
-    start: "2024-02-01"
+    start: "2024-01-01"
     end: "2024-03-01"
 
-    # Bayesian-Search parameters
-    n_iter: 100
-    random_state: 42
+  test:
+    start: "2024-02-01"
+    end: "2024-04-01"
+
+performance:
+  window: "rolling" # "rolling", "static" or "fixed"
+  source: "log" # "log", "c_returns", "c_log_returns", "c_norm_returns"
+  beta_hedge: "rolling" # "rolling", "static", "no_hedge"
+
+  optimization:
+    beta_start: "2024-02-01"
+    start: "2024-03-01"
+    end: "2024-04-01"
+
+    # Search parameters
+    n_iter: 500
     replicates: 1
     penalty_bad: -100
 
+    # Parameters space
+    window_factor_min: 1.50
+    window_factor_max: 3.00
+
+    fixed_window_factor_min: 10
+    fixed_window_factor_max: 1000
+
+    entry_threshold_min: 2.00
+    entry_threshold_max: 4.00
+
+    exit_threshold_min: 0.00
+    exit_threshold_max: 1.00
+
+    stop_loss_min: 1.50
+    stop_loss_max: 3.00
+
+    # Objective parameters
+    min_trades_per_pair: 5
+
   test:
-    beta_start: "2024-01-01"
-    start: "2024-03-01"
-    end: "2024-04-01"
+    beta_start: "2024-03-01"
+    start: "2024-04-01"
+    end: "2024-05-01"
