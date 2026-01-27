@@ -8,8 +8,8 @@ from runners.core.pipelines import execute_testing, setup_run_environment
 logger = logging.getLogger(__name__)
 
 # =======================================================
-ticker_x = "XRPUSDT"
-ticker_y = "DOTUSDT"
+ticker_x = "BTCUSDT"
+ticker_y = "XRPUSDT"
 best_params = {
     "window_factor": 2,
     "entry_threshold": 2,
@@ -29,8 +29,10 @@ def test(cfg: DictConfig):
     bt = Strategy(
         ticker_x,
         ticker_y,
-        cfg.performance.test.beta_start,
-        cfg.performance.test.end,
+        # cfg.performance.test.beta_start,
+        # cfg.performance.test.end,
+        "2024-10-01",
+        "2024-12-01",
         cfg.market.interval,
         cfg.market.fee_rate,
         cfg.market.initial_cash,
@@ -48,9 +50,12 @@ def test(cfg: DictConfig):
         ticker_x,
         ticker_y,
         output_dir,
-        cfg.performance.test.beta_start,
-        cfg.performance.test.start,
-        cfg.performance.test.end,
+        # cfg.performance.test.beta_start,
+        # cfg.performance.test.start,
+        # cfg.performance.test.end,
+        "2024-10-01",
+        "2024-11-01",
+        "2024-12-01",
         subdir="test",
     )
 

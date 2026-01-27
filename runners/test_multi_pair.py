@@ -88,8 +88,6 @@ def test_multi_pair_multi_periods(cfg: DictConfig):
         test_results = []
         test_stats = []
 
-        logger.info("--- Running Tests with Optimized Parameters ---")
-
         for pair_name in selected_pairs_names:
             ticker_x, ticker_y = pair_name.split("-")
             bt = strategies_map[pair_name]

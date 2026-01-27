@@ -150,78 +150,105 @@ class Strategy:
         beta = initial_beta
         win = initial_win
 
+        is_bankrupt = False
         results_buffer = []
 
         for i in range(test_start_pos, len(df)):
-            if total_pnl == -self.initial_cash:
-                df = df.iloc[:i].copy()
-                break
-
             price_x = df[x_col].iloc[i]
             price_y = df[y_col].iloc[i]
-
-            if beta_hedge == "rolling":
-                prev_beta = beta
-                beta = calculate_beta(
-                    x_col=source_x_col,
-                    y_col=source_y_col,
-                    df=df.iloc[start_pos + i - test_start_pos : i],
-                )
-                if beta <= 0:
-                    beta = prev_beta
-
-            if window == "rolling":
-                prev_win = win
-                win = calculate_half_life_window(
-                    x_col=source_x_col,
-                    y_col=source_y_col,
-                    beta=beta,
-                    df=df.iloc[start_pos + i - test_start_pos : i],
-                    window_factor=window_factor,
-                )
-                if win is None or win > i or win < 2:
-                    win = prev_win
-
-            z_score = calculate_z_score(
-                x_col=source_x_col,
-                y_col=source_y_col,
-                beta=beta,
-                df=df.iloc[i - win : i + 1],
-            )
-
-            signal = generate_signal(entry_threshold=entry_threshold, z_score=z_score)
-
-            position_state.signal = signal
             idx = df.index[i]
 
-            pnl, total_fees = TradeExecutor.execute(
-                ctx=self.exec_ctx,
-                position_state=position_state,
-                price_x=price_x,
-                price_y=price_y,
-                z_score=z_score,
-                prev_z_score=prev_z_score,
-                beta=beta,
-                total_fees=total_fees,
-                entry_threshold=entry_threshold,
-                exit_threshold=exit_threshold,
-                stop_loss=stop_loss,
-            )
+            if is_bankrupt:
+                z_score = None
+                pnl = 0
+                position_state.clear_position()
+                position_state.signal = 0
+            else:
+                if beta_hedge == "rolling":
+                    beta = calculate_beta(
+                        x_col=source_x_col,
+                        y_col=source_y_col,
+                        df=df.iloc[start_pos + i - test_start_pos: i],
+                    )
+
+                # if beta_hedge == "rolling":
+                #     prev_beta = beta
+                #     beta = calculate_beta(
+                #         x_col=source_x_col,
+                #         y_col=source_y_col,
+                #         df=df.iloc[start_pos + i - test_start_pos: i],
+                #     )
+                #     if beta <= 0:
+                #         beta = prev_beta
+
+                if window == "rolling":
+                    win = calculate_half_life_window(
+                        x_col=source_x_col,
+                        y_col=source_y_col,
+                        beta=beta,
+                        df=df.iloc[start_pos + i - test_start_pos: i],
+                        window_factor=window_factor,
+                    )
+
+                # if window == "rolling":
+                #     prev_win = win
+                #     win = calculate_half_life_window(
+                #         x_col=source_x_col,
+                #         y_col=source_y_col,
+                #         beta=beta,
+                #         df=df.iloc[start_pos + i - test_start_pos: i],
+                #         window_factor=window_factor,
+                #     )
+                #     if win is None or win > i or win < 2:
+                #         win = prev_win
+
+                if win is not None and beta > 0 and 2 <= win <= i:
+                    z_score = calculate_z_score(
+                        x_col=source_x_col,
+                        y_col=source_y_col,
+                        beta=beta,
+                        df=df.iloc[i - win: i + 1],
+                    )
+                else:
+                    z_score = None
+
+                signal = generate_signal(entry_threshold=entry_threshold, z_score=z_score)
+                position_state.signal = signal
+
+                pnl, total_fees = TradeExecutor.execute(
+                    ctx=self.exec_ctx,
+                    position_state=position_state,
+                    price_x=price_x,
+                    price_y=price_y,
+                    z_score=z_score,
+                    prev_z_score=prev_z_score,
+                    beta=beta,
+                    total_fees=total_fees,
+                    entry_threshold=entry_threshold,
+                    exit_threshold=exit_threshold,
+                    stop_loss=stop_loss,
+                )
 
             prev_z_score = 0.0 if z_score is None or pd.isna(z_score) else z_score
 
             if pnl != 0:
                 total_pnl = pnl + prev_pnl
                 if (
-                    position_state.position != 0
-                    and position_state.prev_position != position_state.position
+                        position_state.position != 0
+                        and position_state.prev_position != position_state.position
                 ):
                     prev_pnl = total_pnl
             else:
                 prev_pnl = total_pnl
 
-            if total_pnl <= -self.initial_cash:
-                total_pnl = -self.initial_cash
+            net_pnl = total_pnl - total_fees
+
+            if is_bankrupt or net_pnl <= -self.initial_cash:
+                is_bankrupt = True
+                net_pnl = -self.initial_cash
+                limit_total_pnl = -self.initial_cash + total_fees
+                if total_pnl < limit_total_pnl:
+                    total_pnl = limit_total_pnl
 
             results_buffer.append(
                 {
@@ -240,7 +267,7 @@ class Strategy:
                     "position": position_state.position,
                     "total_return": total_pnl,
                     "total_fees": total_fees,
-                    "net_return": total_pnl - total_fees,
+                    "net_return": net_pnl,
                 }
             )
 
@@ -249,7 +276,6 @@ class Strategy:
         if results_buffer:
             results_df = pd.DataFrame(results_buffer)
             results_df.set_index("index", inplace=True)
-
             df.loc[results_df.index, results_df.columns] = results_df
 
         df["total_return_pct"] = df["total_return"] / self.initial_cash
@@ -259,9 +285,9 @@ class Strategy:
             last_processed_idx = results_buffer[-1]["index"]
             last_pos_loc = df.index.get_loc(last_processed_idx)
             final_slice_end = min(last_pos_loc, end_pos)
-            df = df.iloc[test_start_pos : final_slice_end + 1].copy()
+            df = df.iloc[test_start_pos: final_slice_end + 1].copy()
         else:
-            df = df.iloc[test_start_pos : end_pos + 1].copy()
+            df = df.iloc[test_start_pos: end_pos + 1].copy()
 
         df.iloc[-1, df.columns == "position"] = 0
 

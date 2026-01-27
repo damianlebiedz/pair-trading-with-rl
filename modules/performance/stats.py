@@ -104,9 +104,10 @@ def calculate_stats(
             sharpe_ratio = (returns.mean() - period_rf) / period_volatility
         else:
             sharpe_ratio = None
+
         sharpe_ratio_annual = (
             (cagr - risk_free_rate_annual) / annual_volatility
-            if annual_volatility not in (0, None)
+            if annual_volatility not in (0, None) and cagr is not None
             else None
         )
 
@@ -127,7 +128,7 @@ def calculate_stats(
 
         sortino_ratio_annual = (
             (cagr - risk_free_rate_annual) / annual_downside_std
-            if annual_downside_std not in (0, None) and annual_downside_std is not None
+            if annual_downside_std not in (0, None) and annual_downside_std is not None and cagr is not None
             else None
         )
 
@@ -138,10 +139,10 @@ def calculate_stats(
 
         # Calmar ratio
         calmar_ratio = total_return / abs(max_drawdown) if max_drawdown != 0 else None
-        calmar_ratio_annual = cagr / abs(max_drawdown) if max_drawdown != 0 else None
+        calmar_ratio_annual = cagr / abs(max_drawdown) if max_drawdown != 0 and cagr is not None else None
 
         # Objective
-        objective = -100 if total_trades < min_trades_per_pair else sortino_ratio_annual
+        objective = -100 if total_trades < min_trades_per_pair or sortino_ratio_annual is None else sortino_ratio_annual
 
         return {
             "total_return": total_return,
