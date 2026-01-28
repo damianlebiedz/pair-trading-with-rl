@@ -8,12 +8,12 @@ from runners.core.pipelines import execute_testing, setup_run_environment
 logger = logging.getLogger(__name__)
 
 # =======================================================
-ticker_x = "BTCUSDT"
-ticker_y = "XRPUSDT"
+ticker_x = "AVAXUSDT"
+ticker_y = "OPUSDT"
 best_params = {
-    "window_factor": 2,
-    "entry_threshold": 2,
-    "exit_threshold": 0,
+    "window_factor": 1,
+    "entry_threshold": 2.7,
+    "exit_threshold": 0.8,
     "stop_loss": 2,
 }
 # =======================================================
@@ -40,6 +40,9 @@ def test(cfg: DictConfig):
         cfg.performance.optimization.min_trades_per_pair,
         cfg.performance.window,
         cfg.performance.beta_hedge,
+        cfg.performance.beta_method,
+        cfg.performance.delayed_entry,
+        cfg.performance.time_exit,
     )
 
     logger.info("--- Starting Test ---")

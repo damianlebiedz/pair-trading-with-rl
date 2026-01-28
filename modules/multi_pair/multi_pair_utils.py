@@ -2,7 +2,7 @@ import pandas as pd
 
 from modules.core.models import StrategyResult
 
-pd.set_option('future.no_silent_downcasting', True)
+pd.set_option("future.no_silent_downcasting", True)
 
 
 def aggregate_strategy_results(

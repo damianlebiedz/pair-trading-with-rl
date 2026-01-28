@@ -14,17 +14,22 @@ def pair_selection(cfg: DictConfig):
     logger.info(f"Saving results to: {output_dir}")
     logger.info("CONFIG:\n%s", OmegaConf.to_yaml(cfg))
 
-    execute_pair_selection(
+    df = execute_pair_selection(
         cfg.tickers,
-        cfg.pair_selection.optimization.start,
-        cfg.pair_selection.optimization.end,
-        cfg.pair_selection.test.start,
-        cfg.pair_selection.test.end,
+        # cfg.pair_selection.test.start,
+        # cfg.pair_selection.test.end,
+        "2024-09-01",
+        "2024-11-01",
         cfg.market.interval,
         cfg.pair_selection.method,
-        cfg.pair_selection.eg_factor,
+        cfg.pair_selection.ps_factor,
+        cfg.pair_selection.top_n_factor,
         output_dir,
+        cfg.pair_selection.optimization.start,
+        cfg.pair_selection.optimization.end,
     )
+
+    logger.info(df)
 
 
 if __name__ == "__main__":

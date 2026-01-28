@@ -6,21 +6,19 @@ import pandas as pd
 class ExecutionContext:
     ticker_x: str
     ticker_y: str
-    initial_cash: float
     fee_rate: float
 
 
 @dataclass
 class PositionState:
-    signal: int = 0
     position: float = 0
     prev_position: float = 0
     q_x: float = 0
     q_y: float = 0
     w_x: float | None = None
     w_y: float | None = None
-    stop_loss_threshold: float | None = None
     entry_dif: float | None = None
+    time_in_pos: int = 0
 
     def update_position(
         self,
@@ -30,7 +28,6 @@ class PositionState:
         q_y,
         w_x,
         w_y,
-        stop_loss_threshold,
         entry_dif,
     ):
         self.position = position
@@ -39,7 +36,6 @@ class PositionState:
         self.q_y = q_y
         self.w_x = w_x
         self.w_y = w_y
-        self.stop_loss_threshold = stop_loss_threshold
         self.entry_dif = entry_dif
 
     def clear_position(self):
@@ -48,8 +44,8 @@ class PositionState:
         self.q_y = 0
         self.w_x = None
         self.w_y = None
-        self.stop_loss_threshold = None
         self.entry_dif = None
+        self.time_in_pos = 0
 
 
 @dataclass
