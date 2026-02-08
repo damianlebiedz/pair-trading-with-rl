@@ -42,7 +42,7 @@ class TradeExecutor:
             ):
                 # OPEN REVERSE POSITION
                 if (position_state.prev_position < 0 < action) or (
-                        position_state.prev_position > 0 > action
+                    position_state.prev_position > 0 > action
                 ):
                     pnl_close, total_fees_after_close = cls._close_position(
                         ctx, position_state, price_x, price_y, total_fees

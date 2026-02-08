@@ -33,7 +33,9 @@ def train_a2c_agent(cfg: DictConfig):
     print(f"Loading training data from '{data_path}'...")
 
     try:
-        latest_file = max(Path(data_path).glob("*.parquet"), key=lambda p: p.stat().st_mtime)
+        latest_file = max(
+            Path(data_path).glob("*.parquet"), key=lambda p: p.stat().st_mtime
+        )
         df = pd.read_parquet(latest_file)
 
     except ValueError:
@@ -42,11 +44,7 @@ def train_a2c_agent(cfg: DictConfig):
 
     print(f"Columns found: {df.columns.tolist()}")
 
-    exec_ctx = ExecutionContext(
-        ticker_x=TICKER_X,
-        ticker_y=TICKER_Y,
-        fee_rate=0.001
-    )
+    exec_ctx = ExecutionContext(ticker_x=TICKER_X, ticker_y=TICKER_Y, fee_rate=0.001)
 
     def make_env():
         return PairsTradingEnv(df=df, exec_ctx=exec_ctx)
@@ -59,10 +57,10 @@ def train_a2c_agent(cfg: DictConfig):
         vec_env,
         verbose=1,
         tensorboard_log=log_dir,
-        learning_rate=cfg.learning_rate,    # default lr for A2C, can be 3e-4 if unstable
-        n_steps=cfg.n_steps,                # number of steps until update
-        gamma=cfg.gamma,                    # discount factor
-        ent_coef=cfg.ent_coef               # entropy (for exploration)
+        learning_rate=cfg.learning_rate,  # default lr for A2C, can be 3e-4 if unstable
+        n_steps=cfg.n_steps,  # number of steps until update
+        gamma=cfg.gamma,  # discount factor
+        ent_coef=cfg.ent_coef,  # entropy (for exploration)
     )
 
     print("Starting A2C training...")

@@ -17,9 +17,7 @@ def load_single_ticker(
     ticker_dir = base_dir / ticker
 
     if not ticker_dir.exists():
-        raise FileNotFoundError(
-            f"Directory not found: {ticker_dir}"
-        )
+        raise FileNotFoundError(f"Directory not found: {ticker_dir}")
 
     files = list(ticker_dir.glob(f"*_{interval}.csv"))
     if not files:

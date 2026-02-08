@@ -16,7 +16,16 @@ class PairsTradingEnv(gym.Env):
         self.df = df.reset_index(drop=True)
         self.ctx = exec_ctx
 
-        required_cols = ["z_score", "spread", "mean", "std", "beta", "win", self.ctx.ticker_x, self.ctx.ticker_y]
+        required_cols = [
+            "z_score",
+            "spread",
+            "mean",
+            "std",
+            "beta",
+            "win",
+            self.ctx.ticker_x,
+            self.ctx.ticker_y,
+        ]
         missing = [c for c in required_cols if c not in self.df.columns]
         if missing:
             raise ValueError(f"Missing columns in df: {missing}.")
@@ -47,11 +56,7 @@ class PairsTradingEnv(gym.Env):
         return self._get_observation(), {}
 
     def step(self, action):
-        mapping = {
-            0: -1.0,    # Short
-            1: 0.0,     # Flat / Exit
-            2: 1.0      # Long
-        }
+        mapping = {0: -1.0, 1: 0.0, 2: 1.0}  # Short  # Flat / Exit  # Long
         trade_action = mapping[int(action)]
 
         price_x = self.df.at[self.current_step, self.ctx.ticker_x]
@@ -70,7 +75,7 @@ class PairsTradingEnv(gym.Env):
             beta=beta,
             portfolio_value=self.portfolio_value,
             total_fees=self.total_fees,
-            exit_threshold=None
+            exit_threshold=None,
         )
 
         self.portfolio_value += step_pnl
@@ -87,7 +92,7 @@ class PairsTradingEnv(gym.Env):
         info = {
             "portfolio_value": self.portfolio_value,
             "position": self.position_state.position,
-            "action": trade_action
+            "action": trade_action,
         }
 
         return self._get_observation(), reward, terminated, truncated, info
@@ -98,14 +103,17 @@ class PairsTradingEnv(gym.Env):
 
         row = self.df.iloc[self.current_step]
 
-        obs = np.array([
-            row.get("z_score", 0.0),
-            row.get("spread", 0.0),
-            row.get("mean", 0.0),
-            row.get("std", 0.0),
-            row.get("beta", 1.0),
-            float(self.position_state.position),  # -1.0, 0.0, 1.0
-            (self.portfolio_value - self.ctx.initial_cash) / self.ctx.initial_cash
-        ], dtype=np.float32)
+        obs = np.array(
+            [
+                row.get("z_score", 0.0),
+                row.get("spread", 0.0),
+                row.get("mean", 0.0),
+                row.get("std", 0.0),
+                row.get("beta", 1.0),
+                float(self.position_state.position),  # -1.0, 0.0, 1.0
+                (self.portfolio_value - self.ctx.initial_cash) / self.ctx.initial_cash,
+            ],
+            dtype=np.float32,
+        )
 
         return np.nan_to_num(obs)

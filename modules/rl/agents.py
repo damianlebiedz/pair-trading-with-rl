@@ -10,12 +10,14 @@ class RLAgentAdapter:
 
     def get_action(self, state_dict: dict) -> float:
         # the same obs vector as in _get_observation (env)
-        obs = np.array([
-            state_dict.get('z_score', 0),
-            state_dict.get('spread', 0),
-            state_dict.get('portfolio_value', 1000) / 1000.0,  # normalization
-            # other features
-        ])
+        obs = np.array(
+            [
+                state_dict.get("z_score", 0),
+                state_dict.get("spread", 0),
+                state_dict.get("portfolio_value", 1000) / 1000.0,  # normalization
+                # other features
+            ]
+        )
 
         self.last_state = obs
 

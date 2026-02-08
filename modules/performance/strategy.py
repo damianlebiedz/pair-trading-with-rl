@@ -5,7 +5,8 @@ from modules.core.execution import TradeExecutor
 from modules.core.indicators import (
     calculate_z_score,
     calculate_beta,
-    calculate_half_life_window, generate_signal,
+    calculate_half_life_window,
+    generate_signal,
 )
 from modules.core.search_methods import random_search
 from modules.data_services.data_loaders import load_pair
@@ -132,7 +133,7 @@ class Strategy:
             stop_loss_thr = entry_threshold * stop_loss
         else:
             stop_loss_thr = None
-        
+
         time_decay_start = self.time_decay_sl[0]
         time_decay_end = self.time_decay_sl[1]
         if self.time_decay_sl:
@@ -154,7 +155,7 @@ class Strategy:
 
             if is_bankrupt:
                 z_score, spread, mean, std = None, None, None, None
-                net_pnl, reward = 0.0, 0.0
+                net_pnl = 0.0
                 signal = 0
                 position_state.clear_position()
             else:
@@ -182,13 +183,14 @@ class Strategy:
 
                 if position_state.sl_thr is None and position_state.position != 0:
                     position_state.sl_thr = stop_loss_thr
-                elif self.time_decay_sl and position_state.time_in_pos >= time_decay_start * win:
+                elif (
+                    self.time_decay_sl
+                    and position_state.time_in_pos >= time_decay_start * win
+                ):
                     position_state.sl_thr -= decay_per_iter
 
                 if self.agent_mode:
-                    current_state_dict = {
-                        ...
-                    }
+                    current_state_dict = {...}
                     action = agent.get_action(current_state_dict)
                 else:
                     action = signal
@@ -218,7 +220,9 @@ class Strategy:
                 else:
                     prev_pnl = total_pnl
 
-                portfolio_value = initial_cash + total_pnl - (total_fees - prev_total_fees)
+                portfolio_value = (
+                    initial_cash + total_pnl - (total_fees - prev_total_fees)
+                )
 
                 net_pnl = total_pnl - total_fees
 

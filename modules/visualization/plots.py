@@ -240,7 +240,16 @@ def plot_spread_pos(
 ) -> None:
     df = result.data.copy()
 
-    for col in ["entry_thr", "exit_thr", "sl_thr", "z_score", "position", "spread", "mean", "std"]:
+    for col in [
+        "entry_thr",
+        "exit_thr",
+        "sl_thr",
+        "z_score",
+        "position",
+        "spread",
+        "mean",
+        "std",
+    ]:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
 
