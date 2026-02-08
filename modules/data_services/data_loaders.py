@@ -18,7 +18,7 @@ def load_single_ticker(
 
     if not ticker_dir.exists():
         raise FileNotFoundError(
-            f"Directory not found: {ticker_dir} (Base dir was: {base_dir})"
+            f"Directory not found: {ticker_dir}"
         )
 
     files = list(ticker_dir.glob(f"*_{interval}.csv"))
@@ -32,7 +32,6 @@ def load_single_ticker(
     first_date = df["open_time"].min()
     last_date = df["open_time"].max()
 
-    # Optional: loose check to allow partial data if needed, strictly check range otherwise
     if first_date > pd.Timestamp(start) or last_date < pd.Timestamp(end):
         raise ValueError(
             f"Data for {ticker} not found for full {start}-{end} date range. Available: {first_date} to {last_date}"

@@ -57,6 +57,37 @@ def setup_run_environment(calling_file: str) -> str:
     return output_dir
 
 
+def setup_rl_run_environment(calling_file: str) -> str:
+    script_dir = os.path.dirname(os.path.abspath(calling_file))
+    project_root = os.path.abspath(os.path.join(script_dir, ".."))
+
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    output_dir = os.path.join(project_root, "data_rl")
+
+    os.makedirs(output_dir, exist_ok=True)
+
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+
+    formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
+
+    file_handler = logging.FileHandler(os.path.join(output_dir, f"{timestamp}.log"))
+    file_handler.setFormatter(formatter)
+    root_logger.addHandler(file_handler)
+
+    if not any(isinstance(h, logging.StreamHandler) for h in root_logger.handlers):
+        console_handler = logging.StreamHandler(sys.stdout)
+        console_handler.setFormatter(formatter)
+        root_logger.addHandler(console_handler)
+
+    logger.debug("--- RL Environment Setup ---")
+    logger.debug(f"Output Directory: {output_dir}")
+
+    return output_dir
+
+
 def execute_optimization(
     cfg: DictConfig,
     bt: Strategy,
