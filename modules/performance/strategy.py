@@ -11,7 +11,7 @@ from modules.core.search_methods import random_search
 from modules.data_services.data_loaders import load_pair
 from modules.data_services.data_utils import add_log_prices
 from modules.core.models import PositionState, ExecutionContext, StrategyResult
-from modules.performance.agents import RLAgentAdapter
+from modules.rl.agents import RLAgentAdapter
 from modules.performance.stats import calculate_stats
 
 
