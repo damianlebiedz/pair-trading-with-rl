@@ -12,9 +12,7 @@ pair_selection:
     end: "2023-12-01"
 
 performance:
-  window: "static" # "rolling", "static" or "fixed"
-  beta_hedge: "static" # "rolling", "static", "no_hedge"
-  beta_method: "johansen" # "ols" or "johansen"
+  beta_method: "ols" # "ols", "johansen" or "kalman"
   delayed_entry: True # True or False
   time_exit: True # True or False
 

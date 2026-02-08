@@ -21,7 +21,7 @@ from modules.multi_pair.multi_pair_optimizer import MultiPairOptimizer
 from modules.multi_pair.multi_pair_utils import aggregate_strategy_results
 from modules.performance.stats import calculate_multi_pair_stats
 from modules.performance.strategy import Strategy
-from modules.visualization.plots import plot_returns, plot_zscore_pos
+from modules.visualization.plots import plot_returns, plot_zscore_pos, plot_spread_pos
 
 logger = logging.getLogger(__name__)
 
@@ -148,6 +148,7 @@ def execute_testing(
     )
 
     plot_zscore_pos(result, directory=output_dir, save=True)
+    plot_spread_pos(result, directory=output_dir, save=True)
     btc_data = load_btc_benchmark(
         test_start=test_start,
         test_end=test_end,

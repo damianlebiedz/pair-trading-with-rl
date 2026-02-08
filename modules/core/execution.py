@@ -2,19 +2,6 @@ from modules.core.models import ExecutionContext, PositionState
 
 
 class TradeExecutor:
-    @staticmethod
-    def get_spread(x: str, y: str, position: float) -> tuple[float, float]:  # TODO
-        """Get spread for two assets depending on position."""
-        if position == 0:
-            # SPREAD FOR POSITION CLOSING
-            return 1.0, 1.0
-        elif position > 0:
-            # SPREAD FOR POSITIVE POSITION OPENING
-            return 1.0, 1.0
-        else:
-            # SPREAD FOR NEGATIVE POSITION OPENING
-            return 1.0, 1.0
-
     @classmethod
     def execute(
         cls,
@@ -35,37 +22,36 @@ class TradeExecutor:
         time_stop: bool,
     ) -> tuple[float, float]:
 
-        if prev_z_score is None:
+        if prev_z_score is None or z_score is None:
             cls.long_signal = False
             cls.short_signal = False
-
-        if delayed_entry:
-            cls.long_signal = prev_z_score <= -entry_threshold
-            cls.short_signal = prev_z_score >= entry_threshold
-
-            cls.open_cond = (
-                prev_z_score is not None
-                and cls.short_signal
-                and z_score < entry_threshold
-            ) or (
-                prev_z_score is not None
-                and cls.long_signal
-                and z_score > -entry_threshold
-            )
+            cls.open_cond = False
         else:
-            cls.long_signal = z_score <= -entry_threshold
-            cls.short_signal = z_score >= entry_threshold
+            if delayed_entry:
+                cls.long_signal = prev_z_score <= -entry_threshold
+                cls.short_signal = prev_z_score >= entry_threshold
 
-            cls.open_cond = (
-                prev_z_score is not None
-                and cls.short_signal
-                and prev_z_score < entry_threshold
-                and z_score <= stop_loss_thr
-            ) or (
-                prev_z_score is not None
-                and cls.long_signal
-                and prev_z_score > -entry_threshold
-            )
+                cls.open_cond = (
+                    cls.short_signal
+                    and z_score < entry_threshold
+                ) or (
+                    cls.long_signal
+                    and z_score > -entry_threshold
+                )
+            else:
+                cls.long_signal = z_score <= -entry_threshold
+                cls.short_signal = z_score >= entry_threshold
+
+                cls.open_cond = (
+                    prev_z_score is not None
+                    and cls.short_signal
+                    and prev_z_score < entry_threshold
+                    and z_score <= stop_loss_thr
+                ) or (
+                    prev_z_score is not None
+                    and cls.long_signal
+                    and prev_z_score > -entry_threshold
+                )
 
         if cls.long_signal:
             cls.signal = 1
@@ -160,20 +146,16 @@ class TradeExecutor:
         wx = 1 / (beta + 1)
         wy = beta / (beta + 1)
 
-        x_spread, y_spread = cls.get_spread(
-            ctx.ticker_x, ctx.ticker_y, position_state.position
-        )
-
         if cls.long_signal:
-            qx = portfolio_value * wx / (price_x * x_spread)
-            qy = -(portfolio_value * wy) / (price_y * y_spread)
+            qx = portfolio_value * wx / price_x
+            qy = -(portfolio_value * wy) / price_y
         elif cls.short_signal:
-            qx = -(portfolio_value * wx) / (price_x * x_spread)
-            qy = portfolio_value * wy / (price_y * y_spread)
+            qx = -(portfolio_value * wx) / price_x
+            qy = portfolio_value * wy / price_y
         else:
             raise ValueError("Cannot open the position while 'position' is 0")
 
-        entry_dif = qx * (price_x * x_spread) + qy * (price_y * y_spread)
+        entry_dif = qx * price_x + qy * price_y
 
         position_state.update_position(
             position=cls.signal,
@@ -194,14 +176,8 @@ class TradeExecutor:
     def _close_position(
         cls, ctx, position_state, price_x, price_y, total_fees
     ) -> tuple[float, float]:
-        x_spread, y_spread = cls.get_spread(ctx.ticker_x, ctx.ticker_y, 0)
-
-        exit_dif = position_state.q_x * (price_x * x_spread) + position_state.q_y * (
-            price_y * y_spread
-        )
-        exit_val = abs(position_state.q_x) * (price_x * x_spread) + abs(
-            position_state.q_y
-        ) * (price_y * y_spread)
+        exit_dif = position_state.q_x * price_x + position_state.q_y * price_y
+        exit_val = abs(position_state.q_x) * price_x + abs(position_state.q_y * price_y)
         pos_fees = exit_val * ctx.fee_rate
 
         if position_state.prev_position != 0:

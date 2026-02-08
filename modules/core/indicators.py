@@ -1,22 +1,46 @@
-from typing import Literal
+from typing import Literal, Union, Any
 import numpy as np
 import pandas as pd
 import statsmodels.api as sm
 from statsmodels.tsa.vector_ar.vecm import coint_johansen
 
 
+class KalmanState:
+    def __init__(self, delta=1e-4, R=1e-3):
+        self.state_mean = np.zeros(2)
+        self.state_cov = np.ones((2, 2))
+        self.Q = np.eye(2) * delta
+        self.R = R
+
+    def update(self, x, y):
+        prediction_cov = self.state_cov + self.Q
+
+        H = np.array([x, 1.0])
+
+        y_pred = H.dot(self.state_mean)
+        y_residual = y - y_pred
+
+        S = H.dot(prediction_cov).dot(H.T) + self.R
+        K = prediction_cov.dot(H.T) / S
+
+        self.state_mean = self.state_mean + K * y_residual
+        self.state_cov = (np.eye(2) - np.outer(K, H)).dot(prediction_cov)
+
+        return self.state_mean[0]
+
+
 def calculate_beta(
     x_col: str,
     y_col: str,
     df: pd.DataFrame,
-    beta_method: Literal["ols", "johansen"],
-) -> float:
+    beta_method: Literal["ols", "johansen", "kalman"],
+) -> Union[float, tuple[float, Any]]:
     """
-    Calculate hedge ratio beta using OLS or Johansen coint.
+    Calculate hedge ratio beta using OLS, Johansen or Kalman.
     Returns beta such that spread = x - beta * y
     """
-    if beta_method not in ["ols", "johansen"]:
-        raise ValueError("coint_method should be 'ols', 'eg', or 'johansen'")
+    if beta_method not in ["ols", "johansen", "kalman"]:
+        raise ValueError("coint_method should be 'ols', 'johansen', or 'kalman'")
 
     if beta_method == "ols":
         X = sm.add_constant(df[y_col])
@@ -26,7 +50,7 @@ def calculate_beta(
 
         return beta
 
-    else:
+    elif beta_method == "johansen":
         data = df[[x_col, y_col]].dropna()
 
         johansen_res = coint_johansen(
@@ -42,6 +66,18 @@ def calculate_beta(
         beta = -vec[1] / vec[0]
 
         return beta
+
+    else:
+        data = df[[x_col, y_col]].dropna()
+        kf = KalmanState()
+        current_beta = 0.0
+
+        for i in range(len(data)):
+            px = data[y_col].iloc[i]
+            py = data[x_col].iloc[i]
+            current_beta = kf.update(px, py)
+
+        return current_beta
 
 
 def calculate_z_score(

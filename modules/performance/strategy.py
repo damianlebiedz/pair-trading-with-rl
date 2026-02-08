@@ -28,8 +28,6 @@ class Strategy:
         initial_cash (float): Starting capital (the same for every trade).
         risk_free_rate_annual (float): Annual risk-free rate.
         min_trades_per_pair (int): Minimum number of trades per pair for the objective.
-        window (str): Window mode: "fixed" (manual size), "rolling" (rolling half-life), "static" (initial half-life).
-        beta_hedge (str): Hedge ratio mode: "rolling", "static" or "no_hedge".
         beta_method (str): Beta calculation method: "ols" or "johansen".
         delayed_entry (bool): Delayed execution or standard one.
     """
@@ -45,21 +43,10 @@ class Strategy:
         initial_cash: float,
         risk_free_rate_annual: float,
         min_trades_per_pair: int,
-        window: Literal["rolling", "static", "fixed"],
-        beta_hedge: Literal["rolling", "static", "no_hedge"],
         beta_method: Literal["ols", "johansen"],
         delayed_entry: bool,
         time_stop: bool,
     ):
-
-        if window not in ["rolling", "static", "fixed"]:
-            raise ValueError("Invalid window: should be 'rolling', 'static' or 'fixed'")
-
-        if beta_hedge not in ["rolling", "static", "no_hedge"]:
-            raise ValueError(
-                "Invalid beta_hedge: should be 'rolling', 'static' or 'no_hedge'"
-            )
-
         self.ticker_x = ticker_x
         self.ticker_y = ticker_y
         self.start = start
@@ -69,8 +56,6 @@ class Strategy:
         self.initial_cash = initial_cash
         self.risk_free_rate_annual = risk_free_rate_annual
         self.min_trades_per_pair = min_trades_per_pair
-        self.window = window
-        self.beta_hedge = beta_hedge
         self.beta_method = beta_method
         self.delayed_entry = delayed_entry
         self.time_stop = time_stop
@@ -95,7 +80,6 @@ class Strategy:
         exit_threshold: float,
         test_start: str,
         test_end: str,
-        window: Literal["rolling", "static", "fixed"],
         window_factor: float | int,
         win_test_start: str,
         stop_loss: float | None,
@@ -109,7 +93,6 @@ class Strategy:
         source_x_col = f"{x_col}_log"
         source_y_col = f"{y_col}_log"
 
-        beta_hedge = self.beta_hedge
         beta_method = self.beta_method
 
         test_start_pos = df.index.get_loc(pd.to_datetime(test_start))
@@ -117,53 +100,29 @@ class Strategy:
         win_start_pos = df.index.get_loc(pd.to_datetime(win_test_start))
         end_pos = df.index.get_loc(pd.to_datetime(test_end))
 
-        if beta_hedge == "no_hedge":
-            initial_beta = 1.0
-        else:
-            initial_beta = calculate_beta(
-                x_col=source_x_col,
-                y_col=source_y_col,
-                df=df.iloc[start_pos:test_start_pos],
-                beta_method=beta_method,
-            )
+        beta = calculate_beta(
+            x_col=source_x_col,
+            y_col=source_y_col,
+            df=df.iloc[start_pos:test_start_pos],
+            beta_method=beta_method,
+        )
 
-        if window == "fixed":
-            initial_win = int(window_factor)
-        else:
-            initial_win = calculate_half_life_window(
-                x_col=source_x_col,
-                y_col=source_y_col,
-                beta=initial_beta,
-                df=df.iloc[win_start_pos:test_start_pos],
-                window_factor=window_factor,
-            )
-
-        start_z_score = 0.0
-        if (
-            initial_win is not None
-            and initial_beta > 0
-            and 2 <= initial_win <= (test_start_pos - start_pos)
-        ):
-            start_z_score, _, _, _ = calculate_z_score(
-                x_col=source_x_col,
-                y_col=source_y_col,
-                beta=initial_beta,
-                df=df.iloc[test_start_pos - initial_win : test_start_pos],
-            )
-            if pd.isna(start_z_score):
-                start_z_score = 0.0
+        win = calculate_half_life_window(
+            x_col=source_x_col,
+            y_col=source_y_col,
+            beta=beta,
+            df=df.iloc[win_start_pos:test_start_pos],
+            window_factor=window_factor,
+        )
 
         portfolio_value = initial_cash
-
         total_fees = 0.0
         prev_total_fees = 0.0
         total_pnl = 0.0
         prev_pnl = 0.0
         position_state = PositionState()
 
-        prev_z_score = start_z_score
-        beta = initial_beta
-        win = initial_win
+        prev_z_score = None
 
         if stop_loss is not None:
             stop_loss_thr = entry_threshold * stop_loss
@@ -183,23 +142,6 @@ class Strategy:
                 pnl = 0
                 position_state.clear_position()
             else:
-                if beta_hedge == "rolling":
-                    beta = calculate_beta(
-                        x_col=source_x_col,
-                        y_col=source_y_col,
-                        df=df.iloc[start_pos + i - test_start_pos : i],
-                        beta_method=beta_method,
-                    )
-
-                if window == "rolling":
-                    win = calculate_half_life_window(
-                        x_col=source_x_col,
-                        y_col=source_y_col,
-                        beta=beta,
-                        df=df.iloc[win_start_pos + i - test_start_pos : i],
-                        window_factor=window_factor,
-                    )
-
                 if win is not None and beta > 0 and 2 <= win <= i:
                     z_score, spread, mean, std = calculate_z_score(
                         x_col=source_x_col,
@@ -342,7 +284,6 @@ class Strategy:
             exit_threshold=exit_threshold,
             test_start=test_start,
             test_end=test_end,
-            window=self.window,
             window_factor=window_factor,
             win_test_start=win_test_start,
             stop_loss=stop_loss,
