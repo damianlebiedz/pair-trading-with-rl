@@ -7,68 +7,21 @@ class TradeExecutor:
         cls,
         ctx: ExecutionContext,
         position_state: PositionState,
+        action: float,
         price_x: float,
         price_y: float,
         z_score: float | None,
-        prev_z_score: float | None,
         beta: float,
-        win: float,
         portfolio_value: float,
         total_fees: float,
-        entry_threshold: float,
         exit_threshold: float,
-        stop_loss_thr: float | None,
-        delayed_entry: bool,
-        time_stop: bool,
     ) -> tuple[float, float]:
-
-        if prev_z_score is None or z_score is None:
-            cls.long_signal = False
-            cls.short_signal = False
-            cls.open_cond = False
-        else:
-            if delayed_entry:
-                cls.long_signal = prev_z_score <= -entry_threshold
-                cls.short_signal = prev_z_score >= entry_threshold
-
-                cls.open_cond = (
-                    cls.short_signal
-                    and z_score < entry_threshold
-                ) or (
-                    cls.long_signal
-                    and z_score > -entry_threshold
-                )
-            else:
-                cls.long_signal = z_score <= -entry_threshold
-                cls.short_signal = z_score >= entry_threshold
-
-                cls.open_cond = (
-                    prev_z_score is not None
-                    and cls.short_signal
-                    and prev_z_score < entry_threshold
-                    and z_score <= stop_loss_thr
-                ) or (
-                    prev_z_score is not None
-                    and cls.long_signal
-                    and prev_z_score > -entry_threshold
-                )
-
-        if cls.long_signal:
-            cls.signal = 1
-        elif cls.short_signal:
-            cls.signal = -1
-        else:
-            cls.signal = 0
+        stop_loss_thr = position_state.sl_thr
 
         # IN POSITION
         if position_state.prev_position != 0:
-            # CLOSE POSITION (NO MEAN-REVERSION)
-            if z_score is None:
-                return cls._close_position(
-                    ctx, position_state, price_x, price_y, total_fees
-                )
-            # CLOSE POSITION (TIME EXIT)
-            elif time_stop and position_state.time_in_pos >= win:
+            # CLOSE POSITION (NO MEAN-REVERSION OR ACTION = 0)
+            if z_score is None or action == 0:
                 return cls._close_position(
                     ctx, position_state, price_x, price_y, total_fees
                 )
@@ -88,14 +41,15 @@ class TradeExecutor:
                 )
             ):
                 # OPEN REVERSE POSITION
-                if (position_state.prev_position < 0 and cls.long_signal) or (
-                    position_state.prev_position > 0 and cls.short_signal
+                if (position_state.prev_position < 0 < action) or (
+                        position_state.prev_position > 0 > action
                 ):
                     pnl_close, total_fees_after_close = cls._close_position(
                         ctx, position_state, price_x, price_y, total_fees
                     )
                     _, total_fees_final = cls._open_position(
                         ctx,
+                        action,
                         beta,
                         position_state,
                         price_x,
@@ -118,9 +72,10 @@ class TradeExecutor:
             if z_score is None:
                 return 0, total_fees
             # OPEN POSITION
-            elif cls.open_cond:
+            elif action != 0:
                 return cls._open_position(
                     ctx,
+                    action,
                     beta,
                     position_state,
                     price_x,
@@ -136,6 +91,7 @@ class TradeExecutor:
     def _open_position(
         cls,
         ctx: ExecutionContext,
+        action: float,
         beta: float,
         position_state: PositionState,
         price_x: float,
@@ -146,19 +102,21 @@ class TradeExecutor:
         wx = 1 / (beta + 1)
         wy = beta / (beta + 1)
 
-        if cls.long_signal:
-            qx = portfolio_value * wx / price_x
-            qy = -(portfolio_value * wy) / price_y
-        elif cls.short_signal:
-            qx = -(portfolio_value * wx) / price_x
-            qy = portfolio_value * wy / price_y
+        pos_cash = portfolio_value * abs(action)
+
+        if action > 0:
+            qx = pos_cash * wx / price_x
+            qy = -(pos_cash * wy) / price_y
+        elif action < 0:
+            qx = -(pos_cash * wx) / price_x
+            qy = pos_cash * wy / price_y
         else:
-            raise ValueError("Cannot open the position while 'position' is 0")
+            raise ValueError("Cannot open the position while signal == 0")
 
         entry_dif = qx * price_x + qy * price_y
 
         position_state.update_position(
-            position=cls.signal,
+            position=action,
             prev_position=position_state.prev_position,
             q_x=qx,
             q_y=qy,
@@ -167,7 +125,7 @@ class TradeExecutor:
             entry_dif=entry_dif,
         )
 
-        pos_fees = portfolio_value * ctx.fee_rate
+        pos_fees = pos_cash * ctx.fee_rate
         t_fees = total_fees + pos_fees
 
         return 0, t_fees

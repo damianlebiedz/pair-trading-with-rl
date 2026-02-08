@@ -29,6 +29,35 @@ class KalmanState:
         return self.state_mean[0]
 
 
+def generate_signal(
+    z_score: float | None,
+    prev_z_score: float | None,
+    entry_threshold: float,
+    stop_loss_thr: float | None,
+    delayed_entry: bool,
+) -> int:
+    if prev_z_score is None or z_score is None:
+        return 0
+
+    if delayed_entry:
+        long_signal = prev_z_score <= -entry_threshold < z_score
+        short_signal = prev_z_score >= entry_threshold > z_score
+    else:
+        if stop_loss_thr:
+            long_signal = -stop_loss_thr <= z_score <= -entry_threshold < prev_z_score
+            short_signal = prev_z_score < entry_threshold <= z_score <= stop_loss_thr
+        else:
+            long_signal = z_score <= -entry_threshold < prev_z_score
+            short_signal = prev_z_score < entry_threshold <= z_score
+
+    if long_signal:
+        return 1
+    elif short_signal:
+        return -1
+    else:
+        return 0
+
+
 def calculate_beta(
     x_col: str,
     y_col: str,

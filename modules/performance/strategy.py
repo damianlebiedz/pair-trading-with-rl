@@ -5,12 +5,13 @@ from modules.core.execution import TradeExecutor
 from modules.core.indicators import (
     calculate_z_score,
     calculate_beta,
-    calculate_half_life_window,
+    calculate_half_life_window, generate_signal,
 )
 from modules.core.search_methods import random_search
 from modules.data_services.data_loaders import load_pair
 from modules.data_services.data_utils import add_log_prices
 from modules.core.models import PositionState, ExecutionContext, StrategyResult
+from modules.performance.agents import RLAgentAdapter
 from modules.performance.stats import calculate_stats
 
 
@@ -30,6 +31,10 @@ class Strategy:
         min_trades_per_pair (int): Minimum number of trades per pair for the objective.
         beta_method (str): Beta calculation method: "ols" or "johansen".
         delayed_entry (bool): Delayed execution or standard one.
+        time_decay_sl (tuple(float, float)): Parameters 'time_decay_start' and 'time_decay_end' for time decay stop loss.
+            - time_decay_start: decay will begin when position exists for at least time_decay_start * window intervals.
+            - time_decay_end: stop loss threshold will be equal to exit threshold after time_decay_end * window intervals.
+        agent_mode (bool): Parameter to enable RL agent to decide on action during strategy performance.
     """
 
     def __init__(
@@ -45,7 +50,8 @@ class Strategy:
         min_trades_per_pair: int,
         beta_method: Literal["ols", "johansen"],
         delayed_entry: bool,
-        time_stop: bool,
+        time_decay_sl: tuple[float, float] | None = None,
+        agent_mode: bool = False,
     ):
         self.ticker_x = ticker_x
         self.ticker_y = ticker_y
@@ -58,7 +64,8 @@ class Strategy:
         self.min_trades_per_pair = min_trades_per_pair
         self.beta_method = beta_method
         self.delayed_entry = delayed_entry
-        self.time_stop = time_stop
+        self.time_decay_sl = time_decay_sl
+        self.agent_mode = agent_mode
 
         self.exec_ctx = ExecutionContext(
             ticker_x=self.ticker_x,
@@ -83,8 +90,6 @@ class Strategy:
         window_factor: float | int,
         win_test_start: str,
         stop_loss: float | None,
-        delayed_entry: bool,
-        time_stop: bool,
     ) -> pd.DataFrame:
         df = df.copy()
 
@@ -117,7 +122,6 @@ class Strategy:
 
         portfolio_value = initial_cash
         total_fees = 0.0
-        prev_total_fees = 0.0
         total_pnl = 0.0
         prev_pnl = 0.0
         position_state = PositionState()
@@ -128,9 +132,20 @@ class Strategy:
             stop_loss_thr = entry_threshold * stop_loss
         else:
             stop_loss_thr = None
+        
+        time_decay_start = self.time_decay_sl[0]
+        time_decay_end = self.time_decay_sl[1]
+        if self.time_decay_sl:
+            hl_diff = (time_decay_end * win) - (time_decay_start * win)
+            sl_exit_diff = stop_loss_thr - exit_threshold
+            decay_per_iter = sl_exit_diff / hl_diff if hl_diff != 0.0 else sl_exit_diff
+        else:
+            decay_per_iter = 0.0
 
         is_bankrupt = False
         results_buffer = []
+
+        agent = RLAgentAdapter(model=...)
 
         for i in range(test_start_pos, len(df)):
             price_x = df[x_col].iloc[i]
@@ -139,7 +154,8 @@ class Strategy:
 
             if is_bankrupt:
                 z_score, spread, mean, std = None, None, None, None
-                pnl = 0
+                net_pnl, reward = 0.0, 0.0
+                signal = 0
                 position_state.clear_position()
             else:
                 if win is not None and beta > 0 and 2 <= win <= i:
@@ -156,47 +172,63 @@ class Strategy:
 
                 prev_total_fees = total_fees
 
+                signal = generate_signal(
+                    z_score=z_score,
+                    prev_z_score=prev_z_score,
+                    entry_threshold=entry_threshold,
+                    stop_loss_thr=stop_loss_thr,
+                    delayed_entry=self.delayed_entry,
+                )
+
+                if position_state.sl_thr is None and position_state.position != 0:
+                    position_state.sl_thr = stop_loss_thr
+                elif self.time_decay_sl and position_state.time_in_pos >= time_decay_start * win:
+                    position_state.sl_thr -= decay_per_iter
+
+                if self.agent_mode:
+                    current_state_dict = {
+                        ...
+                    }
+                    action = agent.get_action(current_state_dict)
+                else:
+                    action = signal
+
                 pnl, total_fees = TradeExecutor.execute(
                     ctx=self.exec_ctx,
                     position_state=position_state,
+                    action=action,
                     price_x=price_x,
                     price_y=price_y,
                     z_score=z_score,
-                    prev_z_score=prev_z_score,
                     beta=beta,
-                    win=win,
                     portfolio_value=portfolio_value,
                     total_fees=total_fees,
-                    entry_threshold=entry_threshold,
                     exit_threshold=exit_threshold,
-                    stop_loss_thr=stop_loss_thr,
-                    delayed_entry=delayed_entry,
-                    time_stop=time_stop,
                 )
 
-            prev_z_score = z_score
+                prev_z_score = z_score
 
-            if pnl != 0:
-                total_pnl = pnl + prev_pnl
-                if (
-                    position_state.position != 0
-                    and position_state.prev_position != position_state.position
-                ):
+                if pnl != 0:
+                    total_pnl = pnl + prev_pnl
+                    if (
+                        position_state.position != 0
+                        and position_state.prev_position != position_state.position
+                    ):
+                        prev_pnl = total_pnl
+                else:
                     prev_pnl = total_pnl
-            else:
-                prev_pnl = total_pnl
 
-            portfolio_value = initial_cash + total_pnl - (total_fees - prev_total_fees)
+                portfolio_value = initial_cash + total_pnl - (total_fees - prev_total_fees)
 
-            net_pnl = total_pnl - total_fees
+                net_pnl = total_pnl - total_fees
 
-            if is_bankrupt or net_pnl <= -initial_cash:
-                is_bankrupt = True
-                net_pnl = -initial_cash
-                portfolio_value = 0
-                limit_total_pnl = -initial_cash + total_fees
-                if total_pnl < limit_total_pnl:
-                    total_pnl = limit_total_pnl
+                if is_bankrupt or net_pnl <= -initial_cash:
+                    is_bankrupt = True
+                    net_pnl = -initial_cash
+                    portfolio_value = 0
+                    limit_total_pnl = -initial_cash + total_fees
+                    if total_pnl < limit_total_pnl:
+                        total_pnl = limit_total_pnl
 
             results_buffer.append(
                 {
@@ -209,11 +241,12 @@ class Strategy:
                     "beta": beta,
                     "entry_thr": entry_threshold,
                     "exit_thr": exit_threshold,
-                    "sl_thr": stop_loss_thr,
+                    "sl_thr": position_state.sl_thr,
                     "q_x": position_state.q_x,
                     "q_y": position_state.q_y,
                     "w_x": position_state.w_x,
                     "w_y": position_state.w_y,
+                    "signal": signal,
                     "position": position_state.position,
                     "portfolio_value": portfolio_value,
                     "total_return": total_pnl,
@@ -287,8 +320,6 @@ class Strategy:
             window_factor=window_factor,
             win_test_start=win_test_start,
             stop_loss=stop_loss,
-            delayed_entry=self.delayed_entry,
-            time_stop=self.time_stop,
         )
 
         stats = calculate_stats(

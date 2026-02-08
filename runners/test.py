@@ -40,7 +40,7 @@ def test(cfg: DictConfig):
         cfg.performance.optimization.min_trades_per_pair,
         cfg.performance.beta_method,
         cfg.performance.delayed_entry,
-        cfg.performance.time_exit,
+        (cfg.performance.time_decay_start, cfg.performance.time_decay_end),
     )
 
     logger.info("--- Starting Test ---")

@@ -19,6 +19,7 @@ class PositionState:
     w_y: float | None = None
     entry_dif: float | None = None
     time_in_pos: int = 0
+    sl_thr: float | None = None
 
     def update_position(
         self,
@@ -46,6 +47,7 @@ class PositionState:
         self.w_y = None
         self.entry_dif = None
         self.time_in_pos = 0
+        self.sl_thr = None
 
 
 @dataclass

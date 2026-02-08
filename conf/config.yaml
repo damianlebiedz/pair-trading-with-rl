@@ -14,7 +14,8 @@ pair_selection:
 performance:
   beta_method: "ols" # "ols", "johansen" or "kalman"
   delayed_entry: True # True or False
-  time_exit: True # True or False
+  time_decay_start: 0.5
+  time_decay_end: 1.0
 
   iterations: 12 # integer >= 1
 
