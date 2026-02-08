@@ -3,8 +3,5 @@ __pycache__
 .hydra/
 
 data/*
-!data/.ignore
-!data/asset_list.xlsm
-
+data_rl/*
 results/*
-!results/.ignore
