@@ -131,6 +131,34 @@ def plot_zscore_pos(
         col=1,
     )
 
+    fig.add_trace(
+        go.Scatter(
+            x=df.index,
+            y=df["spread"],
+            mode="lines",
+            name="Spread",
+            line=dict(color="blue", width=1),
+            visible="legendonly",
+            hovertemplate="<b>Date</b>: %{x|%Y-%m-%d %H:%M}<br><b>Spread</b>: %{y:.4f}<extra></extra>",
+        ),
+        row=1,
+        col=1,
+    )
+
+    fig.add_trace(
+        go.Scatter(
+            x=df.index,
+            y=df["mean"],
+            mode="lines",
+            name="Mean",
+            line=dict(color="orange", width=1.5),
+            visible="legendonly",
+            hovertemplate="<b>Date</b>: %{x|%Y-%m-%d %H:%M}<br><b>Mean</b>: %{y:.4f}<extra></extra>",
+        ),
+        row=1,
+        col=1,
+    )
+
     if "sl_thr" in df.columns and not df["sl_thr"].isna().all():
         fig.add_trace(
             go.Scatter(
@@ -179,7 +207,7 @@ def plot_zscore_pos(
 
     fig.update_layout(
         template="plotly_white",
-        hovermode="closest",
+        hovermode="x unified",
         height=750,
         legend=dict(
             orientation="h",
@@ -216,10 +244,12 @@ def plot_zscore_pos(
         tickformat="%Y-%m-%d",
         row=2,
         col=1,
+        fixedrange=True,
+        showspikes=True,
+        spikemode="across",
+        spikesnap="cursor",
+        spikethickness=1,
     )
-    fig.update_xaxes(tickvals=custom_ticks, row=1, col=1)
-
-    fig.update_xaxes(fixedrange=True)
     fig.update_yaxes(fixedrange=True)
 
     filename = f"zscore_pos_{result.ticker_x}_{result.ticker_y}_{result.start}_{result.end}.html".replace(
@@ -325,7 +355,7 @@ def plot_returns(
             font=dict(color="black"),
         ),
         template="plotly_white",
-        hovermode="closest",
+        hovermode="x unified",
         legend=dict(
             orientation="h",
             yanchor="bottom",
@@ -348,6 +378,10 @@ def plot_returns(
         tickvals=custom_ticks,
         tickformat="%Y-%m-%d",
         fixedrange=True,
+        showspikes=True,
+        spikemode="across",
+        spikesnap="cursor",
+        spikethickness=1,
     )
 
     filename = f"returns_{result.ticker_x}_{result.ticker_y}_{result.start}_{result.end}.html".replace(

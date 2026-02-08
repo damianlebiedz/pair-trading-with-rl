@@ -18,8 +18,8 @@ logger = logging.getLogger(__name__)
 # =======================================================
 best_params = {
     "window_factor": 2,
-    "entry_threshold": 2,
-    "exit_threshold": 0,
+    "entry_threshold": 2.5,
+    "exit_threshold": 0.2,
     "stop_loss": 2,
 }
 # =======================================================
@@ -32,7 +32,7 @@ def test_multi_pair_multi_periods(cfg: DictConfig):
     config = {
         "pair_selection_test_start": cfg.pair_selection.test.start,
         "pair_selection_test_end": cfg.pair_selection.test.end,
-        "test_beta_start": cfg.performance.test.beta_start,
+        "test_win_start": cfg.performance.test.win_start,
         "test_start": cfg.performance.test.start,
         "test_end": cfg.performance.test.end,
     }
@@ -56,7 +56,8 @@ def test_multi_pair_multi_periods(cfg: DictConfig):
             lists["pair_selection_test_end_list"][i],
             cfg.market.interval,
             cfg.pair_selection.method,
-            cfg.pair_selection.eg_factor,
+            cfg.pair_selection.ps_factor,
+            cfg.pair_selection.top_n_factor,
             output_dir,
         )
 
@@ -72,7 +73,7 @@ def test_multi_pair_multi_periods(cfg: DictConfig):
             bt = Strategy(
                 ticker_x,
                 ticker_y,
-                lists["test_beta_start_list"][i],
+                lists["test_win_start_list"][i],
                 lists["test_end_list"][i],
                 cfg.market.interval,
                 cfg.market.fee_rate,
@@ -88,8 +89,6 @@ def test_multi_pair_multi_periods(cfg: DictConfig):
         test_results = []
         test_stats = []
 
-        logger.info("--- Running Tests with Optimized Parameters ---")
-
         for pair_name in selected_pairs_names:
             ticker_x, ticker_y = pair_name.split("-")
             bt = strategies_map[pair_name]
@@ -103,7 +102,7 @@ def test_multi_pair_multi_periods(cfg: DictConfig):
                 ticker_x,
                 ticker_y,
                 output_dir,
-                lists["test_beta_start_list"][i],
+                lists["test_win_start_list"][i],
                 lists["test_start_list"][i],
                 lists["test_end_list"][i],
                 "test",

@@ -1,39 +1,52 @@
+from typing import Literal
 import numpy as np
 import pandas as pd
 import statsmodels.api as sm
+from statsmodels.tsa.vector_ar.vecm import coint_johansen
 
 
-def generate_signal(entry_threshold: float, z_score: float) -> int:
+def calculate_beta(
+    x_col: str,
+    y_col: str,
+    df: pd.DataFrame,
+    beta_method: Literal["ols", "johansen"],
+) -> float:
     """
-    Generate signals for trades depends on current z-score.
-
-    Signal = 1:     Long X, Short Y
-    Signal = -1:    Short X, Long Y
-    Signal = 0:     do nothing
+    Calculate hedge ratio beta using OLS or Johansen coint.
+    Returns beta such that spread = x - beta * y
     """
-    signal = 0
-    if z_score is not None:
-        if z_score <= -entry_threshold:
-            signal = 1
-        elif z_score >= entry_threshold:
-            signal = -1
+    if beta_method not in ["ols", "johansen"]:
+        raise ValueError("coint_method should be 'ols', 'eg', or 'johansen'")
 
-    return signal
+    if beta_method == "ols":
+        X = sm.add_constant(df[y_col])
+        y = df[x_col]
+        model = sm.OLS(y, X, missing="drop").fit()
+        beta = model.params[y_col]
 
+        return beta
 
-def calculate_beta(x_col: str, y_col: str, df: pd.DataFrame) -> float:
-    """Calculate beta from OLS."""
-    X = sm.add_constant(df[y_col])
-    y = df[x_col]
-    model = sm.OLS(y, X, missing="drop").fit()
-    beta = model.params[y_col]
+    else:
+        data = df[[x_col, y_col]].dropna()
 
-    return beta
+        johansen_res = coint_johansen(
+            data.values,
+            det_order=0,
+            k_ar_diff=1,
+        )
+
+        # first cointegrating vector
+        vec = johansen_res.evec[:, 0]
+
+        # normalize: x - beta * y
+        beta = -vec[1] / vec[0]
+
+        return beta
 
 
 def calculate_z_score(
     x_col: str, y_col: str, beta: float, df: pd.DataFrame
-) -> float | None:
+) -> tuple[float | None, float, float, float]:
     """Calculate z-score with provided beta."""
     spread_series = df[x_col] - (beta * df[y_col])
 
@@ -44,10 +57,10 @@ def calculate_z_score(
     std = historical.std()
 
     if std == 0:
-        return None
+        return None, spread, mean, std
     z_score = (spread - mean) / std
 
-    return z_score
+    return z_score, spread, mean, std
 
 
 def calculate_half_life_window(

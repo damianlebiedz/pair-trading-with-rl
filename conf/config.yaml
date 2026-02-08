@@ -1,6 +1,7 @@
 pair_selection:
-  eg_factor: 0.01
-  method: "both" # "both" or "second"
+  ps_factor: 0.05
+  top_n_factor: 10
+  method: "second" # "both" or "second"
 
   optimization:
     start: "2023-09-01"
@@ -13,22 +14,25 @@ pair_selection:
 performance:
   window: "static" # "rolling", "static" or "fixed"
   beta_hedge: "static" # "rolling", "static", "no_hedge"
+  beta_method: "johansen" # "ols" or "johansen"
+  delayed_entry: True # True or False
+  time_exit: True # True or False
 
   iterations: 12 # integer >= 1
 
   optimization:
-    beta_start: "2023-11-01"
+    win_start: "2023-11-01"
     start: "2023-12-01"
     end: "2024-01-01"
 
     # Search parameters
-    n_iter: 1000
+    n_iter: 300
     replicates: 1
     penalty_bad: -100
 
     # Parameters space
     window_factor_min: 1.50
-    window_factor_max: 3.00
+    window_factor_max: 4.00
 
     fixed_window_factor_min: 1
     fixed_window_factor_max: 1000
@@ -46,6 +50,6 @@ performance:
     min_trades_per_pair: 5
 
   test:
-    beta_start: "2023-12-01"
+    win_start: "2023-12-01"
     start: "2024-01-01"
     end: "2024-02-01"

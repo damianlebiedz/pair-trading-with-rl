@@ -8,7 +8,7 @@ import pandas as pd
 from omegaconf import DictConfig
 
 from modules.core.models import StrategyResult
-from modules.core.statistical_tests import engle_granger_cointegration
+from modules.core.statistical_tests import johansen_cointegration
 from modules.data_services.data_loaders import load_data
 from modules.data_services.data_utils import (
     save_strategy_result,
@@ -65,7 +65,7 @@ def execute_optimization(
     metric: tuple[str, str],
 ) -> dict[str, Any]:
 
-    beta_opt_start = cfg.performance.optimization.beta_start
+    win_opt_start = cfg.performance.optimization.win_start
     opt_start = cfg.performance.optimization.start
     opt_end = cfg.performance.optimization.end
 
@@ -75,7 +75,7 @@ def execute_optimization(
         metric=metric,
         opt_start=opt_start,
         opt_end=opt_end,
-        beta_opt_start=beta_opt_start,
+        win_opt_start=win_opt_start,
         n_iter=cfg.performance.optimization.n_iter,
         replicates=cfg.performance.optimization.replicates,
         penalty_bad=cfg.performance.optimization.penalty_bad,
@@ -117,7 +117,7 @@ def execute_testing(
     ticker_x: str,
     ticker_y: str,
     output_dir: str,
-    beta_test_start: str,
+    win_test_start: str,
     test_start: str,
     test_end: str,
     subdir: str | None = None,
@@ -138,7 +138,7 @@ def execute_testing(
         stop_loss=stop_loss,
         test_start=test_start,
         test_end=test_end,
-        beta_test_start=beta_test_start,
+        win_test_start=win_test_start,
     )
 
     save_strategy_result(
@@ -166,7 +166,8 @@ def execute_pair_selection(
     test_end: str,
     interval: str,
     method: str,
-    eg_factor: float,
+    ps_factor: float,
+    top_n_factor: float,
     output_dir: str,
     opt_start: str | None = None,
     opt_end: str | None = None,
@@ -181,15 +182,19 @@ def execute_pair_selection(
         end=test_end,
         interval=interval,
     )
-    eg_df_test = engle_granger_cointegration(df_test)
+    ps_df_test = johansen_cointegration(df_test)
+
+    if ps_factor == 0.05:
+        factor = ps_df_test["crit_95"]
+    elif ps_factor == 0.01:
+        factor = ps_df_test["crit_99"]
+    else:
+        raise ValueError("ps_factor should be 0.05 or 0.01")
 
     if selection_method == "second" or opt_start is None or opt_end is None:
-        condition = eg_df_test["eg_p_value"] <= eg_factor
-        sort_column = "eg_p_value"
+        condition = ps_df_test["max_eig_stat"] > factor
+        sort_column = "max_eig_stat"
         logger.info("Selection method: 'second' (filtering by test set only).")
-
-        final_df = eg_df_test[condition].sort_values(sort_column).reset_index(drop=True)
-        final_df = final_df.round(4)
 
         start = test_start
 
@@ -200,24 +205,30 @@ def execute_pair_selection(
             end=opt_end,
             interval=interval,
         )
-        eg_df_opt = engle_granger_cointegration(df_opt)
+        ps_df_opt = johansen_cointegration(df_opt)
 
         merged_df = pd.merge(
-            eg_df_opt, eg_df_test, on="pair", how="inner", suffixes=("_opt", "_test")
+            ps_df_opt, ps_df_test, on="pair", how="inner", suffixes=("_opt", "_test")
         )
 
-        condition = (eg_df_test["eg_p_value_opt"] <= eg_factor) & (
-            eg_df_test["eg_p_value_test"] <= eg_factor
+        condition = (merged_df["max_eig_stat_opt"] > factor) & (
+            merged_df["max_eig_stat_test"] > factor
         )
-        sort_column = "eg_p_value_test"
+        sort_column = "max_eig_stat_test"
         logger.info(
             "Selection method: 'both' (filtering by optimization AND test sets)."
         )
 
-        final_df = merged_df[condition].sort_values(sort_column).reset_index(drop=True)
-        final_df = final_df.round(4)
-
         start = opt_start
+
+    final_df = (
+        ps_df_test[condition]
+        .query("beta > 0")
+        .sort_values(sort_column, ascending=False)
+        .head(top_n_factor)
+        .reset_index(drop=True)
+        .round(4)
+    )
 
     save_dataframe(
         df=final_df,
