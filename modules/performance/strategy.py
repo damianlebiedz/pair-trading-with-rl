@@ -265,7 +265,7 @@ class Strategy:
                     price_y=price_y,
                     z_score=z_score,
                     beta=beta,
-                    portfolio_value=equity,
+                    equity=equity,
                     exec_logger=exec_logger,
                 )
 

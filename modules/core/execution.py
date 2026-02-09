@@ -19,7 +19,7 @@ class TradeExecutor:
         price_y: float,
         z_score: float | None,
         beta: float,
-        portfolio_value: float,
+        equity: float,
         exec_logger: ExecLogger,
     ) -> tuple[float, float]:
         prev_position = position_state.prev_position
@@ -60,7 +60,7 @@ class TradeExecutor:
                         position_state,
                         price_x,
                         price_y,
-                        portfolio_value,
+                        equity + pnl_close - fees_after_close,
                         exec_logger,
                     )
                     return pnl_close, fees_after_close + fees_after_open
@@ -87,7 +87,7 @@ class TradeExecutor:
                     position_state,
                     price_x,
                     price_y,
-                    portfolio_value,
+                    equity,
                     exec_logger,
                 )
             # STAY OUT OF POSITION
@@ -104,13 +104,13 @@ class TradeExecutor:
         position_state: PositionState,
         price_x: float,
         price_y: float,
-        portfolio_value: float,
+        equity: float,
         exec_logger: ExecLogger,
     ) -> tuple[float, float]:
         wx = 1 / (beta + 1)
         wy = beta / (beta + 1)
 
-        pos_cash = portfolio_value * abs(action)
+        pos_cash = equity * abs(action)
 
         if action > 0:
             qx = pos_cash * wx / price_x
