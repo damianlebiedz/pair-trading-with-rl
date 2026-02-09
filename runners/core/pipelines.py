@@ -178,6 +178,12 @@ def execute_testing(
         directory=output_dir,
     )
 
+    save_dataframe(
+        df=result.stats,
+        file_name=f"stats_{ticker_x}_{ticker_y}_{test_start}_{test_end}",
+        directory=output_dir,
+    )
+
     plot_zscore_pos(result, directory=output_dir, save=True)
     plot_spread_pos(result, directory=output_dir, save=True)
     btc_data = load_btc_benchmark(

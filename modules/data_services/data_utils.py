@@ -63,9 +63,9 @@ def load_btc_benchmark(test_start: str, test_end: str, interval: str) -> pd.Data
         end=test_end,
         interval=interval,
     )
-    btc_data["BTC_return"] = btc_data["BTCUSDT"].pct_change()
-    btc_data.loc[btc_data.index[0], "BTC_return"] = 0.0
-    btc_data["BTC_c_return"] = (1 + btc_data["BTC_return"]).cumprod() - 1
+    btc_data["BTC_pct"] = btc_data["BTCUSDT"].pct_change()
+    btc_data.loc[btc_data.index[0], "BTC_pct"] = 0.0
+    btc_data["BTC_return"] = (1 + btc_data["BTC_pct"]).cumprod() - 1
 
     return btc_data
 

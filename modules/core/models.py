@@ -9,6 +9,11 @@ class ExecutionContext:
     fee_rate: float
 
 
+@dataclass(frozen=True)
+class PositionContext:
+    base_sl_thr: float
+
+
 @dataclass
 class PositionState:
     position: float = 0
@@ -17,27 +22,27 @@ class PositionState:
     q_y: float = 0
     w_x: float | None = None
     w_y: float | None = None
-    entry_dif: float | None = None
+    prev_dif: float | None = None
     time_in_pos: int = 0
     sl_thr: float | None = None
 
     def update_position(
         self,
         position,
-        prev_position,
         q_x,
         q_y,
         w_x,
         w_y,
-        entry_dif,
+        prev_dif,
+        sl_thr,
     ):
         self.position = position
-        self.prev_position = prev_position
         self.q_x = q_x
         self.q_y = q_y
         self.w_x = w_x
         self.w_y = w_y
-        self.entry_dif = entry_dif
+        self.prev_dif = prev_dif
+        self.sl_thr = sl_thr
 
     def clear_position(self):
         self.position = 0
@@ -45,9 +50,8 @@ class PositionState:
         self.q_y = 0
         self.w_x = None
         self.w_y = None
-        self.entry_dif = None
+        self.prev_dif = None
         self.time_in_pos = 0
-        self.sl_thr = None
 
 
 @dataclass

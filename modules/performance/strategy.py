@@ -11,7 +11,7 @@ from modules.core.indicators import (
 from modules.core.search_methods import random_search
 from modules.data_services.data_loaders import load_pair
 from modules.data_services.data_utils import add_log_prices
-from modules.core.models import PositionState, ExecutionContext, StrategyResult
+from modules.core.models import PositionState, ExecutionContext, StrategyResult, PositionContext
 from modules.rl.agents import RLAgentAdapter
 from modules.performance.stats import calculate_stats
 
@@ -35,7 +35,7 @@ class Strategy:
         time_decay_sl (tuple(float, float)): Parameters 'time_decay_start' and 'time_decay_end' for time decay stop loss.
             - time_decay_start: decay will begin when position exists for at least time_decay_start * window intervals.
             - time_decay_end: stop loss threshold will be equal to exit threshold after time_decay_end * window intervals.
-        agent_mode (bool): Parameter to enable RL agent to decide on action during strategy performance.
+        agent (RLAgentAdapter): RL Agent, if None - trade without agent, otherwise - use agent's actions.
     """
 
     def __init__(
@@ -52,7 +52,7 @@ class Strategy:
         beta_method: Literal["ols", "johansen"],
         delayed_entry: bool,
         time_decay_sl: tuple[float, float] | None = None,
-        agent_mode: bool = False,
+        agent: RLAgentAdapter | None = None,
     ):
         self.ticker_x = ticker_x
         self.ticker_y = ticker_y
@@ -66,7 +66,7 @@ class Strategy:
         self.beta_method = beta_method
         self.delayed_entry = delayed_entry
         self.time_decay_sl = time_decay_sl
-        self.agent_mode = agent_mode
+        self.agent = agent
 
         self.exec_ctx = ExecutionContext(
             ticker_x=self.ticker_x,
@@ -121,10 +121,11 @@ class Strategy:
             window_factor=window_factor,
         )
 
-        portfolio_value = initial_cash
-        total_fees = 0.0
+        equity = initial_cash
+        equity_peak = initial_cash
+
         total_pnl = 0.0
-        prev_pnl = 0.0
+        total_fees = 0.0
         position_state = PositionState()
 
         prev_z_score = None
@@ -134,19 +135,21 @@ class Strategy:
         else:
             stop_loss_thr = None
 
-        time_decay_start = self.time_decay_sl[0]
-        time_decay_end = self.time_decay_sl[1]
+        position_ctx = PositionContext(base_sl_thr=stop_loss_thr)
+
         if self.time_decay_sl:
+            time_decay_start = self.time_decay_sl[0]
+            time_decay_end = self.time_decay_sl[1]
+
             hl_diff = (time_decay_end * win) - (time_decay_start * win)
             sl_exit_diff = stop_loss_thr - exit_threshold
             decay_per_iter = sl_exit_diff / hl_diff if hl_diff != 0.0 else sl_exit_diff
         else:
+            time_decay_start = 0.0
             decay_per_iter = 0.0
 
         is_bankrupt = False
         results_buffer = []
-
-        agent = RLAgentAdapter(model=...)
 
         for i in range(test_start_pos, len(df)):
             price_x = df[x_col].iloc[i]
@@ -155,7 +158,8 @@ class Strategy:
 
             if is_bankrupt:
                 z_score, spread, mean, std = None, None, None, None
-                net_pnl = 0.0
+                total_net_pnl, equity = 0.0, 0.0
+                drawdown_pct = -1.0
                 signal = 0
                 position_state.clear_position()
             else:
@@ -171,8 +175,6 @@ class Strategy:
                 else:
                     z_score, spread, mean, std = None, None, None, None
 
-                prev_total_fees = total_fees
-
                 signal = generate_signal(
                     z_score=z_score,
                     prev_z_score=prev_z_score,
@@ -181,7 +183,7 @@ class Strategy:
                     delayed_entry=self.delayed_entry,
                 )
 
-                if position_state.sl_thr is None and position_state.position != 0:
+                if position_state.position == 0:
                     position_state.sl_thr = stop_loss_thr
                 elif (
                     self.time_decay_sl
@@ -189,50 +191,58 @@ class Strategy:
                 ):
                     position_state.sl_thr -= decay_per_iter
 
-                if self.agent_mode:
-                    current_state_dict = {...}
-                    action = agent.get_action(current_state_dict)
-                else:
-                    action = signal
+                if equity > equity_peak:
+                    equity_peak = equity
 
-                pnl, total_fees = TradeExecutor.execute(
+                if equity_peak > 0:
+                    drawdown_pct = (equity - equity_peak) / equity_peak
+                else:
+                    drawdown_pct = 0.0
+
+                if self.agent:
+                    current_state_dict = {  # TODO (może jakaś struktura danych)
+                        "z_score": z_score,
+                        "std": std,
+                        "beta": beta,
+                        "window": win,
+                        "position": position_state.position,
+                        "signal": signal,
+                        "drawdown_pct": drawdown_pct,
+                        "total_net_return": (total_pnl - total_fees) / initial_cash,
+                        "next_fees": equity * self.fee_rate,
+                    }
+                    action = self.agent.get_action(current_state_dict)
+                else:
+                    action = position_state.prev_position if signal == 0 else signal
+
+                pnl, fees = TradeExecutor.execute( # TODO: ilość argumentów
                     ctx=self.exec_ctx,
+                    pos_ctx=position_ctx, # TODO: może tutaj? stałe
                     position_state=position_state,
                     action=action,
                     price_x=price_x,
                     price_y=price_y,
                     z_score=z_score,
                     beta=beta,
-                    portfolio_value=portfolio_value,
-                    total_fees=total_fees,
+                    portfolio_value=equity,
                     exit_threshold=exit_threshold,
                 )
 
                 prev_z_score = z_score
 
-                if pnl != 0:
-                    total_pnl = pnl + prev_pnl
-                    if (
-                        position_state.position != 0
-                        and position_state.prev_position != position_state.position
-                    ):
-                        prev_pnl = total_pnl
-                else:
-                    prev_pnl = total_pnl
+                total_pnl += pnl
+                total_fees += fees
+                total_net_pnl = total_pnl - total_fees
 
-                portfolio_value = (
-                    initial_cash + total_pnl - (total_fees - prev_total_fees)
-                )
+                equity = initial_cash + total_net_pnl
 
-                net_pnl = total_pnl - total_fees
-
-                if is_bankrupt or net_pnl <= -initial_cash:
+                if equity < 0.0:
                     is_bankrupt = True
-                    net_pnl = -initial_cash
-                    portfolio_value = 0
-                    limit_total_pnl = -initial_cash + total_fees
-                    if total_pnl < limit_total_pnl:
-                        total_pnl = limit_total_pnl
+                    equity = 0.0
+                    drawdown_pct = -1.0
+                    total_net_pnl = -initial_cash
+                    if total_pnl < -initial_cash:
+                        total_pnl = 0.0
 
             results_buffer.append(
                 {
@@ -252,10 +262,12 @@ class Strategy:
                     "w_y": position_state.w_y,
                     "signal": signal,
                     "position": position_state.position,
-                    "portfolio_value": portfolio_value,
-                    "total_return": total_pnl,
+                    "total_pnl": total_pnl,
                     "total_fees": total_fees,
-                    "net_return": net_pnl,
+                    "total_net_pnl": total_net_pnl,
+                    "total_return": total_pnl / initial_cash,
+                    "total_net_return": total_net_pnl / initial_cash,
+                    "drawdown_pct": drawdown_pct,
                 }
             )
 
@@ -265,9 +277,6 @@ class Strategy:
             results_df = pd.DataFrame(results_buffer)
             results_df.set_index("index", inplace=True)
             df.loc[results_df.index, results_df.columns] = results_df
-
-        df["total_return_pct"] = df["total_return"] / self.initial_cash
-        df["net_return_pct"] = df["net_return"] / self.initial_cash
 
         if results_buffer:
             last_processed_idx = results_buffer[-1]["index"]

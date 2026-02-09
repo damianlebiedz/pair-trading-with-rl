@@ -477,7 +477,7 @@ def plot_returns(
     fig.add_trace(
         go.Scatter(
             x=df.index,
-            y=df["net_return_pct"],
+            y=df["total_net_return"],
             mode="lines",
             name="Total Return (Net)",
             line=dict(color="black", width=1.5),
@@ -488,7 +488,7 @@ def plot_returns(
     fig.add_trace(
         go.Scatter(
             x=df.index,
-            y=df["total_return_pct"],
+            y=df["total_return"],
             mode="lines",
             name="Total Return (Gross)",
             line=dict(color="grey", width=1.5),
@@ -501,7 +501,7 @@ def plot_returns(
         fig.add_trace(
             go.Scatter(
                 x=btc_data.index,
-                y=btc_data["BTC_c_return"],
+                y=btc_data["BTC_return"],
                 mode="lines",
                 name="BTC Return",
                 line=dict(color="red", width=1, dash="dot"),

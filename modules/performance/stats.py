@@ -175,8 +175,8 @@ def calculate_stats(
             "objective": objective,
         }
 
-    gross_stats = compute_stats(df["total_return"])
-    net_stats = compute_stats(df["net_return"])
+    gross_stats = compute_stats(df["total_pnl"])
+    net_stats = compute_stats(df["total_net_pnl"])
 
     metrics_order = [
         "total_return",
