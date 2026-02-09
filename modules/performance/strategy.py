@@ -415,6 +415,9 @@ class Strategy:
             min_trades_per_pair=self.min_trades_per_pair,
         )
 
+        exec_logger_df = exec_logger.to_df()
+        exec_logger_df['ticker'] = self.ticker_x + "-" + self.ticker_y
+
         return StrategyResult(
             data=data,
             ticker_x=self.ticker_x,
@@ -424,7 +427,7 @@ class Strategy:
             interval=self.interval,
             fee_rate=self.fee_rate,
             stats=stats,
-            exec_logger=exec_logger.to_df(),
+            exec_logger=exec_logger_df,
         )
 
     def run_optimization(
