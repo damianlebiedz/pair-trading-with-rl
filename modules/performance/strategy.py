@@ -242,9 +242,7 @@ class Strategy:
                     if stop_loss_thr and entry_threshold:
                         max_pain_dist = stop_loss_thr - entry_threshold
                         if max_pain_dist > 0 and z_score is not None:
-                            current_pain_dist = (
-                                abs(z_score) - entry_threshold
-                            )  # 0.0 = entry, 1.0 = stop loss
+                            current_pain_dist = abs(z_score) - entry_threshold
                             sl_utilization = current_pain_dist / max_pain_dist
                         else:
                             sl_utilization = 0.0
@@ -320,13 +318,15 @@ class Strategy:
             if position_state.position != 0:
                 price_x = df[x_col].iloc[-1]
                 price_y = df[y_col].iloc[-1]
-                pnl, fees = TradeExecutor.call_close_position( # TODO: opisać dlaczego używam metody prywatnej
+
+                pnl, fees = TradeExecutor.call_close_position(
                     ctx=self.exec_ctx,
                     position_state=position_state,
                     price_x=price_x,
                     price_y=price_y,
                     exec_logger=exec_logger,
                 )
+
                 results_buffer[-1]["total_fees"] += fees
                 results_buffer[-1]["total_net_pnl"] += pnl - fees
                 results_buffer[-1]["q_x"] = 0

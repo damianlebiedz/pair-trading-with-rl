@@ -204,4 +204,22 @@ class TradeExecutor:
         price_y: float,
         exec_logger: ExecLogger,
     ) -> tuple[float, float]:
+        """
+        Public wrapper to close a position.
+
+        Purpose:
+            Provides a safe, explicit way to close a position at the end of a simulation or
+            in special scenarios, without exposing the private `_close_position` logic
+            directly. Useful for finalizing results.
+
+        Rationale:
+            _close_position is private because normal execution flow should control
+            position closing. This wrapper allows intentional closure from outside
+            the main execution loop while preserving fee and PnL logging.
+
+        Returns:
+            Tuple containing:
+                - pnl (float): Profit or loss realized from closing the position.
+                - fees (float): Transaction fees incurred during closure.
+        """
         return cls._close_position(ctx, position_state, price_x, price_y, exec_logger)
