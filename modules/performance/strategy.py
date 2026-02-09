@@ -11,7 +11,14 @@ from modules.core.indicators import (
 from modules.core.search_methods import random_search
 from modules.data_services.data_loaders import load_pair
 from modules.data_services.data_utils import add_log_prices
-from modules.core.models import PositionState, ExecutionContext, StrategyResult, PositionContext
+from modules.core.models import (
+    PositionState,
+    ExecutionContext,
+    StrategyResult,
+    AgentState,
+    StrategyContext,
+    ExecLogger,
+)
 from modules.rl.agents import RLAgentAdapter
 from modules.performance.stats import calculate_stats
 
@@ -121,12 +128,29 @@ class Strategy:
             window_factor=window_factor,
         )
 
+        df[f"ret_{self.ticker_x}"] = df[source_x_col].diff().fillna(0.0)
+        df[f"ret_{self.ticker_y}"] = df[source_y_col].diff().fillna(0.0)
+
+        vol_window = 24
+        df[f"vol_{self.ticker_x}"] = (
+            df[f"ret_{self.ticker_x}"].rolling(window=vol_window).std()
+        )
+        df[f"vol_{self.ticker_y}"] = (
+            df[f"ret_{self.ticker_y}"].rolling(window=vol_window).std()
+        )
+
+        df["market_vol"] = (
+            df[f"vol_{self.ticker_x}"] + df[f"vol_{self.ticker_y}"]
+        ) / 2.0
+        df["market_vol"] = df["market_vol"].fillna(0.0)
+
         equity = initial_cash
         equity_peak = initial_cash
 
         total_pnl = 0.0
         total_fees = 0.0
         position_state = PositionState()
+        exec_logger = ExecLogger()
 
         prev_z_score = None
 
@@ -135,7 +159,10 @@ class Strategy:
         else:
             stop_loss_thr = None
 
-        position_ctx = PositionContext(base_sl_thr=stop_loss_thr)
+        str_ctx = StrategyContext(
+            sl_threshold=stop_loss_thr,
+            exit_threshold=exit_threshold,
+        )
 
         if self.time_decay_sl:
             time_decay_start = self.time_decay_sl[0]
@@ -200,24 +227,40 @@ class Strategy:
                     drawdown_pct = 0.0
 
                 if self.agent:
-                    current_state_dict = {  # TODO (może jakaś struktura danych)
-                        "z_score": z_score,
-                        "std": std,
-                        "beta": beta,
-                        "window": win,
-                        "position": position_state.position,
-                        "signal": signal,
-                        "drawdown_pct": drawdown_pct,
-                        "total_net_return": (total_pnl - total_fees) / initial_cash,
-                        "next_fees": equity * self.fee_rate,
-                    }
-                    action = self.agent.get_action(current_state_dict)
+                    current_state = AgentState(
+                        z_score=z_score,
+                        std=std,
+                        beta=beta,
+                        window=win,
+                        signal=signal,
+                        position=position_state.position,
+                        norm_time_in_pos=position_state.time_in_pos / win if win else 0,
+                        drawdown_pct=drawdown_pct,
+                        current_market_vol=df["market_vol"].iloc[i],
+                        sl_utilization=None,
+                    )
+                    if stop_loss_thr and entry_threshold:
+                        max_pain_dist = stop_loss_thr - entry_threshold
+                        if max_pain_dist > 0 and z_score is not None:
+                            current_pain_dist = (
+                                abs(z_score) - entry_threshold
+                            )  # 0.0 = entry, 1.0 = stop loss
+                            sl_utilization = current_pain_dist / max_pain_dist
+                        else:
+                            sl_utilization = 0.0
+                        current_state.sl_utilization = sl_utilization
+                    action = self.agent.get_action(current_state)
                 else:
                     action = position_state.prev_position if signal == 0 else signal
 
-                pnl, fees = TradeExecutor.execute( # TODO: ilość argumentów
-                    ctx=self.exec_ctx,
-                    pos_ctx=position_ctx, # TODO: może tutaj? stałe
+                # TODO: można wydzielić action, prices, z_score, beta i value do PortfolioState z update, ALE...
+                # TODO: execute ma tylko wykonywać na podstawie sygnału, czyli tam nie chcemy sprawdzania exit/sl itd.
+
+                position_state.open_time = idx
+
+                pnl, fees = TradeExecutor.execute(
+                    exec_ctx=self.exec_ctx,
+                    str_ctx=str_ctx,
                     position_state=position_state,
                     action=action,
                     price_x=price_x,
@@ -225,7 +268,7 @@ class Strategy:
                     z_score=z_score,
                     beta=beta,
                     portfolio_value=equity,
-                    exit_threshold=exit_threshold,
+                    exec_logger=exec_logger,
                 )
 
                 prev_z_score = z_score
@@ -274,11 +317,28 @@ class Strategy:
             position_state.prev_position = position_state.position
 
         if results_buffer:
+            if position_state.position != 0:
+                price_x = df[x_col].iloc[-1]
+                price_y = df[y_col].iloc[-1]
+                pnl, fees = TradeExecutor.call_close_position( # TODO: opisać dlaczego używam metody prywatnej
+                    ctx=self.exec_ctx,
+                    position_state=position_state,
+                    price_x=price_x,
+                    price_y=price_y,
+                    exec_logger=exec_logger,
+                )
+                results_buffer[-1]["total_fees"] += fees
+                results_buffer[-1]["total_net_pnl"] += pnl - fees
+                results_buffer[-1]["q_x"] = 0
+                results_buffer[-1]["q_y"] = 0
+                results_buffer[-1]["w_x"] = None
+                results_buffer[-1]["w_y"] = None
+                results_buffer[-1]["position"] = 0
+
             results_df = pd.DataFrame(results_buffer)
             results_df.set_index("index", inplace=True)
             df.loc[results_df.index, results_df.columns] = results_df
 
-        if results_buffer:
             last_processed_idx = results_buffer[-1]["index"]
             last_pos_loc = df.index.get_loc(last_processed_idx)
             final_slice_end = min(last_pos_loc, end_pos)
@@ -286,9 +346,20 @@ class Strategy:
         else:
             df = df.iloc[test_start_pos : end_pos + 1].copy()
 
-        df.iloc[-1, df.columns == "position"] = 0
-
-        return df.drop(columns=[source_x_col, source_y_col], errors="ignore")
+        return (
+            df.drop(
+                columns=[
+                    source_x_col,
+                    source_y_col,
+                    f"ret_{self.ticker_x}",
+                    f"ret_{self.ticker_y}",
+                    f"vol_{self.ticker_x}",
+                    f"vol_{self.ticker_y}",
+                ],
+                errors="ignore",
+            ),
+            exec_logger,
+        )
 
     def run_strategy(
         self,
@@ -323,7 +394,7 @@ class Strategy:
             StrategyResult: Object containing backtest data and performance statistics.
         """
 
-        data = self._execute_loop(
+        data, exec_logger = self._execute_loop(
             df=self.data,
             initial_cash=self.initial_cash,
             entry_threshold=entry_threshold,
@@ -337,6 +408,7 @@ class Strategy:
 
         stats = calculate_stats(
             df=data,
+            exec_logger=exec_logger,
             initial_cash=self.initial_cash,
             interval=self.interval,
             risk_free_rate_annual=self.risk_free_rate_annual,
@@ -352,6 +424,7 @@ class Strategy:
             interval=self.interval,
             fee_rate=self.fee_rate,
             stats=stats,
+            exec_logger=exec_logger.to_df(),
         )
 
     def run_optimization(

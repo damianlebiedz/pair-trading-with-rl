@@ -179,6 +179,12 @@ def execute_testing(
     )
 
     save_dataframe(
+        df=result.exec_logger,
+        file_name=f"exec_logger_{ticker_x}_{ticker_y}_{test_start}_{test_end}",
+        directory=output_dir,
+    )
+
+    save_dataframe(
         df=result.stats,
         file_name=f"stats_{ticker_x}_{ticker_y}_{test_start}_{test_end}",
         directory=output_dir,

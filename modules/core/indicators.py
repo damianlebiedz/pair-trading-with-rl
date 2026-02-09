@@ -1,4 +1,4 @@
-from typing import Literal, Union, Any
+from typing import Literal
 import numpy as np
 import pandas as pd
 import statsmodels.api as sm
@@ -63,7 +63,7 @@ def calculate_beta(
     y_col: str,
     df: pd.DataFrame,
     beta_method: Literal["ols", "johansen", "kalman"],
-) -> Union[float, tuple[float, Any]]:
+) -> float:
     """
     Calculate hedge ratio beta using OLS, Johansen or Kalman.
     Returns beta such that spread = x - beta * y

@@ -1,4 +1,4 @@
-import numpy as np
+from modules.core.models import AgentState
 
 
 class RLAgentAdapter:
@@ -8,17 +8,11 @@ class RLAgentAdapter:
         self.last_state = None
         self.last_action = None
 
-    def get_action(self, state_dict: dict) -> float:
+    def get_action(self, state: AgentState) -> float:
         # the same obs vector as in _get_observation (env)
-        obs = np.array(
-            [
-                state_dict.get("z_score", 0),
-                state_dict.get("spread", 0),
-                state_dict.get("portfolio_value", 1000) / 1000.0,  # normalization
-                # other features
-            ]
-        )
 
+        # obs = state.get_state_arr().reshape(1, -1)
+        obs = state.get_state_arr()
         self.last_state = obs
 
         action, _ = self.model.predict(obs, deterministic=not self.training_mode)
