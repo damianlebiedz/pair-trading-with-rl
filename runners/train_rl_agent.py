@@ -155,7 +155,8 @@ def train_a2c_agent(cfg: DictConfig):
 
             obs = vec_env.reset()
             total_reward = 0
-            for _ in range(1000):
+
+            while True:
                 action, _ = model.predict(obs, deterministic=True)
                 obs, rewards, dones, info = vec_env.step(action)
                 total_reward += rewards[0]
