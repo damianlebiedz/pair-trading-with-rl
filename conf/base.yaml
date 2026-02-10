@@ -9,6 +9,12 @@ hydra:
     dir: .
   output_subdir: null
 
+wandb:
+  project: "research-paper"
+  entity: null
+  group: "a2c"
+  mode: "online"
+
 paths:
   models_dir: models
 

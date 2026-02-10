@@ -7,7 +7,7 @@ from modules.core.models import (
     StrategyResult,
     ExecLogger,
     AgentState,
-    PositionState
+    PositionState,
 )
 from modules.core.execution import TradeExecutor
 from modules.rl.rewards import RewardScheme
@@ -16,7 +16,12 @@ from modules.rl.rewards import RewardScheme
 class PairsTradingEnv(gym.Env):
     metadata = {"render_modes": ["human"]}
 
-    def __init__(self, result: StrategyResult, exec_ctx: ExecutionContext, reward_scheme: RewardScheme):
+    def __init__(
+        self,
+        result: StrategyResult,
+        exec_ctx: ExecutionContext,
+        reward_scheme: RewardScheme,
+    ):
         super(PairsTradingEnv, self).__init__()
 
         self.result = result
@@ -109,7 +114,7 @@ class PairsTradingEnv(gym.Env):
             "equity": self.equity,
             "position": self.position_state.position,
             "action": target_position,
-            "step_fees": step_fees
+            "step_fees": step_fees,
         }
 
         reward = self.reward_scheme.calculate(
@@ -117,7 +122,7 @@ class PairsTradingEnv(gym.Env):
             equity=self.equity,
             position=self.position_state.position,
             step_fees=step_fees,
-            info=info
+            info=info,
         )
 
         return self._get_observation(), reward, terminated, truncated, info
@@ -139,7 +144,9 @@ class PairsTradingEnv(gym.Env):
             std=row.get("std", 0.0),
             beta=row.get("beta", 0.0),
             window=int(window),
-            signal=int(self.position_state.position),  # Current actual position direction
+            signal=int(
+                self.position_state.position
+            ),  # Current actual position direction
             position=float(self.position_state.position),
             norm_time_in_pos=float(norm_time),
             drawdown_pct=float(drawdown_pct),

@@ -12,3 +12,5 @@ data_rl/*/*
 
 results/*
 !results/.ignore
+
+.env

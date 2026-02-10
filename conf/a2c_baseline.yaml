@@ -8,3 +8,4 @@ gamma: 0.99               # Discount factor (how important is the future)
 ent_coef: 0.01            # Entropy coefficient (how much agent should explore)
 total_timesteps: 50000
 policy_type: "MlpPolicy"  # Policy Network
+seed: 42
