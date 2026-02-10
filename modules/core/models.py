@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-
 import numpy as np
 import pandas as pd
 from pydantic import BaseModel, ConfigDict
@@ -9,11 +8,6 @@ class ExecutionContext(BaseModel):
     ticker_x: str
     ticker_y: str
     fee_rate: float
-
-
-class StrategyContext(BaseModel):
-    sl_threshold: float | None = None
-    exit_threshold: float
 
 
 @dataclass(slots=True)
@@ -126,6 +120,7 @@ class AgentState:
             Converts the dataclass into a fixed-size float32 array suitable as
             input to RL agents. Missing values (None) are replaced with 0.0.
     """
+
     z_score: float | None
     std: float | None
     beta: float

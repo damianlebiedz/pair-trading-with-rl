@@ -16,7 +16,6 @@ from modules.core.models import (
     ExecutionContext,
     StrategyResult,
     AgentState,
-    StrategyContext,
     ExecLogger,
 )
 from modules.rl.agents import RLAgentAdapter
@@ -159,11 +158,6 @@ class Strategy:
         else:
             stop_loss_thr = None
 
-        str_ctx = StrategyContext(
-            sl_threshold=stop_loss_thr,
-            exit_threshold=exit_threshold,
-        )
-
         if self.time_decay_sl:
             time_decay_start = self.time_decay_sl[0]
             time_decay_end = self.time_decay_sl[1]
@@ -249,21 +243,22 @@ class Strategy:
                         current_state.sl_utilization = sl_utilization
                     action = self.agent.get_action(current_state)
                 else:
-                    action = position_state.prev_position if signal == 0 else signal
-
-                # TODO: można wydzielić action, prices, z_score, beta i value do PortfolioState z update, ALE...
-                # TODO: execute ma tylko wykonywać na podstawie sygnału, czyli tam nie chcemy sprawdzania exit/sl itd.
+                    action = TradeExecutor.decide(
+                        position_state=position_state,
+                        signal=signal,
+                        z_score=z_score,
+                        exit_threshold=exit_threshold,
+                    )
 
                 position_state.open_time = idx
 
                 pnl, fees = TradeExecutor.execute(
                     exec_ctx=self.exec_ctx,
-                    str_ctx=str_ctx,
                     position_state=position_state,
                     action=action,
+                    stop_loss_thr=stop_loss_thr,
                     price_x=price_x,
                     price_y=price_y,
-                    z_score=z_score,
                     beta=beta,
                     equity=equity,
                     exec_logger=exec_logger,
@@ -303,6 +298,7 @@ class Strategy:
                     "w_y": position_state.w_y,
                     "signal": signal,
                     "position": position_state.position,
+                    "equity": equity,
                     "total_pnl": total_pnl,
                     "total_fees": total_fees,
                     "total_net_pnl": total_net_pnl,
@@ -416,7 +412,7 @@ class Strategy:
         )
 
         exec_logger_df = exec_logger.to_df()
-        exec_logger_df['ticker'] = self.ticker_x + "-" + self.ticker_y
+        exec_logger_df["ticker"] = self.ticker_x + "-" + self.ticker_y
 
         return StrategyResult(
             data=data,
@@ -440,31 +436,32 @@ class Strategy:
         win_opt_start: str,
         n_iter: int | None = None,
         replicates: int | None = None,
-        penalty_bad: int | None = None,
+        penalty_bad: float | None = None,
     ) -> tuple[dict, float]:
         """
         Runs optimization to find the best parameter combination for the strategy.
 
-        Scenario A: Fixed Window Size (window="fixed")
+        Scenario A: Fixed Window Size (window="fixed"):
         -> 'window_factor' represents the exact window length (int)
-        >>> from skopt.space import Integer, Real
-        >>> param_space = [
-        >>>     Integer(10, 300, name='window_factor'), # Search window size from 10 to 300
-        >>>     Real(1.0, 3.0, name='entry_threshold'),
-        >>>     ...
-        >>> ]
 
-        Scenario B: Dynamic Window (window="rolling" or "static")
+            from skopt.space import Integer, Real
+            param_space = [
+                Integer(10, 300, name='window_factor'), # Search window size from 10 to 300
+                Real(1.0, 3.0, name='entry_threshold'),
+            ]
+
+        Scenario B: Dynamic Window (window="rolling" or "static"):
         -> 'window_factor' represents the Half-Life multiplier (float)
-        >>> from skopt.space import Real
-        >>> param_space = [
-        >>>     Real(0.5, 4.0, name='window_factor'),   # Search multiplier from 0.5 to 4.0
-        >>>     Real(1.0, 3.0, name='entry_threshold'),
-        >>>     ...
-        >>> ]
 
-        Scenario C: Locking parameters (static_params)
-        >>> static_params = {'stop_loss': 1.05}         # 'stop_loss' will be constant 1.05 for all iterations.
+            from skopt.space import Real
+            param_space = [
+                Real(0.5, 4.0, name='window_factor'),   # Search multiplier from 0.5 to 4.0
+                Real(1.0, 3.0, name='entry_threshold'),
+            ]
+
+        Scenario C: Locking parameters (static_params):
+
+            static_params = {'stop_loss': 1.05}         # 'stop_loss' will be constant 1.05 for all iterations.
             static_params = {'stop_loss': None}         # Trade without 'stop_loss'.
 
         Args:
@@ -476,7 +473,7 @@ class Strategy:
             win_opt_start (str): Start date for Z-score OU (Half-Life)-based window calculation.
             n_iter (int, optional): Number of optimization iterations.
             replicates (int, optional): Number of runs per param set to average results (reduces noise).
-            penalty_bad (int, optional): Score assigned to failed/invalid runs.
+            penalty_bad (float, optional): Score assigned to failed/invalid runs.
 
         Returns:
             tuple[dict, float]: Best parameters found and the corresponding score.

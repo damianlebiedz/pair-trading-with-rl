@@ -1,104 +1,114 @@
 from modules.core.models import (
     ExecutionContext,
     PositionState,
-    StrategyContext,
     Log,
     ExecLogger,
 )
 
 
 class TradeExecutor:
+    """Stateless class for life-cycle management of positions."""
+
+    @staticmethod
+    def decide(
+        position_state: PositionState,
+        signal: float,
+        z_score: float | None,
+        exit_threshold: float,
+    ) -> float:
+        """
+        Determines the target position based on strategy rules (Z-score, TP, SL).
+        Used by heuristic strategies. RL agents skip this and provide 'action' directly.
+        """
+        prev_position = position_state.prev_position
+        stop_loss_thr = position_state.sl_thr
+
+        if z_score is None:
+            return 0.0
+
+        # IN POSITION
+        if prev_position != 0:
+            is_long = prev_position > 0
+
+            # REVERSAL
+            if (is_long and signal < 0) or (not is_long and signal > 0):
+                return signal
+
+            if is_long:
+                hit_tp = z_score >= -exit_threshold
+                hit_sl = stop_loss_thr is not None and z_score <= -stop_loss_thr
+                if hit_tp or hit_sl:
+                    return 0.0
+            else:
+                hit_tp = z_score <= exit_threshold
+                hit_sl = stop_loss_thr is not None and z_score >= stop_loss_thr
+                if hit_tp or hit_sl:
+                    return 0.0
+
+            # HOLD POSITION
+            return prev_position
+
+        # OUT OF POSITION
+        else:
+            return signal
+
     @classmethod
     def execute(
         cls,
         exec_ctx: ExecutionContext,
-        str_ctx: StrategyContext,
         position_state: PositionState,
+        stop_loss_thr: float | None,
         action: float,
         price_x: float,
         price_y: float,
-        z_score: float | None,
         beta: float,
         equity: float,
         exec_logger: ExecLogger,
     ) -> tuple[float, float]:
+        """
+        Mechanically aligns the portfolio with the target 'action'.
+        Handles Open, Close, Hold, and Reversal logic.
+        """
         prev_position = position_state.prev_position
-        stop_loss_thr = position_state.sl_thr
 
-        # IN POSITION
-        if prev_position != 0:
-            # CLOSE POSITION (NO MEAN-REVERSION OR ACTION = 0)
-            if z_score is None or action == 0:
-                return cls._close_position(
-                    exec_ctx, position_state, price_x, price_y, exec_logger
-                )
-            # CLOSE POSITION (STOP LOSS OR TAKE PROFIT FROM SHORT LEG)
-            elif (
-                prev_position < 0
-                and (
-                    z_score <= str_ctx.exit_threshold
-                    or (stop_loss_thr is not None and z_score >= stop_loss_thr)
-                )
-                # CLOSE POSITION (STOP LOSS OR TAKE PROFIT FROM LONG LEG)
-            ) or (
-                prev_position > 0
-                and (
-                    z_score >= -str_ctx.exit_threshold
-                    or (stop_loss_thr is not None and z_score <= -stop_loss_thr)
-                )
-            ):
-                # OPEN REVERSE POSITION
-                if (prev_position < 0 < action) or (prev_position > 0 > action):
-                    pnl_close, fees_after_close = cls._close_position(
-                        exec_ctx, position_state, price_x, price_y, exec_logger
-                    )
-                    _, fees_after_open = cls._open_position(
-                        exec_ctx,
-                        str_ctx,
-                        action,
-                        beta,
-                        position_state,
-                        price_x,
-                        price_y,
-                        equity + pnl_close - fees_after_close,
-                        exec_logger,
-                    )
-                    return pnl_close, fees_after_close + fees_after_open
-
-                return cls._close_position(
-                    exec_ctx, position_state, price_x, price_y, exec_logger
-                )
-            # HOLD POSITION
-            else:
+        if action == prev_position:
+            if prev_position != 0:
                 return cls._hold_position(position_state, price_x, price_y)
+            return 0.0, 0.0
 
-        # OUT OF POSITION
-        else:
-            # STAY OUT OF POSITION
-            if z_score is None:
-                return 0.0, 0.0
-            # OPEN POSITION
-            elif action != 0:
-                return cls._open_position(
-                    exec_ctx,
-                    str_ctx,
-                    action,
-                    beta,
-                    position_state,
-                    price_x,
-                    price_y,
-                    equity,
-                    exec_logger,
-                )
-            # STAY OUT OF POSITION
-            else:
-                return 0.0, 0.0
+        pnl_total = 0.0
+        fees_total = 0.0
+        current_equity = equity
+
+        if prev_position != 0:
+            pnl, fees = cls._close_position(
+                exec_ctx, position_state, price_x, price_y, exec_logger
+            )
+            pnl_total += pnl
+            fees_total += fees
+            current_equity = equity + pnl - fees
+
+        if action != 0:
+            _, fees = cls._open_position(
+                exec_ctx,
+                stop_loss_thr,
+                action,
+                beta,
+                position_state,
+                price_x,
+                price_y,
+                current_equity,
+                exec_logger,
+            )
+            fees_total += fees
+
+        return pnl_total, fees_total
 
     @classmethod
     def _open_position(
         cls,
         ctx: ExecutionContext,
-        str_ctx: StrategyContext,
+        stop_loss_thr: float | None,
         action: float,
         beta: float,
         position_state: PositionState,
@@ -115,11 +125,9 @@ class TradeExecutor:
         if action > 0:
             qx = pos_cash * wx / price_x
             qy = -(pos_cash * wy) / price_y
-        elif action < 0:
+        else:
             qx = -(pos_cash * wx) / price_x
             qy = pos_cash * wy / price_y
-        else:
-            raise ValueError("Cannot open the position while signal == 0")
 
         entry_dif = qx * price_x + qy * price_y
 
@@ -131,7 +139,7 @@ class TradeExecutor:
             w_y=wy,
             entry_dif=entry_dif,
             prev_dif=entry_dif,
-            sl_thr=str_ctx.sl_threshold,
+            sl_thr=stop_loss_thr,
         )
 
         fees = pos_cash * ctx.fee_rate
@@ -159,7 +167,7 @@ class TradeExecutor:
         exec_logger: ExecLogger,
     ) -> tuple[float, float]:
         exit_dif = position_state.q_x * price_x + position_state.q_y * price_y
-        exit_val = abs(position_state.q_x) * price_x + abs(position_state.q_y * price_y)
+        exit_val = abs(position_state.q_x) * price_x + abs(position_state.q_y) * price_y
 
         pnl = exit_dif - position_state.prev_dif
         fees = exit_val * ctx.fee_rate
