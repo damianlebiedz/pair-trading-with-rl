@@ -1,7 +1,6 @@
 from modules.core.models import (
     ExecutionContext,
     PositionState,
-    Log,
     ExecLogger,
 )
 
@@ -139,12 +138,13 @@ class TradeExecutor:
             w_y=wy,
             entry_dif=entry_dif,
             prev_dif=entry_dif,
+            entry_equity=pos_cash,
             sl_thr=stop_loss_thr,
         )
 
         fees = pos_cash * ctx.fee_rate
 
-        log = Log(
+        exec_logger.log(
             open_time=position_state.open_time,
             price_x=price_x,
             price_y=price_y,
@@ -152,8 +152,10 @@ class TradeExecutor:
             qy=qy,
             position=position_state.position,
             fees=fees,
+            pnl=0.0,
+            entry_equity=pos_cash,
+            time_in_pos=0,
         )
-        exec_logger.append(log)
 
         return 0.0, fees
 
@@ -172,7 +174,9 @@ class TradeExecutor:
         pnl = exit_dif - position_state.prev_dif
         fees = exit_val * ctx.fee_rate
 
-        log = Log(
+        position_state.time_in_pos += 1
+
+        exec_logger.log(
             open_time=position_state.open_time,
             price_x=price_x,
             price_y=price_y,
@@ -181,9 +185,9 @@ class TradeExecutor:
             position=0.0,
             fees=fees,
             pnl=exit_dif - position_state.entry_dif,
+            entry_equity=position_state.entry_equity,
             time_in_pos=position_state.time_in_pos,
         )
-        exec_logger.append(log)
 
         position_state.clear_position()
 
