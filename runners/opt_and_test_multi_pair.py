@@ -162,7 +162,7 @@ def opt_and_test_multi_pair(cfg: DictConfig):
                 end=lists["test_end_list"][i],
                 interval=cfg.market.interval,
                 fee_rate=cfg.market.fee_rate,
-                initial_cash=cfg.market.initial_cash / len(selected_pairs_names),
+                initial_cash=cfg.market.initial_cash / cfg.pair_selection.top_n_factor,
                 risk_free_rate_annual=cfg.market.risk_free_rate_annual,
                 min_trades_per_pair=cfg.performance.optimization.min_trades_per_pair,
                 beta_method=cfg.performance.beta_method,
