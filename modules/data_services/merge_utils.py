@@ -65,7 +65,7 @@ def stitch_strategy_results(
                     offsets[col] = df[col].iloc[-1]
 
     final_df = pd.concat(merged_dfs).sort_index()
-    final_df = final_df[~final_df.index.duplicated(keep='first')]
+    final_df = final_df[~final_df.index.duplicated(keep="first")]
 
     if exec_dfs:
         final_exec_df = (

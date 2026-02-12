@@ -65,7 +65,9 @@ def test_multi_pair_multi_periods(cfg: DictConfig):
         selected_pairs_names = ps_df["pair"].tolist()
 
         if not selected_pairs_names:
-            logger.warning(f"Iteration {i + 1}: No pairs selected! Skipping trading for this period.")
+            logger.warning(
+                f"Iteration {i + 1}: No pairs selected! Skipping trading for this period."
+            )
             continue
 
         strategies = []
