@@ -65,30 +65,33 @@ class ExecLogger:
     def __init__(self):
         self._logs: list[dict[str, Any]] = []
 
-    def log(self,
-            open_time: pd.Timestamp,
-            price_x: float,
-            price_y: float,
-            qx: float,
-            qy: float,
-            position: float,
-            fees: float,
-            pnl: float,
-            entry_equity: float,
-            time_in_pos: int,
-        ):
-        self._logs.append({
-            "open_time": open_time,
-            "price_x": price_x,
-            "price_y": price_y,
-            "qx": qx,
-            "qy": qy,
-            "position": position,
-            "fees": fees,
-            "pnl": pnl,
-            "entry_equity": entry_equity,
-            "time_in_pos": time_in_pos
-        })
+    def log(
+        self,
+        open_time: pd.Timestamp,
+        price_x: float,
+        price_y: float,
+        qx: float,
+        qy: float,
+        position: float,
+        fees: float,
+        pnl: float,
+        entry_equity: float,
+        time_in_pos: int,
+    ):
+        self._logs.append(
+            {
+                "open_time": open_time,
+                "price_x": price_x,
+                "price_y": price_y,
+                "qx": qx,
+                "qy": qy,
+                "position": position,
+                "fees": fees,
+                "pnl": pnl,
+                "entry_equity": entry_equity,
+                "time_in_pos": time_in_pos,
+            }
+        )
 
     def to_df(self) -> pd.DataFrame:
         if not self._logs:

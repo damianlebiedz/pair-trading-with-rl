@@ -12,12 +12,14 @@ pair_selection:
     end: "2023-12-01"
 
 performance:
-  beta_method: "ols" # "ols", "johansen" or "kalman"
-  delayed_entry: True # True or False
+  beta_method: "kalman" # "ols", "johansen" or "kalman"
+  delayed_entry: False # True or False
   time_decay_start: 0.5
   time_decay_end: 1.0
 
   iterations: 12 # integer >= 1
+
+  rl_reward: "pnl" # "pnl" or "risk_adj"
 
   optimization:
     win_start: "2023-11-01"

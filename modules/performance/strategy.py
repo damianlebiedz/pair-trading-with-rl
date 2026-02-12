@@ -18,6 +18,7 @@ from modules.core.models import (
     AgentState,
     ExecLogger,
 )
+from modules.performance.objectives import ObjectiveScheme
 from modules.rl.agents import RLAgentAdapter
 from modules.performance.stats import calculate_stats
 
@@ -42,6 +43,8 @@ class Strategy:
             - time_decay_start: decay will begin when position exists for at least time_decay_start * window intervals.
             - time_decay_end: stop loss threshold will be equal to exit threshold after time_decay_end * window intervals.
         agent (RLAgentAdapter): RL Agent, if None - trade without agent, otherwise - use agent's actions.
+        vol_window (int): Volatility window size. Default = 24 (one day in '1h' interval).
+        source (str): Type of prices. Default = "log".
     """
 
     def __init__(
@@ -59,6 +62,8 @@ class Strategy:
         delayed_entry: bool,
         time_decay_sl: tuple[float, float] | None = None,
         agent: RLAgentAdapter | None = None,
+        vol_window: int = 24,
+        source: str = "log",
     ):
         self.ticker_x = ticker_x
         self.ticker_y = ticker_y
@@ -73,6 +78,8 @@ class Strategy:
         self.delayed_entry = delayed_entry
         self.time_decay_sl = time_decay_sl
         self.agent = agent
+        self.vol_window = vol_window
+        self.source = source
 
         self.exec_ctx = ExecutionContext(
             ticker_x=self.ticker_x,
@@ -98,12 +105,48 @@ class Strategy:
         win_test_start: str,
         stop_loss: float | None,
     ) -> pd.DataFrame:
+        """
+        Core backtesting loop that iterates through market data to simulate strategy execution.
+
+        This method performs the following steps:
+        1. Calculates static parameters (Beta, Window) based on pre-test data.
+        2. Computes market volatility features for risk assessment.
+        3. Iterates bar-by-bar through the `test_start` to `test_end` range.
+        4. Calculates dynamic indicators (Z-Score, Spread) inside the loop.
+        5. Generates signals and executes trades via TradeExecutor.
+        6. Tracks equity, PnL, fees, and drawdown state.
+        7. Handles stop-loss logic (including time-based decay if enabled).
+        8. Force-closes any open positions at the end of the simulation period.
+
+        Note:
+            - Z-Score window is calculated with the current close included. More in research paper.
+
+        Args:
+            df (pd.DataFrame): DataFrame containing price data (columns must match ticker names).
+            initial_cash (float): Starting capital for the simulation.
+            entry_threshold (float): Z-score threshold for entering positions (long/short spread).
+            exit_threshold (float): Z-score threshold for exiting positions (reversion to mean).
+            test_start (str): Start date string (YYYY-MM-DD) for the backtest loop.
+            test_end (str): End date string (YYYY-MM-DD) for the backtest loop.
+            window_factor (float | int): Parameter determining the lookback window size.
+                - If fixed window: integer size (e.g., 100).
+                - If rolling window: float multiplier for Half-Life calculation.
+            win_test_start (str): Start date for data used to calculate the initial window/beta.
+            stop_loss (float | None): Stop-loss distance from entry threshold. None to disable.
+
+        Returns:
+            tuple[pd.DataFrame, pd.DataFrame]:
+                1. Strategy DataFrame: Time-series data containing price, equity curve,
+                   signals, z-scores, PnL per step, and drawdown.
+                2. Execution Logger DataFrame: Detailed record of individual trades (entries/exits),
+                   fees and execution prices.
+        """
         df = df.copy()
 
         x_col = self.ticker_x
         y_col = self.ticker_y
-        source_x_col = f"{x_col}_log"
-        source_y_col = f"{y_col}_log"
+        source_x_col = f"{x_col}_{self.source}"
+        source_y_col = f"{y_col}_{self.source}"
 
         beta_method = self.beta_method
 
@@ -130,7 +173,7 @@ class Strategy:
         df[f"ret_{self.ticker_x}"] = df[source_x_col].diff().fillna(0.0)
         df[f"ret_{self.ticker_y}"] = df[source_y_col].diff().fillna(0.0)
 
-        vol_window = 24
+        vol_window = self.vol_window
         df[f"vol_{self.ticker_x}"] = (
             df[f"ret_{self.ticker_x}"].rolling(window=vol_window).std()
         )
@@ -179,19 +222,17 @@ class Strategy:
 
             if is_bankrupt:
                 z_score, spread, mean, std = None, None, None, None
-                total_net_pnl, equity = 0.0, 0.0
+                total_net_pnl = -initial_cash
+                equity = 0.0
                 drawdown_pct = -1.0
                 signal = 0
-                position_state.clear_position()
             else:
                 if win is not None and beta > 0 and 2 <= win <= i:
                     z_score, spread, mean, std = calculate_z_score(
                         x_col=source_x_col,
                         y_col=source_y_col,
                         beta=beta,
-                        df=df.iloc[
-                            i - win + 1 : i + 1
-                        ],  # Z-Score window with the current close included
+                        df=df.iloc[i - win + 1 : i + 1],
                     )
                 else:
                     z_score, spread, mean, std = None, None, None, None
@@ -274,6 +315,7 @@ class Strategy:
 
                 if equity < 0.0:
                     is_bankrupt = True
+                    position_state.clear_position()
                     equity = 0.0
                     drawdown_pct = -1.0
                     total_net_pnl = -initial_cash
@@ -342,6 +384,9 @@ class Strategy:
         else:
             df = df.iloc[test_start_pos : end_pos + 1].copy()
 
+        exec_log_df = exec_logger.to_df()
+        exec_log_df["ticker"] = self.ticker_x + "-" + self.ticker_y
+
         return (
             df.drop(
                 columns=[
@@ -354,7 +399,7 @@ class Strategy:
                 ],
                 errors="ignore",
             ),
-            exec_logger,
+            exec_log_df,
         )
 
     def run_strategy(
@@ -387,10 +432,10 @@ class Strategy:
             win_test_start (str): Start date for Z-score OU (Half-Life)-based window calculation.
 
         Returns:
-            StrategyResult: Object containing backtest data and performance statistics.
+            StrategyResult: Object containing backtest data, performance statistics and execution logger.
         """
 
-        data, exec_logger = self._execute_loop(
+        data, exec_log_df = self._execute_loop(
             df=self.data,
             initial_cash=self.initial_cash,
             entry_threshold=entry_threshold,
@@ -404,15 +449,11 @@ class Strategy:
 
         stats = calculate_stats(
             df=data,
-            exec_logger=exec_logger,
+            exec_log_df=exec_log_df,
             initial_cash=self.initial_cash,
             interval=self.interval,
             risk_free_rate_annual=self.risk_free_rate_annual,
-            min_trades_per_pair=self.min_trades_per_pair,
         )
-
-        exec_logger_df = exec_logger.to_df()
-        exec_logger_df["ticker"] = self.ticker_x + "-" + self.ticker_y
 
         return StrategyResult(
             data=data,
@@ -423,14 +464,15 @@ class Strategy:
             interval=self.interval,
             fee_rate=self.fee_rate,
             stats=stats,
-            exec_logger=exec_logger_df,
+            exec_logger=exec_log_df,
         )
 
     def run_optimization(
         self,
         static_params: dict,
         param_space: list,
-        metric: tuple[str, str],
+        metric_type: Literal["gross", "net"],
+        objective_func: ObjectiveScheme,
         opt_start: str,
         opt_end: str,
         win_opt_start: str,
@@ -467,7 +509,8 @@ class Strategy:
         Args:
             static_params (dict): Dictionary of parameters to keep constant (not optimized).
             param_space (list): List of skopt Dimensions (Integer/Real) for parameters to optimize.
-            metric (tuple[str, str]): Metric to minimize/maximize (e.g., ('stats', 'sharpe_ratio')).
+            metric_type (Literal['gross', 'net']): metric type for objective function.
+            objective_func (ObjectiveScheme): objective function to maximize.
             opt_start (str): Start date for optimization period.
             opt_end (str): End date for optimization period.
             win_opt_start (str): Start date for Z-score OU (Half-Life)-based window calculation.
@@ -484,9 +527,11 @@ class Strategy:
             entry_threshold: float,
             exit_threshold: float,
             stop_loss: float | None,
-            **_kwargs,
+            **kwargs,
         ) -> float:
             try:
+                current_metric_type = kwargs.get("metric_type", metric_type)
+
                 result = self.run_strategy(
                     window_factor=window_factor,
                     entry_threshold=entry_threshold,
@@ -497,7 +542,9 @@ class Strategy:
                     win_test_start=win_opt_start,
                 )
 
-                score = result.stats.loc[metric]
+                score = objective_func.calculate(
+                    stats=result.stats, metric_type=current_metric_type
+                )
 
                 if isinstance(score, pd.Series):
                     score = score.iloc[0]
@@ -513,7 +560,7 @@ class Strategy:
             strategy_func=objective_wrapper,
             param_space=param_space,
             static_params=static_params,
-            metric=metric,
+            metric_type=metric_type,
             n_iter=n_iter,
             replicates=replicates,
             penalty_bad=penalty_bad,

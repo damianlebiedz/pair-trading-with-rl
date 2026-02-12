@@ -1,12 +1,13 @@
 import logging
-from typing import Any
+from typing import Any, Literal
 import pandas as pd
 from omegaconf import DictConfig
 import numpy as np
 
 from modules.core.search_methods import random_search
 from modules.multi_pair.multi_pair_utils import aggregate_strategy_results
-from modules.performance.stats import calculate_multi_pair_stats
+from modules.performance.objectives import ObjectiveScheme
+from modules.performance.stats import calculate_stats
 from modules.performance.strategy import Strategy
 
 logger = logging.getLogger(__name__)
@@ -18,7 +19,7 @@ class MultiPairOptimizer:
         self.cfg = cfg
         self.opt_start = cfg.performance.optimization.start
         self.opt_end = cfg.performance.optimization.end
-        self.beta_opt_start = cfg.performance.optimization.beta_start
+        self.win_opt_start = cfg.performance.optimization.win_start
         self.penalty_bad = cfg.performance.optimization.penalty_bad
         self.interval = strategies[0].interval
         self.risk_free_rate_annual = strategies[0].risk_free_rate_annual
@@ -28,7 +29,11 @@ class MultiPairOptimizer:
         self.number_of_pairs = len(strategies)
 
     def objective(
-        self, static_params: dict, param_dict: dict, metric: tuple[str, str]
+        self,
+        static_params: dict,
+        param_dict: dict,
+        metric_type: Literal["gross", "net"],
+        objective_func: ObjectiveScheme,
     ) -> float:
         """Calculates the objective score for a given set of parameters across all pairs."""
         try:
@@ -50,24 +55,25 @@ class MultiPairOptimizer:
                     stop_loss=stop_loss,
                     test_start=self.opt_start,
                     test_end=self.opt_end,
-                    beta_test_start=self.beta_opt_start,
+                    win_test_start=self.win_opt_start,
                 )
                 results.append(res)
                 individual_stats_dfs.append(res.stats)
 
-            merged_df = aggregate_strategy_results(results, self.total_initial_cash)
-
-            stats = calculate_multi_pair_stats(
-                merged_df=merged_df,
-                individual_stats_dfs=individual_stats_dfs,
-                total_initial_cash=self.total_initial_cash,
-                interval=self.interval,
-                risk_free_rate_annual=self.risk_free_rate_annual,
-                number_of_pairs=self.number_of_pairs,
-                min_trades_per_pair=self.min_trades_per_pair,
+            merged_df, merged_exec_res = aggregate_strategy_results(
+                results, self.total_initial_cash
             )
 
-            score = stats.loc[metric]
+            stats = calculate_stats(
+                df=merged_df,
+                exec_log_df=merged_exec_res,
+                initial_cash=self.total_initial_cash,
+                interval=self.interval,
+                risk_free_rate_annual=self.risk_free_rate_annual,
+            )
+
+            score = objective_func.calculate(stats=stats, metric_type=metric_type)
+
             if isinstance(score, pd.Series):
                 score = score.iloc[0]
 
@@ -84,21 +90,23 @@ class MultiPairOptimizer:
         self,
         static_params: dict[str, Any],
         param_space: list[Any],
-        metric: tuple[str, str],
+        metric_type: Literal["gross", "net"],
+        objective_func: ObjectiveScheme,
     ) -> tuple[dict, float]:
 
         def wrapper_func(**kwargs) -> float:
-            metric_arg = kwargs.pop("metric", metric)
-
             return self.objective(
-                static_params={}, param_dict=kwargs, metric=metric_arg
+                static_params=static_params,
+                param_dict=kwargs,
+                metric_type=metric_type,
+                objective_func=objective_func,
             )
 
         best_params, best_score = random_search(
             strategy_func=wrapper_func,
             param_space=param_space,
             static_params=static_params,
-            metric=metric,
+            metric_type=metric_type,
             n_iter=self.cfg.performance.optimization.n_iter,
             replicates=self.cfg.performance.optimization.replicates,
             penalty_bad=self.penalty_bad,

@@ -4,6 +4,7 @@ import hydra
 from omegaconf import OmegaConf, DictConfig
 from skopt.space import Real
 
+from modules.performance.objectives import SortinoWithPenalty
 from modules.performance.strategy import Strategy
 from runners.core.pipelines import (
     execute_pair_selection,
@@ -72,7 +73,6 @@ def opt_and_test_multi_pair_multi_periods(cfg: DictConfig):
                 name="stop_loss",
             ),
         ]
-        metric = ("objective", "net")
 
         logger.info(f"Saving results to: {output_dir}")
         logger.info("CONFIG:\n%s", OmegaConf.to_yaml(cfg))
@@ -114,8 +114,12 @@ def opt_and_test_multi_pair_multi_periods(cfg: DictConfig):
             strategies.append(bt)
             strategies_map[pair_name] = bt
 
+        metric_type = "net"
+        objective_func = SortinoWithPenalty(
+            min_trades_per_pair=cfg.performance.optimization.min_trades_per_pair
+        )
         best_params = execute_multi_pair_optimization(
-            cfg, strategies, static_params, param_space, metric
+            cfg, strategies, static_params, param_space, metric_type, objective_func
         )
 
         test_results = []

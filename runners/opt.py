@@ -3,6 +3,7 @@ import hydra
 from omegaconf import OmegaConf, DictConfig
 from skopt.space import Real
 
+from modules.performance.objectives import SortinoWithPenalty
 from modules.performance.strategy import Strategy
 from runners.core.pipelines import (
     execute_optimization,
@@ -49,7 +50,6 @@ def opt(cfg: DictConfig):
             name="stop_loss",
         ),
     ]
-    metric = ("objective", "net")
 
     logger.info(f"Saving results to: {output_dir}")
     logger.info("CONFIG:\n%s", OmegaConf.to_yaml(cfg))
@@ -69,7 +69,14 @@ def opt(cfg: DictConfig):
     )
 
     logger.info("--- Starting Optimization ---")
-    best_params = execute_optimization(cfg, bt, static_params, param_space, metric)
+
+    metric_type = "net"
+    objective_func = SortinoWithPenalty(
+        min_trades_per_pair=cfg.performance.optimization.min_trades_per_pair
+    )
+    best_params = execute_optimization(
+        cfg, bt, static_params, param_space, metric_type, objective_func
+    )
 
     logger.info("--- Starting Test of Optimization ---")
     execute_testing(

@@ -3,7 +3,7 @@ import os
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 import pandas as pd
 from omegaconf import DictConfig
 
@@ -19,7 +19,8 @@ from modules.data_services.data_utils import (
 )
 from modules.multi_pair.multi_pair_optimizer import MultiPairOptimizer
 from modules.multi_pair.multi_pair_utils import aggregate_strategy_results
-from modules.performance.stats import calculate_multi_pair_stats
+from modules.performance.objectives import ObjectiveScheme
+from modules.performance.stats import calculate_stats
 from modules.performance.strategy import Strategy
 from modules.visualization.plots import plot_returns, plot_zscore_pos, plot_spread_pos
 
@@ -93,7 +94,8 @@ def execute_optimization(
     bt: Strategy,
     static_params: dict[str, Any],
     param_space: list[Any],
-    metric: tuple[str, str],
+    metric_type: Literal["gross", "net"],
+    objective_func: ObjectiveScheme,
 ) -> dict[str, Any]:
 
     win_opt_start = cfg.performance.optimization.win_start
@@ -103,7 +105,8 @@ def execute_optimization(
     best_params, best_score = bt.run_optimization(
         static_params=static_params,
         param_space=param_space,
-        metric=metric,
+        metric_type=metric_type,
+        objective_func=objective_func,
         opt_start=opt_start,
         opt_end=opt_end,
         win_opt_start=win_opt_start,
@@ -124,14 +127,18 @@ def execute_multi_pair_optimization(
     strategies: list[Strategy],
     static_params: dict[str, Any],
     param_space: list[Any],
-    metric: tuple[str, str],
+    metric_type: Literal["gross", "net"],
+    objective_func: ObjectiveScheme,
 ) -> dict[str, Any]:
     logger.info(f"Starting Multi-Pair Optimization on {len(strategies)} pairs...")
 
     optimizer = MultiPairOptimizer(strategies, cfg)
 
     best_params, best_score = optimizer.run(
-        static_params=static_params, param_space=param_space, metric=metric
+        static_params=static_params,
+        param_space=param_space,
+        metric_type=metric_type,
+        objective_func=objective_func,
     )
 
     best_params.update(static_params)
@@ -289,7 +296,6 @@ def merge_multi_pair_results(
     cfg: DictConfig,
     output_dir: str,
     results: list[StrategyResult],
-    individual_stats_dfs: list[pd.DataFrame],
     total_initial_cash: float,
     risk_free_rate_annual: float,
     test_start: str,
@@ -299,16 +305,14 @@ def merge_multi_pair_results(
     if not results:
         raise ValueError("No results to merge")
 
-    merged_df = aggregate_strategy_results(results, total_initial_cash)
+    merged_df, merged_exec_res = aggregate_strategy_results(results, total_initial_cash)
 
-    stats = calculate_multi_pair_stats(
-        merged_df=merged_df,
-        individual_stats_dfs=individual_stats_dfs,
-        total_initial_cash=total_initial_cash,
+    stats = calculate_stats(
+        df=merged_df,
+        exec_log_df=merged_exec_res,
+        initial_cash=total_initial_cash,
         interval=results[0].interval,
         risk_free_rate_annual=risk_free_rate_annual,
-        number_of_pairs=len(results),
-        min_trades_per_pair=cfg.performance.optimization.min_trades_per_pair,
     )
 
     final_result = StrategyResult(
@@ -320,11 +324,18 @@ def merge_multi_pair_results(
         interval=results[0].interval,
         fee_rate=results[0].fee_rate,
         stats=stats,
+        exec_logger=merged_exec_res,
     )
 
     save_strategy_result(
         result=final_result,
         file_name=f"returns_multi_pair_{test_start}_{test_end}",
+        directory=output_dir,
+    )
+
+    save_dataframe(
+        df=merged_exec_res,
+        file_name=f"exec_logger_multi_pair_{final_result.start}_{final_result.end}",
         directory=output_dir,
     )
 
@@ -413,6 +424,8 @@ def merge_multi_period_results(
         return None
 
     merged_dfs = []
+    exec_dfs = []
+
     offset_return = 0.0
     offset_net = 0.0
     offset_return_pct = 0.0
@@ -435,6 +448,9 @@ def merge_multi_period_results(
 
         merged_dfs.append(df)
 
+        if not res.exec_logger.empty:
+            exec_dfs.append(res.exec_logger.copy())
+
         if not df.empty:
             if "total_return" in df.columns:
                 offset_return = df["total_return"].iloc[-1]
@@ -446,15 +462,16 @@ def merge_multi_period_results(
                 offset_net_pct = df["net_return_pct"].iloc[-1]
 
     final_df = pd.concat(merged_dfs).sort_index()
+    final_exec_df = (
+        pd.concat(exec_dfs).sort_values(by="open_time").reset_index(drop=True)
+    )
 
-    stats = calculate_multi_pair_stats(
-        merged_df=final_df,
-        individual_stats_dfs=collected_stats,
-        total_initial_cash=initial_cash,
+    stats = calculate_stats(
+        df=final_df,
+        exec_log_df=final_exec_df,
+        initial_cash=initial_cash,
         interval=results[0].interval,
         risk_free_rate_annual=risk_free_rate_annual,
-        number_of_pairs=0,
-        min_trades_per_pair=cfg.performance.optimization.min_trades_per_pair,
     )
 
     final_result = StrategyResult(
@@ -466,11 +483,18 @@ def merge_multi_period_results(
         interval=results[0].interval,
         fee_rate=results[0].fee_rate,
         stats=stats,
+        exec_logger=final_exec_df,
     )
 
     save_strategy_result(
         result=final_result,
         file_name=f"returns_{ticker_x}_{ticker_y}_{final_result.start}_{final_result.end}",
+        directory=output_dir,
+    )
+
+    save_dataframe(
+        df=final_exec_df,
+        file_name=f"exec_logger_{ticker_x}_{ticker_y}_{final_result.start}_{final_result.end}",
         directory=output_dir,
     )
 
