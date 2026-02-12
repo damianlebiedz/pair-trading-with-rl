@@ -1,3 +1,4 @@
+import calendar
 from typing import Literal
 import numpy as np
 import pandas as pd
@@ -18,10 +19,31 @@ def calculate_stats(
     2. Trade execution analysis (Win Rate, Avg Trade etc.) based on the execution logger.
     """
     steps_per_day = get_steps(interval)
-    periods_per_year = steps_per_day * 365
+
+    if not df.empty:
+        start_year = df.index[0].year
+        last_ts = df.index[-1]
+        end_year = last_ts.year
+
+        if last_ts.month == 1 and last_ts.day == 1:
+            end_year -= 1
+
+        if end_year < start_year:
+            end_year = start_year
+
+        if start_year == end_year:
+            days_in_year = 366 if calendar.isleap(start_year) else 365
+        else:
+            days_in_year = 365.25
+    else:
+        days_in_year = 365
+
+    periods_per_year = steps_per_day * days_in_year
 
     def calculate_time_series_metrics(pnl_series: pd.Series) -> dict:
         """Calculates risk-adjusted return metrics based on the continuous equity curve."""
+        pnl_series = pnl_series.iloc[1:]
+
         equity_curve = pnl_series + initial_cash
         returns = equity_curve.pct_change(fill_method=None).dropna()
 
@@ -30,6 +52,8 @@ def calculate_stats(
 
         # Volatility
         period_volatility = returns.std() if not pd.isna(returns.std()) else None
+
+        actual_periods = len(returns)
         annual_volatility = (
             period_volatility * np.sqrt(periods_per_year)
             if period_volatility is not None
@@ -38,7 +62,7 @@ def calculate_stats(
 
         # CAGR (Compound Annual Growth Rate)
         if len(equity_curve) > 0 and equity_curve.iloc[0] > 0:
-            years = len(equity_curve) / periods_per_year
+            years = actual_periods / periods_per_year
             if years <= 0 or equity_curve.iloc[-1] <= 0:
                 cagr = None
             else:
