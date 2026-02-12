@@ -63,9 +63,10 @@ def test_multi_pair(cfg: DictConfig):
             cfg.pair_selection.ps_factor,
             cfg.pair_selection.top_n_factor,
             output_dir,
+            cfg.pair_selection.coint_type,
         )
 
-        logger.info(ps_df)
+        logger.info(f"\n{ps_df}")
         selected_pairs_names = ps_df["pair"].tolist()
 
         if not selected_pairs_names:

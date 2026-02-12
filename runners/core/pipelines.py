@@ -8,7 +8,10 @@ import pandas as pd
 from omegaconf import DictConfig
 
 from modules.core.models import StrategyResult
-from modules.core.statistical_tests import johansen_cointegration
+from modules.core.statistical_tests import (
+    johansen_cointegration,
+    engle_granger_cointegration,
+)
 from modules.data_services.data_loaders import load_data
 from modules.data_services.data_utils import (
     save_strategy_result,
@@ -222,6 +225,7 @@ def execute_pair_selection(
     ps_factor: float,
     top_n_factor: float,
     output_dir: str,
+    coint_type: Literal["eg", "johansen"],
     opt_start: str | None = None,
     opt_end: str | None = None,
 ) -> pd.DataFrame:
@@ -229,63 +233,145 @@ def execute_pair_selection(
     if selection_method not in ["both", "second"]:
         raise ValueError("'method' must be 'both' or 'second'")
 
+    if coint_type not in ["eg", "johansen"]:
+        raise ValueError(f"Unknown cointegration type: {coint_type}")
+
+    logger.info(f"Running pair selection using '{coint_type}' cointegration test.")
+
     df_test = load_data(
         tickers=tickers,
         start=test_start,
         end=test_end,
         interval=interval,
     )
-    ps_df_test = johansen_cointegration(df_test)
 
-    if ps_factor == 0.05:
-        factor = ps_df_test["crit_95"]
-    elif ps_factor == 0.01:
-        factor = ps_df_test["crit_99"]
+    if coint_type == "johansen":
+        ps_df_test = johansen_cointegration(df_test)
+        if ps_factor == 0.05:
+            crit_col = "crit_95"
+        elif ps_factor == 0.01:
+            crit_col = "crit_99"
+        else:
+            raise ValueError("ps_factor should be 0.05 or 0.01 for Johansen")
+
+        factor = ps_df_test[crit_col]
+
     else:
-        raise ValueError("ps_factor should be 0.05 or 0.01")
+        ps_df_test = engle_granger_cointegration(df_test)
+        factor = ps_factor
+        crit_col = None
 
     if selection_method == "second" or opt_start is None or opt_end is None:
-        condition = ps_df_test["max_eig_stat"] > factor
-        sort_column = "max_eig_stat"
         logger.info("Selection method: 'second' (filtering by test set only).")
-
         start = test_start
 
+        if coint_type == "johansen":
+            condition = (ps_df_test["max_eig_stat"] > factor) & (ps_df_test["beta"] > 0)
+            sort_column = "max_eig_stat"
+            ascending = False
+        else:
+            condition = (ps_df_test["p_value"] < factor) & (ps_df_test["beta"] > 0)
+            sort_column = "p_value"
+            ascending = True
+
+        final_df_source = ps_df_test[condition]
+
     else:
+        logger.info(
+            "Selection method: 'both' (filtering by optimization AND test sets)."
+        )
+        start = opt_start
+
         df_opt = load_data(
             tickers=tickers,
             start=opt_start,
             end=opt_end,
             interval=interval,
         )
-        ps_df_opt = johansen_cointegration(df_opt)
 
-        merged_df = pd.merge(
-            ps_df_opt, ps_df_test, on="pair", how="inner", suffixes=("_opt", "_test")
-        )
+        if coint_type == "johansen":
+            ps_df_opt = johansen_cointegration(df_opt)
 
-        condition = (merged_df["max_eig_stat_opt"] > factor) & (
-            merged_df["max_eig_stat_test"] > factor
-        )
-        sort_column = "max_eig_stat_test"
-        logger.info(
-            "Selection method: 'both' (filtering by optimization AND test sets)."
-        )
+            merged_df = pd.merge(
+                ps_df_opt,
+                ps_df_test,
+                on="pair",
+                how="inner",
+                suffixes=("_opt", "_test"),
+            )
 
-        start = opt_start
+            if merged_df.empty:
+                logger.warning(
+                    "Intersection of Opt and Test sets is empty. No pairs to analyze."
+                )
+                return pd.DataFrame()
+
+            crit_col_test = f"{crit_col}_test"
+            crit_col_opt = f"{crit_col}_opt"
+
+            condition = (
+                (merged_df["max_eig_stat_opt"] > merged_df[crit_col_opt])
+                & (merged_df["max_eig_stat_test"] > merged_df[crit_col_test])
+                & (merged_df["beta_opt"] > 0)
+                & (merged_df["beta_test"] > 0)
+            )
+            sort_column = "max_eig_stat_test"
+            ascending = False
+
+        else:
+            ps_df_opt = engle_granger_cointegration(df_opt)
+
+            merged_df = pd.merge(
+                ps_df_opt,
+                ps_df_test,
+                on="pair",
+                how="inner",
+                suffixes=("_opt", "_test"),
+            )
+
+            if merged_df.empty:
+                logger.warning(
+                    "Intersection of Opt and Test sets is empty. No pairs to analyze."
+                )
+                return pd.DataFrame()
+
+            condition = (
+                (merged_df["p_value_opt"] < factor)
+                & (merged_df["p_value_test"] < factor)
+                & (merged_df["beta_opt"] > 0)
+                & (merged_df["beta_test"] > 0)
+            )
+            sort_column = "p_value_test"
+            ascending = True
+
+        final_df_source = merged_df[condition]
+
+        if not final_df_source.empty:
+            final_df_source = final_df_source.copy()
+            final_df_source["beta"] = final_df_source["beta_test"]
+
+    if final_df_source.empty:
+        logger.warning(
+            f"No pairs met the statistical significance criteria (method='{method}', type='{coint_type}')."
+        )
+        return pd.DataFrame()
 
     final_df = (
-        ps_df_test[condition]
-        .query("beta > 0")
-        .sort_values(sort_column, ascending=False)
+        final_df_source.sort_values(sort_column, ascending=ascending)
         .head(top_n_factor)
         .reset_index(drop=True)
         .round(4)
     )
 
+    if final_df.empty:
+        logger.warning(
+            "Pairs met significance criteria but were filtered out due to negative beta."
+        )
+        return pd.DataFrame()
+
     save_dataframe(
         df=final_df,
-        file_name=f"pair_selection_{method}_{start}_{test_end}",
+        file_name=f"pair_selection_{method}_{coint_type}_{start}_{test_end}",
         directory=output_dir,
     )
 
