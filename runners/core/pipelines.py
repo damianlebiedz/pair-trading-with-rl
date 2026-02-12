@@ -15,14 +15,16 @@ from modules.data_services.data_utils import (
     load_btc_benchmark,
     save_dataframe,
     load_strategy_result,
-    load_dataframe,
 )
-from modules.multi_pair.multi_pair_optimizer import MultiPairOptimizer
-from modules.multi_pair.multi_pair_utils import aggregate_strategy_results
+from modules.performance.multi_pair_optimizer import MultiPairOptimizer
+from modules.data_services.merge_utils import (
+    aggregate_strategy_results,
+    stitch_strategy_results,
+)
 from modules.performance.objectives import ObjectiveScheme
 from modules.performance.stats import calculate_stats
 from modules.performance.strategy import Strategy
-from modules.visualization.plots import plot_returns, plot_zscore_pos, plot_spread_pos
+from modules.utils.plots import plot_returns, plot_zscore_pos, plot_spread_pos
 
 logger = logging.getLogger(__name__)
 
@@ -296,7 +298,7 @@ def merge_multi_pair_results(
     cfg: DictConfig,
     output_dir: str,
     results: list[StrategyResult],
-    total_initial_cash: float,
+    initial_cash: float,
     risk_free_rate_annual: float,
     test_start: str,
     test_end: str,
@@ -305,12 +307,12 @@ def merge_multi_pair_results(
     if not results:
         raise ValueError("No results to merge")
 
-    merged_df, merged_exec_res = aggregate_strategy_results(results, total_initial_cash)
+    merged_df, merged_exec_res = aggregate_strategy_results(results, initial_cash)
 
     stats = calculate_stats(
         df=merged_df,
         exec_log_df=merged_exec_res,
-        initial_cash=total_initial_cash,
+        initial_cash=initial_cash,
         interval=results[0].interval,
         risk_free_rate_annual=risk_free_rate_annual,
     )
@@ -367,15 +369,15 @@ def merge_multi_period_results(
 ) -> StrategyResult | None:
     """
     Checks for multiple iteration folders (1, 2, ...) and merges results for a specific pair
-    chronologically in a staircase manner.
-    Loads stats from each period individually to aggregate them.
+    chronologically using the stitch_strategy_results helper.
     """
     base_path = Path(output_dir)
 
     if not (base_path / "1").exists():
-        raise ValueError(
+        logger.warning(
             f"Cannot perform multi-period merge when there is no multi periods in {output_dir}"
         )
+        return None
 
     logger.info(
         f"Detected multi-period structure in {output_dir}. Merging results for {ticker_x}-{ticker_y}..."
@@ -387,7 +389,6 @@ def merge_multi_period_results(
     )
 
     results = []
-    collected_stats = []
 
     for d in iter_dirs:
         pattern = f"returns_{ticker_x}_{ticker_y}_*.parquet"
@@ -397,74 +398,15 @@ def merge_multi_period_results(
             logger.warning(f"No result file found for {ticker_x}-{ticker_y} in {d}")
             continue
 
-        file_path = files[0]
-        file_stem = file_path.stem
-
+        file_stem = files[0].stem
         res = load_strategy_result(file_stem, directory=str(d))
         results.append(res)
-
-        stats_pattern = f"stats_{ticker_x}_{ticker_y}_*.parquet"
-        stats_files = list(d.glob(stats_pattern))
-
-        if not stats_files:
-            logger.warning(f"Stats file not found for {ticker_x}-{ticker_y} in {d}")
-        else:
-            stats_path = stats_files[0]
-            stats_filename = stats_path.stem
-
-            stats_df = load_dataframe(stats_filename, directory=str(d))
-
-            if "metric" in stats_df.columns:
-                stats_df = stats_df.set_index("metric")
-
-            collected_stats.append(stats_df)
 
     if not results:
         logger.warning("No results collected for merging.")
         return None
 
-    merged_dfs = []
-    exec_dfs = []
-
-    offset_return = 0.0
-    offset_net = 0.0
-    offset_return_pct = 0.0
-    offset_net_pct = 0.0
-
-    for res in results:
-        df = res.data.copy()
-
-        if "open_time" in df.columns:
-            df = df.set_index("open_time")
-
-        if "total_return" in df.columns:
-            df["total_return"] += offset_return
-        if "net_return" in df.columns:
-            df["net_return"] += offset_net
-        if "total_return_pct" in df.columns:
-            df["total_return_pct"] += offset_return_pct
-        if "net_return_pct" in df.columns:
-            df["net_return_pct"] += offset_net_pct
-
-        merged_dfs.append(df)
-
-        if not res.exec_logger.empty:
-            exec_dfs.append(res.exec_logger.copy())
-
-        if not df.empty:
-            if "total_return" in df.columns:
-                offset_return = df["total_return"].iloc[-1]
-            if "net_return" in df.columns:
-                offset_net = df["net_return"].iloc[-1]
-            if "total_return_pct" in df.columns:
-                offset_return_pct = df["total_return_pct"].iloc[-1]
-            if "net_return_pct" in df.columns:
-                offset_net_pct = df["net_return_pct"].iloc[-1]
-
-    final_df = pd.concat(merged_dfs).sort_index()
-    final_exec_df = (
-        pd.concat(exec_dfs).sort_values(by="open_time").reset_index(drop=True)
-    )
+    final_df, final_exec_df = stitch_strategy_results(results)
 
     stats = calculate_stats(
         df=final_df,

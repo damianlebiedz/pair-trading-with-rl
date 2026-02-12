@@ -5,7 +5,7 @@ from omegaconf import DictConfig
 import numpy as np
 
 from modules.core.search_methods import random_search
-from modules.multi_pair.multi_pair_utils import aggregate_strategy_results
+from modules.data_services.merge_utils import aggregate_strategy_results
 from modules.performance.objectives import ObjectiveScheme
 from modules.performance.stats import calculate_stats
 from modules.performance.strategy import Strategy
@@ -35,7 +35,30 @@ class MultiPairOptimizer:
         metric_type: Literal["gross", "net"],
         objective_func: ObjectiveScheme,
     ) -> float:
-        """Calculates the objective score for a given set of parameters across all pairs."""
+        """
+        Evaluates the aggregate portfolio performance for a specific set of parameters.
+
+        This method simulates the strategy across all configured pairs using the provided
+        parameters. It then aggregates the results into a single portfolio equity curve
+        (using `aggregate_strategy_results`) to calculate global performance metrics.
+
+        The goal is to find a parameter set that creates a stable portfolio, rather than
+        optimizing each pair individually.
+
+        Args:
+            static_params (dict): Constant parameters fixed during this optimization run.
+            param_dict (dict): The specific set of variable parameters (e.g., window_factor,
+                thresholds) being tested in this iteration.
+            metric_type (Literal["gross", "net"]): Whether to evaluate based on Gross PnL
+                or Net PnL (after fees).
+            objective_func (ObjectiveScheme): The scoring logic (e.g., Sharpe Ratio)
+                used to quantify the portfolio's performance.
+
+        Returns:
+            float: The calculated score based on the aggregated portfolio stats.
+            Returns `self.penalty_bad` if execution fails, results are empty, or
+            scores are invalid (NaN/Inf).
+        """
         try:
             params = {**static_params, **param_dict}
 

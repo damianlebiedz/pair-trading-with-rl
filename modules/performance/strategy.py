@@ -201,7 +201,7 @@ class Strategy:
         else:
             stop_loss_thr = None
 
-        if self.time_decay_sl:
+        if self.time_decay_sl and win is not None:
             time_decay_start = self.time_decay_sl[0]
             time_decay_end = self.time_decay_sl[1]
 
@@ -227,7 +227,7 @@ class Strategy:
                 drawdown_pct = -1.0
                 signal = 0
             else:
-                if win is not None and beta > 0 and 2 <= win <= i:
+                if win is not None:
                     z_score, spread, mean, std = calculate_z_score(
                         x_col=source_x_col,
                         y_col=source_y_col,

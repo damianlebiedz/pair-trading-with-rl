@@ -107,6 +107,7 @@ def save_strategy_result(
         "interval": result.interval,
         "fee_rate": float(result.fee_rate),
         "stats_json": result.stats.to_json(),
+        "exec_logger_json": result.exec_logger.to_json(),
     }
 
     custom_meta_key = "strategy_params".encode("utf-8")
@@ -156,4 +157,5 @@ def load_strategy_result(
         interval=meta["interval"],
         fee_rate=float(meta["fee_rate"]),
         stats=pd.read_json(StringIO(meta["stats_json"])),
+        exec_logger=pd.read_json(StringIO(meta["exec_logger_json"])),
     )

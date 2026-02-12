@@ -140,8 +140,11 @@ def calculate_half_life_window(
 
     Returns:
         int: window size based on half-life * window_factor
-        None: if spread is not mean-reverting or window is invalid
+        None: if beta <= 0, spread is not mean-reverting, or window is invalid.
     """
+    if beta <= 0:
+        return None
+
     # Construct spread using pre-estimated hedge ratio
     series = df[x_col] - (beta * df[y_col])
 
@@ -166,8 +169,8 @@ def calculate_half_life_window(
     half_life = -np.log(2) / lam
     window = int(half_life * window_factor)
 
-    # Reject windows larger than available data
-    if window > len(df):
+    # Reject windows < 2 or larger than available data
+    if window < 2 or window > len(df):
         return None
 
     return window

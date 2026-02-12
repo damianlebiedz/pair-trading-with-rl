@@ -123,7 +123,6 @@ def opt_and_test_multi_pair_multi_periods(cfg: DictConfig):
         )
 
         test_results = []
-        test_stats = []
 
         logger.info("--- Running Tests with Optimized Parameters ---")
 
@@ -162,7 +161,6 @@ def opt_and_test_multi_pair_multi_periods(cfg: DictConfig):
             )
 
             test_results.append(result_test)
-            test_stats.append(result_test.stats)
 
         logger.info("--- Merging Multi-Pair Results ---")
 
@@ -170,7 +168,6 @@ def opt_and_test_multi_pair_multi_periods(cfg: DictConfig):
             cfg,
             output_dir,
             test_results,
-            test_stats,
             cfg.market.initial_cash,
             cfg.market.risk_free_rate_annual,
             lists["test_start_list"][i],

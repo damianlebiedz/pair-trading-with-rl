@@ -4,7 +4,7 @@ import plotly.graph_objects as go
 from pathlib import Path
 from datetime import datetime
 
-from modules.visualization.plots import _get_custom_tickvals
+from modules.utils.plots import _get_custom_tickvals
 from modules.data_services.data_utils import load_btc_benchmark
 
 

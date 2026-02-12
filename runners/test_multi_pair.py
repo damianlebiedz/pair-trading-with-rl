@@ -64,6 +64,10 @@ def test_multi_pair_multi_periods(cfg: DictConfig):
         logger.info(ps_df)
         selected_pairs_names = ps_df["pair"].tolist()
 
+        if not selected_pairs_names:
+            logger.warning(f"Iteration {i + 1}: No pairs selected! Skipping trading for this period.")
+            continue
+
         strategies = []
         strategies_map = {}
 
@@ -80,14 +84,15 @@ def test_multi_pair_multi_periods(cfg: DictConfig):
                 cfg.market.initial_cash / len(selected_pairs_names),
                 cfg.market.risk_free_rate_annual,
                 cfg.performance.optimization.min_trades_per_pair,
-                cfg.performance.window,
-                cfg.performance.beta_hedge,
+                cfg.performance.beta_method,
+                cfg.performance.delayed_entry,
+                (cfg.performance.time_decay_start, cfg.performance.time_decay_end),
             )
+
             strategies.append(bt)
             strategies_map[pair_name] = bt
 
         test_results = []
-        test_stats = []
 
         for pair_name in selected_pairs_names:
             ticker_x, ticker_y = pair_name.split("-")
@@ -109,7 +114,6 @@ def test_multi_pair_multi_periods(cfg: DictConfig):
             )
 
             test_results.append(result_test)
-            test_stats.append(result_test.stats)
 
         logger.info("--- Merging Multi-Pair Results ---")
 
@@ -117,7 +121,6 @@ def test_multi_pair_multi_periods(cfg: DictConfig):
             cfg,
             output_dir,
             test_results,
-            test_stats,
             cfg.market.initial_cash,
             cfg.market.risk_free_rate_annual,
             lists["test_start_list"][i],
