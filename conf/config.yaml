@@ -23,6 +23,9 @@ performance:
   rl_reward: "pnl" # "pnl" or "risk_adj"
 
   optimization:
+    objective_func: "sortino" # "sortino"
+    metric_type: "net" # "gross" or "net"
+
     win_start: "2023-11-01"
     start: "2023-12-01"
     end: "2024-01-01"

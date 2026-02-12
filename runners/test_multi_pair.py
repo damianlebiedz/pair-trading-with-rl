@@ -55,15 +55,15 @@ def test_multi_pair(cfg: DictConfig):
         logger.info(f"--- Running Iteration {i+1} ---")
 
         ps_df = execute_pair_selection(
-            cfg.tickers,
-            lists["pair_selection_test_start_list"][i],
-            lists["pair_selection_test_end_list"][i],
-            cfg.market.interval,
-            cfg.pair_selection.method,
-            cfg.pair_selection.ps_factor,
-            cfg.pair_selection.top_n_factor,
-            output_dir,
-            cfg.pair_selection.coint_type,
+            tickers=cfg.tickers,
+            test_start=lists["pair_selection_test_start_list"][i],
+            test_end=lists["pair_selection_test_end_list"][i],
+            interval=cfg.market.interval,
+            method=cfg.pair_selection.method,
+            ps_factor=cfg.pair_selection.ps_factor,
+            top_n_factor=cfg.pair_selection.top_n_factor,
+            output_dir=output_dir,
+            coint_type=cfg.pair_selection.coint_type,
         )
 
         logger.info(f"\n{ps_df}")
@@ -128,18 +128,18 @@ def test_multi_pair(cfg: DictConfig):
             ticker_x, ticker_y = pair_name.split("-")
 
             bt = Strategy(
-                ticker_x,
-                ticker_y,
-                lists["test_win_start_list"][i],
-                lists["test_end_list"][i],
-                cfg.market.interval,
-                cfg.market.fee_rate,
-                cfg.market.initial_cash / len(selected_pairs_names),
-                cfg.market.risk_free_rate_annual,
-                cfg.performance.optimization.min_trades_per_pair,
-                cfg.performance.beta_method,
-                cfg.performance.delayed_entry,
-                (cfg.performance.time_decay_start, cfg.performance.time_decay_end),
+                ticker_x=ticker_x,
+                ticker_y=ticker_y,
+                start=lists["test_win_start_list"][i],
+                end=lists["test_end_list"][i],
+                interval=cfg.market.interval,
+                fee_rate=cfg.market.fee_rate,
+                initial_cash=cfg.market.initial_cash / len(selected_pairs_names),
+                risk_free_rate_annual=cfg.market.risk_free_rate_annual,
+                min_trades_per_pair=cfg.performance.optimization.min_trades_per_pair,
+                beta_method=cfg.performance.beta_method,
+                delayed_entry=cfg.performance.delayed_entry,
+                time_decay_sl=(cfg.performance.time_decay_start, cfg.performance.time_decay_end),
             )
 
             strategies.append(bt)
@@ -154,16 +154,16 @@ def test_multi_pair(cfg: DictConfig):
             logger.info(f"--- Testing pair: {pair_name} ---")
 
             result_test = execute_testing(
-                cfg,
-                bt,
-                best_params,
-                ticker_x,
-                ticker_y,
-                output_dir,
-                lists["test_win_start_list"][i],
-                lists["test_start_list"][i],
-                lists["test_end_list"][i],
-                "test",
+                cfg=cfg,
+                bt=bt,
+                best_params=best_params,
+                ticker_x=ticker_x,
+                ticker_y=ticker_y,
+                output_dir=output_dir,
+                win_test_start=lists["test_win_start_list"][i],
+                test_start=lists["test_start_list"][i],
+                test_end=lists["test_end_list"][i],
+                subdir="test",
             )
 
             test_results.append(result_test)
@@ -171,22 +171,22 @@ def test_multi_pair(cfg: DictConfig):
         logger.info("--- Merging Multi-Pair Results ---")
 
         merge_multi_pair_results(
-            cfg,
-            output_dir,
-            test_results,
-            cfg.market.initial_cash,
-            cfg.market.risk_free_rate_annual,
-            lists["test_start_list"][i],
-            lists["test_end_list"][i],
+            cfg=cfg,
+            output_dir=output_dir,
+            results=test_results,
+            initial_cash=cfg.market.initial_cash,
+            risk_free_rate_annual=cfg.market.risk_free_rate_annual,
+            test_start=lists["test_start_list"][i],
+            test_end=lists["test_end_list"][i],
         )
 
     merge_multi_period_results(
-        cfg,
-        root,
-        "multi",
-        "pair",
-        cfg.market.initial_cash,
-        cfg.market.risk_free_rate_annual,
+        cfg=cfg,
+        output_dir=root,
+        ticker_x="multi",
+        ticker_y="pair",
+        initial_cash=cfg.market.initial_cash,
+        risk_free_rate_annual=cfg.market.risk_free_rate_annual,
     )
 
 

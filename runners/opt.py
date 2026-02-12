@@ -3,7 +3,6 @@ import hydra
 from omegaconf import OmegaConf, DictConfig
 from skopt.space import Real
 
-from modules.performance.objectives import SortinoWithPenalty
 from modules.performance.strategy import Strategy
 from runners.core.pipelines import (
     execute_optimization,
@@ -55,40 +54,42 @@ def opt(cfg: DictConfig):
     logger.info("CONFIG:\n%s", OmegaConf.to_yaml(cfg))
 
     bt = Strategy(
-        ticker_x,
-        ticker_y,
-        cfg.performance.optimization.beta_start,
-        cfg.performance.optimization.end,
-        cfg.market.interval,
-        cfg.market.fee_rate,
-        cfg.market.initial_cash,
-        cfg.market.risk_free_rate_annual,
-        cfg.performance.optimization.min_trades_per_pair,
-        cfg.performance.window,
-        cfg.performance.beta_hedge,
+        ticker_x=ticker_x,
+        ticker_y=ticker_y,
+        start=cfg.performance.optimization.beta_start,
+        end=cfg.performance.optimization.end,
+        interval=cfg.market.interval,
+        fee_rate=cfg.market.fee_rate,
+        initial_cash=cfg.market.initial_cash,
+        risk_free_rate_annual=cfg.market.risk_free_rate_annual,
+        min_trades_per_pair=cfg.performance.optimization.min_trades_per_pair,
+        beta_method=cfg.performance.beta_method,
+        delayed_entry=cfg.performance.delayed_entry,
+        time_decay_sl=(cfg.performance.time_decay_start, cfg.performance.time_decay_end),
     )
 
     logger.info("--- Starting Optimization ---")
 
-    metric_type = "net"
-    objective_func = SortinoWithPenalty(
-        min_trades_per_pair=cfg.performance.optimization.min_trades_per_pair
-    )
     best_params = execute_optimization(
-        cfg, bt, static_params, param_space, metric_type, objective_func
+        cfg=cfg,
+        bt=bt,
+        static_params=static_params,
+        param_space=param_space,
+        metric_type=cfg.performance.optimization.metric_type,
+        objective_func=cfg.performance.optimization.objective_func,
     )
 
     logger.info("--- Starting Test of Optimization ---")
     execute_testing(
-        cfg,
-        bt,
-        best_params,
-        ticker_x,
-        ticker_y,
-        output_dir,
-        cfg.performance.optimization.beta_start,
-        cfg.performance.optimization.start,
-        cfg.performance.optimization.end,
+        cfg=cfg,
+        bt=bt,
+        best_params=best_params,
+        ticker_x=ticker_x,
+        ticker_y=ticker_y,
+        output_dir=output_dir,
+        win_test_start=cfg.performance.optimization.beta_start,
+        test_start=cfg.performance.optimization.start,
+        test_end=cfg.performance.optimization.end,
         subdir="opt",
     )
 

@@ -24,7 +24,7 @@ from modules.data_services.merge_utils import (
     aggregate_strategy_results,
     stitch_strategy_results,
 )
-from modules.performance.objectives import ObjectiveScheme
+from modules.performance.objectives import SortinoWithPenalty
 from modules.performance.stats import calculate_stats
 from modules.performance.strategy import Strategy
 from modules.utils.plots import plot_returns, plot_zscore_pos, plot_spread_pos
@@ -100,12 +100,20 @@ def execute_optimization(
     static_params: dict[str, Any],
     param_space: list[Any],
     metric_type: Literal["gross", "net"],
-    objective_func: ObjectiveScheme,
+    objective_func: Literal["sortino"],
 ) -> dict[str, Any]:
 
     win_opt_start = cfg.performance.optimization.win_start
     opt_start = cfg.performance.optimization.start
     opt_end = cfg.performance.optimization.end
+
+    if objective_func not in ["sortino"]:
+        raise ValueError("objective_func should be 'sortino'")
+
+    if objective_func == "sortino":
+        objective_func = SortinoWithPenalty(
+            min_trades_per_pair=cfg.performance.optimization.min_trades_per_pair
+        )
 
     best_params, best_score = bt.run_optimization(
         static_params=static_params,
@@ -133,9 +141,17 @@ def execute_multi_pair_optimization(
     static_params: dict[str, Any],
     param_space: list[Any],
     metric_type: Literal["gross", "net"],
-    objective_func: ObjectiveScheme,
+    objective_func: Literal["sortino"],
 ) -> dict[str, Any]:
     logger.info(f"Starting Multi-Pair Optimization on {len(strategies)} pairs...")
+
+    if objective_func not in ["sortino"]:
+        raise ValueError("objective_func should be 'sortino'")
+
+    if objective_func == "sortino":
+        objective_func = SortinoWithPenalty(
+            min_trades_per_pair=cfg.performance.optimization.min_trades_per_pair
+        )
 
     optimizer = MultiPairOptimizer(strategies, cfg)
 
