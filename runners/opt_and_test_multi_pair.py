@@ -5,7 +5,7 @@ import pandas as pd
 from omegaconf import OmegaConf, DictConfig
 from skopt.space import Real
 
-from modules.core.models import StrategyResult
+from modules.performance.models import StrategyResult
 from modules.data_services.data_loaders import load_data
 from modules.data_services.data_utils import save_dataframe, save_strategy_result
 from modules.performance.strategy import Strategy

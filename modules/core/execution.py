@@ -1,5 +1,4 @@
-from modules.core.models import (
-    ExecutionContext,
+from modules.performance.models import (
     PositionState,
     ExecLogger,
 )
@@ -25,11 +24,9 @@ class TradeExecutor:
         if z_score is None:
             return 0.0
 
-        # IN POSITION
         if prev_position != 0:
             is_long = prev_position > 0
 
-            # REVERSAL
             if (is_long and signal < 0) or (not is_long and signal > 0):
                 return signal
 
@@ -44,17 +41,15 @@ class TradeExecutor:
                 if hit_tp or hit_sl:
                     return 0.0
 
-            # HOLD POSITION
             return prev_position
 
-        # OUT OF POSITION
         else:
             return signal
 
     @classmethod
     def execute(
         cls,
-        exec_ctx: ExecutionContext,
+        fee_rate: float,
         position_state: PositionState,
         stop_loss_thr: float | None,
         action: float,
@@ -72,7 +67,10 @@ class TradeExecutor:
 
         if action == prev_position:
             if prev_position != 0:
-                return cls._hold_position(position_state, price_x, price_y)
+                return cls._hold_position(
+                    position_state=position_state,
+                    price_x=price_x,
+                    price_y=price_y)
             return 0.0, 0.0
 
         pnl_total = 0.0
@@ -81,7 +79,11 @@ class TradeExecutor:
 
         if prev_position != 0:
             pnl, fees = cls._close_position(
-                exec_ctx, position_state, price_x, price_y, exec_logger
+                fee_rate=fee_rate,
+                position_state=position_state,
+                price_x=price_x,
+                price_y=price_y,
+                exec_logger=exec_logger
             )
             pnl_total += pnl
             fees_total += fees
@@ -89,15 +91,15 @@ class TradeExecutor:
 
         if action != 0:
             _, fees = cls._open_position(
-                exec_ctx,
-                stop_loss_thr,
-                action,
-                beta,
-                position_state,
-                price_x,
-                price_y,
-                current_equity,
-                exec_logger,
+                fee_rate=fee_rate,
+                stop_loss_thr=stop_loss_thr,
+                action=action,
+                beta=beta,
+                position_state=position_state,
+                price_x=price_x,
+                price_y=price_y,
+                equity=current_equity,
+                exec_logger=exec_logger,
             )
             fees_total += fees
 
@@ -106,7 +108,7 @@ class TradeExecutor:
     @classmethod
     def _open_position(
         cls,
-        ctx: ExecutionContext,
+        fee_rate: float,
         stop_loss_thr: float | None,
         action: float,
         beta: float,
@@ -142,7 +144,7 @@ class TradeExecutor:
             sl_thr=stop_loss_thr,
         )
 
-        fees = pos_cash * ctx.fee_rate
+        fees = pos_cash * fee_rate
 
         exec_logger.log(
             open_time=position_state.open_time,
@@ -162,7 +164,7 @@ class TradeExecutor:
     @classmethod
     def _close_position(
         cls,
-        ctx: ExecutionContext,
+        fee_rate: float,
         position_state: PositionState,
         price_x: float,
         price_y: float,
@@ -172,7 +174,7 @@ class TradeExecutor:
         exit_val = abs(position_state.q_x) * price_x + abs(position_state.q_y) * price_y
 
         pnl = exit_dif - position_state.prev_dif
-        fees = exit_val * ctx.fee_rate
+        fees = exit_val * fee_rate
 
         position_state.time_in_pos += 1
 
@@ -210,7 +212,7 @@ class TradeExecutor:
     @classmethod
     def call_close_position(
         cls,
-        ctx: ExecutionContext,
+        fee_rate: float,
         position_state: PositionState,
         price_x: float,
         price_y: float,
@@ -234,4 +236,10 @@ class TradeExecutor:
                 - pnl (float): Profit or loss realized from closing the position.
                 - fees (float): Transaction fees incurred during closure.
         """
-        return cls._close_position(ctx, position_state, price_x, price_y, exec_logger)
+        return cls._close_position(
+            fee_rate=fee_rate,
+            position_state=position_state,
+            price_x=price_x,
+            price_y=price_y,
+            exec_logger=exec_logger
+        )

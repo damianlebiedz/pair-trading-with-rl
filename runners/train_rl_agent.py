@@ -13,7 +13,6 @@ from wandb.integration.sb3 import WandbCallback
 
 from modules.data_services.data_utils import load_strategy_result
 from modules.rl.environments import PairsTradingEnv
-from modules.core.models import ExecutionContext
 from runners.core.pipelines import setup_rl_run_environment
 
 logger = logging.getLogger(__name__)
@@ -97,13 +96,9 @@ def train_a2c_agent(cfg: DictConfig):
 
     logger.info(f"Loaded data for {result.ticker_x}/{result.ticker_y}")
 
-    exec_ctx = ExecutionContext(
-        ticker_x=result.ticker_x, ticker_y=result.ticker_y, fee_rate=result.fee_rate
-    )
-
     def make_env():
         env = PairsTradingEnv(
-            result=result, exec_ctx=exec_ctx, reward_scheme=cfg.rl_reward
+            result=result, reward_scheme=cfg.rl_reward
         )
         env.reset(seed=seed)
         return env

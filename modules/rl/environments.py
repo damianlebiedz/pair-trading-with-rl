@@ -2,14 +2,13 @@ import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
 
-from modules.core.models import (
-    ExecutionContext,
+from modules.performance.models import (
     StrategyResult,
     ExecLogger,
-    AgentState,
     PositionState,
 )
 from modules.core.execution import TradeExecutor
+from modules.rl.models import AgentState
 from modules.rl.rewards import RewardScheme
 
 
@@ -19,14 +18,12 @@ class PairsTradingEnv(gym.Env):
     def __init__(
         self,
         result: StrategyResult,
-        exec_ctx: ExecutionContext,
         reward_scheme: RewardScheme,
     ):
         super(PairsTradingEnv, self).__init__()
 
         self.result = result
         self.df = result.data.reset_index(drop=True)
-        self.exec_ctx = exec_ctx
 
         self.position_state = PositionState()
         self.exec_logger = ExecLogger()
@@ -38,8 +35,8 @@ class PairsTradingEnv(gym.Env):
             "std",
             "beta",
             "window",
-            self.exec_ctx.ticker_x,
-            self.exec_ctx.ticker_y,
+            self.result.ticker_x,
+            self.result.ticker_y,
         ]
 
         missing = [c for c in required_cols if c not in self.df.columns]
@@ -84,12 +81,12 @@ class PairsTradingEnv(gym.Env):
         mapping = {0: -1.0, 1: 0.0, 2: 1.0}
         target_position = mapping[int(action)]
 
-        price_x = self.df.at[self.current_step, self.exec_ctx.ticker_x]
-        price_y = self.df.at[self.current_step, self.exec_ctx.ticker_y]
+        price_x = self.df.at[self.current_step, self.result.ticker_x]
+        price_y = self.df.at[self.current_step, self.result.ticker_y]
         beta = self.df.at[self.current_step, "beta"]
 
         step_pnl, step_fees = TradeExecutor.execute(
-            exec_ctx=self.exec_ctx,
+            fee_rate=self.result.fee_rate,
             position_state=self.position_state,
             stop_loss_thr=None,  # RL agent handles exit via actions
             action=target_position,

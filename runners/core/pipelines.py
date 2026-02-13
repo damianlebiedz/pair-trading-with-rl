@@ -7,7 +7,7 @@ from typing import Any, Literal
 import pandas as pd
 from omegaconf import DictConfig
 
-from modules.core.models import StrategyResult
+from modules.performance.models import StrategyResult
 from modules.core.statistical_tests import (
     johansen_cointegration,
     engle_granger_cointegration,

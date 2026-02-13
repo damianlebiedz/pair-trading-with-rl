@@ -8,7 +8,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import json
 
-from modules.core.models import StrategyResult
+from modules.performance.models import StrategyResult
 from modules.data_services.data_loaders import load_data, get_project_root
 
 

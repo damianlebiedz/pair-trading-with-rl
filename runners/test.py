@@ -29,7 +29,7 @@ def test(cfg: DictConfig):
     bt = Strategy(
         ticker_x=ticker_x,
         ticker_y=ticker_y,
-        start=cfg.performance.test.beta_start,
+        start=cfg.performance.test.win_start,
         end=cfg.performance.test.end,
         interval=cfg.market.interval,
         fee_rate=cfg.market.fee_rate,
@@ -52,7 +52,7 @@ def test(cfg: DictConfig):
         ticker_x=ticker_x,
         ticker_y=ticker_y,
         output_dir=output_dir,
-        win_test_start=cfg.performance.test.beta_start,
+        win_test_start=cfg.performance.test.win_start,
         test_start=cfg.performance.test.start,
         test_end=cfg.performance.test.end,
         subdir="test",

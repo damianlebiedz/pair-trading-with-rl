@@ -1,4 +1,4 @@
-from modules.core.models import AgentState
+from modules.rl.models import AgentState
 
 
 class RLAgentAdapter:

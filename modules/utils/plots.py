@@ -210,18 +210,24 @@ def plot_zscore_pos(
     )
 
     fig.update_xaxes(
+        hoverformat="%Y-%m-%d %H:%M",
+        showspikes=True,
+        spikemode="across",
+        spikesnap="cursor",
+        spikethickness=1,
+        showline=False,
+        fixedrange=True,
+    )
+
+    fig.update_xaxes(
         title=dict(text="Date", font=dict(color="black")),
         tickfont=dict(color="black"),
         tickvals=custom_ticks,
         tickformat="%Y-%m-%d",
         row=2,
         col=1,
-        fixedrange=True,
-        showspikes=True,
-        spikemode="across",
-        spikesnap="cursor",
-        spikethickness=1,
     )
+
     fig.update_yaxes(fixedrange=True)
 
     filename = f"zscore_pos_{result.ticker_x}_{result.ticker_y}_{result.start}_{result.end}.html".replace(
@@ -427,17 +433,22 @@ def plot_spread_pos(
     )
 
     fig.update_xaxes(
+        hoverformat="%Y-%m-%d %H:%M",
+        showspikes=True,
+        spikemode="across",
+        spikesnap="cursor",
+        spikethickness=1,
+        showline=False,
+        fixedrange=True,
+    )
+
+    fig.update_xaxes(
         title=dict(text="Date", font=dict(color="black")),
         tickfont=dict(color="black"),
         tickvals=custom_ticks,
         tickformat="%Y-%m-%d",
         row=2,
         col=1,
-        fixedrange=True,
-        showspikes=True,
-        spikemode="across",
-        spikesnap="cursor",
-        spikethickness=1,
     )
 
     fig.update_yaxes(fixedrange=True)
@@ -481,7 +492,7 @@ def plot_returns(
             mode="lines",
             name="Total Return (Net)",
             line=dict(color="black", width=1.5),
-            hovertemplate="<b>Date</b>: %{x|%Y-%m-%d %H:%M}<br><b>Total Return (Net)</b>: %{y:.4f}<extra></extra>",
+            hovertemplate="<b>Total Return (Net)</b>: %{y:.4f}<extra></extra>",
         )
     )
 
@@ -493,7 +504,7 @@ def plot_returns(
             name="Total Return (Gross)",
             line=dict(color="grey", width=1.5),
             visible="legendonly",
-            hovertemplate="<b>Date</b>: %{x|%Y-%m-%d %H:%M}<br><b>Total Return (Gross)</b>: %{y:.4f}<extra></extra>",
+            hovertemplate="<b>Total Return (Gross)</b>: %{y:.4f}<extra></extra>",
         )
     )
 
@@ -506,7 +517,7 @@ def plot_returns(
                 name="BTC Return",
                 line=dict(color="red", width=1, dash="dot"),
                 visible="legendonly",
-                hovertemplate="<b>Date</b>: %{x|%Y-%m-%d %H:%M}<br><b>BTC Return</b>: %{y:.4f}<extra></extra>",
+                hovertemplate="<b>BTC Return</b>: %{y:.4f}<extra></extra>",
             )
         )
 
@@ -519,7 +530,7 @@ def plot_returns(
                 line=dict(color="blue", width=1, dash="dot"),
                 opacity=0.6,
                 visible="legendonly",
-                hovertemplate=f"<b>Date</b>: %{{x|%Y-%m-%d %H:%M}}<br><b>{result.ticker_x} Return</b>: %{{y:.4f}}<extra></extra>",
+                hovertemplate=f"<b>{result.ticker_x} Return</b>: %{{y:.4f}}<extra></extra>",
             )
         )
     if result.ticker_y in df.columns:
@@ -531,7 +542,7 @@ def plot_returns(
                 line=dict(color="green", width=1, dash="dot"),
                 opacity=0.6,
                 visible="legendonly",
-                hovertemplate=f"<b>Date</b>: %{{x|%Y-%m-%d %H:%M}}<br><b>{result.ticker_y} Return</b>: %{{y:.4f}}<extra></extra>",
+                hovertemplate=f"<b>{result.ticker_y} Return</b>: %{{y:.4f}}<extra></extra>",
             )
         )
 
@@ -567,6 +578,7 @@ def plot_returns(
         tickfont=dict(color="black"),
         tickvals=custom_ticks,
         tickformat="%Y-%m-%d",
+        hoverformat="%Y-%m-%d %H:%M",
         fixedrange=True,
         showspikes=True,
         spikemode="across",

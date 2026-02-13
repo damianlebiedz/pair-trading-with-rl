@@ -11,16 +11,15 @@ from modules.core.indicators import (
 from modules.core.search_methods import random_search
 from modules.data_services.data_loaders import load_pair
 from modules.data_services.data_utils import add_log_prices
-from modules.core.models import (
+from modules.performance.models import (
     PositionState,
-    ExecutionContext,
     StrategyResult,
-    AgentState,
     ExecLogger,
 )
 from modules.performance.objectives import ObjectiveScheme
 from modules.rl.agents import RLAgentAdapter
 from modules.performance.stats import calculate_stats
+from modules.rl.models import AgentState
 
 
 class Strategy:
@@ -80,12 +79,6 @@ class Strategy:
         self.agent = agent
         self.vol_window = vol_window
         self.source = source
-
-        self.exec_ctx = ExecutionContext(
-            ticker_x=self.ticker_x,
-            ticker_y=self.ticker_y,
-            fee_rate=self.fee_rate,
-        )
 
         self.data = load_pair(
             x=ticker_x, y=ticker_y, start=start, end=end, interval=interval
@@ -294,7 +287,7 @@ class Strategy:
                 position_state.open_time = idx
 
                 pnl, fees = TradeExecutor.execute(
-                    exec_ctx=self.exec_ctx,
+                    fee_rate=self.fee_rate,
                     position_state=position_state,
                     action=action,
                     stop_loss_thr=stop_loss_thr,
@@ -358,7 +351,7 @@ class Strategy:
                 price_y = df[y_col].iloc[-1]
 
                 pnl, fees = TradeExecutor.call_close_position(
-                    ctx=self.exec_ctx,
+                    fee_rate=self.fee_rate,
                     position_state=position_state,
                     price_x=price_x,
                     price_y=price_y,

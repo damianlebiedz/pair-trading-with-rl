@@ -1,6 +1,6 @@
 import pandas as pd
 
-from modules.core.models import StrategyResult
+from modules.performance.models import StrategyResult
 
 
 def stitch_strategy_results(

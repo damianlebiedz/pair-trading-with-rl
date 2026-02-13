@@ -6,19 +6,52 @@ from statsmodels.tsa.vector_ar.vecm import coint_johansen
 
 
 class KalmanState:
-    def __init__(self, delta=1e-4, R=1e-3):
+    """
+    Implements an online Kalman Filter for recursive least squares estimation
+    of a linear regression model: y = beta * x + alpha.
+
+    The filter treats the regression coefficients (slope 'beta' and intercept 'alpha')
+     as the hidden state vector, evolving as a random walk.
+
+    Attributes:
+        state_mean (np.ndarray): Current estimate of [beta, alpha].
+        state_cov (np.ndarray): Covariance matrix of the state estimate.
+        Q (np.ndarray): Process noise covariance matrix (allows adaptation).
+        R (float): Measurement noise variance.
+    """
+
+    def __init__(self, delta: float = 1e-4, R: float = 1e-3):
+        """
+        Args:
+            delta: Ridge factor for process noise Q. Controls the flexibility of the
+                   moving beta (higher = more adaptive/noisy, lower = smoother/stable).
+            R: Measurement noise variance. Represents the expected error in the
+               observation equation.
+        """
         self.state_mean = np.zeros(2)
         self.state_cov = np.ones((2, 2))
         self.Q = np.eye(2) * delta
         self.R = R
 
-    def update(self, x, y):
+    def update(self, obs_x: float, obs_y: float) -> float:
+        """
+        Updates the filter with a new observation pair and returns the updated beta.
+
+        The observation equation is modeled as: obs_y = beta * obs_x + alpha + noise.
+
+        Args:
+            obs_x: Independent variable (Predictor, e.g., Asset Y / Hedge).
+            obs_y: Dependent variable (Target, e.g., Asset X).
+
+        Returns:
+            float: The updated estimate of the slope coefficient (beta).
+        """
         prediction_cov = self.state_cov + self.Q
 
-        H = np.array([x, 1.0])
+        H = np.array([obs_x, 1.0])
 
         y_pred = H.dot(self.state_mean)
-        y_residual = y - y_pred
+        y_residual = obs_y - y_pred
 
         S = H.dot(prediction_cov).dot(H.T) + self.R
         K = prediction_cov.dot(H.T) / S
@@ -36,6 +69,34 @@ def generate_signal(
     stop_loss_thr: float | None,
     delayed_entry: bool,
 ) -> int:
+    """
+    Generates trading signals based on Z-Score threshold crossings.
+
+    Signal Logic:
+    1. **Long Signal (1)**: Implies spread is too low (Long Spread = Long X / Short Y).
+    2. **Short Signal (-1)**: Implies spread is too high (Short Spread = Short X / Long Y).
+    3. **Hold (0)**: No new entry signal.
+
+    Entry Modes:
+    - **Standard Entry**: Triggered when the Z-Score crosses *out* of the bands
+      (e.g., z_score > entry_threshold). Captures divergence immediately.
+    - **Delayed Entry**: Triggered when the Z-Score is extreme but crosses *back* towards the mean (e.g., prev > thr and curr < thr). Captures mean reversion
+      momentum and avoids "catching a falling knife".
+
+    Stop Loss:
+    - If enabled, prevents opening positions if the spread has diverged beyond
+      the 'stop_loss_thr'.
+
+    Args:
+        z_score: Current Z-Score value.
+        prev_z_score: Z-Score value from the previous step.
+        entry_threshold: Absolute Z-Score level required to consider a trade.
+        stop_loss_thr: Absolute Z-Score level where trading is forbidden (risk control).
+        delayed_entry: Boolean flag to switch between Standard and Delayed logic.
+
+    Returns:
+        int: Signal direction (1 for Long, -1 for Short, 0 for Neutral).
+    """
     if prev_z_score is None or z_score is None:
         return 0
 
@@ -65,8 +126,29 @@ def calculate_beta(
     beta_method: Literal["ols", "johansen", "kalman"],
 ) -> float:
     """
-    Calculate hedge ratio beta using OLS, Johansen or Kalman.
-    Returns beta such that spread = x - beta * y
+    Calculates the hedge ratio (beta) using the specified statistical method.
+
+    The function determines 'beta' such that the spread is defined as: spread = x - beta * y.
+
+    Algorithm by method:
+    1. **OLS**: Performs a static linear regression (Ordinary Least Squares) where 'x_col' is the target
+       and 'y_col' is the feature.
+    2. **Johansen**: Computes cointegration vectors. Uses the first eigenvector (corresponding to the
+       largest eigenvalue) and normalizes it with respect to x to derive beta.
+    3. **Kalman**: Applies an online Kalman Filter to estimate the evolving beta step-by-step,
+       treating 'y_col' as the observable state predictor for 'x_col'.
+
+    Args:
+        x_col: Column name for the dependent asset (X).
+        y_col: Column name for the independent asset (Y, hedge).
+        df: DataFrame containing the price series.
+        beta_method: Method to use ('ols', 'johansen', or 'kalman').
+
+    Returns:
+        float: Calculated beta coefficient.
+
+    Raises:
+        ValueError: If an invalid beta_method is provided.
     """
     if beta_method not in ["ols", "johansen", "kalman"]:
         raise ValueError("coint_method should be 'ols', 'johansen', or 'kalman'")
@@ -88,10 +170,7 @@ def calculate_beta(
             k_ar_diff=1,
         )
 
-        # first cointegrating vector
         vec = johansen_res.evec[:, 0]
-
-        # normalize: x - beta * y
         beta = -vec[1] / vec[0]
 
         return beta
@@ -102,9 +181,9 @@ def calculate_beta(
         current_beta = 0.0
 
         for i in range(len(data)):
-            px = data[y_col].iloc[i]
-            py = data[x_col].iloc[i]
-            current_beta = kf.update(px, py)
+            obs_x = data[y_col].iloc[i]
+            obs_y = data[x_col].iloc[i]
+            current_beta = kf.update(obs_x, obs_y)
 
         return current_beta
 
@@ -112,14 +191,37 @@ def calculate_beta(
 def calculate_z_score(
     x_col: str, y_col: str, beta: float, df: pd.DataFrame
 ) -> tuple[float | None, float, float, float]:
-    """Calculate z-score with provided beta."""
-    spread_series = df[x_col] - (beta * df[y_col])
+    """
+    Calculates the Z-Score of the spread based on the provided data window.
 
-    historical = spread_series.iloc[:-1]
+    The function computes the spread as: spread = x - (beta * y).
+    It uses the Mean and Std Dev of the *entire* provided DataFrame 'df'
+    to normalize the *last* spread value.
+
+    Note:
+        To simulate a rolling window, 'df' should contain only the last N rows
+        (lookback window). Including the current observation in mean/std calculation
+        (Standard Z-Score) makes the indicator smoother than using historical-only
+        stats (Predictive Z-Score).
+
+    Args:
+        x_col: Column name for Asset X.
+        y_col: Column name for Asset Y.
+        beta: Hedge ratio.
+        df: DataFrame representing the rolling window (historical + current).
+
+    Returns:
+        tuple containing:
+            - z_score (float | None): Normalized spread value (None if std is 0).
+            - spread (float): The raw spread value at the last step.
+            - mean (float): Mean of the spread over the window.
+            - std (float): Standard deviation of the spread over the window.
+    """
+    spread_series = df[x_col] - (beta * df[y_col])
     spread = spread_series.iloc[-1]
 
-    mean = historical.mean()
-    std = historical.std()
+    mean = spread_series.mean()
+    std = spread_series.std()
 
     if std == 0:
         return None, spread, mean, std
@@ -136,40 +238,51 @@ def calculate_half_life_window(
     window_factor: float,
 ) -> int | None:
     """
-    Estimate OU process half-life for a spread and derive a rolling window size.
+    Estimates the mean-reversion Half-Life via the Ornstein-Uhlenbeck (OU) process
+    to derive a dynamic lookback window.
+
+    Methodology:
+    1. Construct the spread series using the provided beta: spread = x - beta * y.
+    2. Discretize the OU process as: Δspread_t = λ * spread_{t-1} + ε_t.
+    3. Regress the daily change in spread (Δspread) against the lagged spread to estimate
+       the mean reversion speed (λ).
+    4. Validate λ: If λ >= 0, the process is not mean-reverting (explosive or random walk),
+       and the function returns None.
+    5. Calculate Half-Life: -ln(2) / λ.
+    6. Derive Window: floor(Half-Life * window_factor).
+
+    Args:
+        x_col: Column name for asset X.
+        y_col: Column name for asset Y.
+        beta: Hedge ratio.
+        df: DataFrame containing price data.
+        window_factor: Multiplier for the half-life to determine final window size.
 
     Returns:
-        int: window size based on half-life * window_factor
-        None: if beta <= 0, spread is not mean-reverting, or window is invalid.
+        int | None: The calculated window size, or None if the spread is not mean-reverting
+        (beta <= 0 or lambda >= 0) or if the calculated window is invalid (< 2 or > data length).
     """
     if beta <= 0:
         return None
 
-    # Construct spread using pre-estimated hedge ratio
     series = df[x_col] - (beta * df[y_col])
 
-    # OU process discretization: ΔX_t = λ X_{t-1} + ε_t
     lag = series.shift(1)
     ret = series - lag
 
-    # Align time series
     lag = lag.iloc[1:]
     ret = ret.iloc[1:]
 
-    # Regress spread changes on lagged level to estimate mean reversion speed (λ)
     X = sm.add_constant(lag)
     model = sm.OLS(ret, X, missing="drop").fit()
     lam = model.params.iloc[1]
 
-    # Reject non-mean-reverting spreads (λ >= 0)
     if lam >= 0:
         return None
 
-    # OU half-life
     half_life = -np.log(2) / lam
     window = int(half_life * window_factor)
 
-    # Reject windows < 2 or larger than available data
     if window < 2 or window > len(df):
         return None
 
