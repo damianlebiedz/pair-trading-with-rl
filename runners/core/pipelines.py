@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 from omegaconf import DictConfig
 
-from modules.core.indicators import calculate_beta
+from modules.core.indicators import calculate_beta, calculate_half_life_window
 from modules.performance.models import StrategyResult
 from modules.core.statistical_tests import (
     johansen_cointegration,
@@ -249,6 +249,7 @@ def execute_pair_selection(
     beta_method: Literal["ols", "johansen", "kalman"],
     opt_start: str | None = None,
     opt_end: str | None = None,
+    hl_window_factor: float | None = None,
 ) -> pd.DataFrame:
     selection_method = method
     if selection_method not in ["both", "second"]:
@@ -395,7 +396,13 @@ def execute_pair_selection(
         if df_val[col].dtype in ["float64", "float32", "int64"]:
             df_val[f"{col}_log"] = np.log(df_val[col] + 1e-8)
 
-    valid_pairs_indices = []
+    final_df_source = final_df_source.copy()
+    final_df_source["validation_beta"] = np.nan
+    final_df_source["validation_window"] = np.nan
+
+    valid_results = []
+
+    final_df_source = final_df_source.drop_duplicates(subset=['pair'])
 
     for idx, row in final_df_source.iterrows():
         pair = row["pair"]
@@ -409,26 +416,39 @@ def execute_pair_selection(
                 beta_method=beta_method,
             )
 
-            min_beta = 0.0
-            if beta_val > min_beta:
-                final_df_source.at[idx, "beta"] = beta_val
-                valid_pairs_indices.append(idx)
-            else:
-                logger.debug(
-                    f"Pair {pair} REJECTED. {beta_method} beta on test set: {beta_val:.4f} <= {min_beta}"
+            if beta_val <= 0.0:
+                logger.debug(f"Pair {pair} REJECTED. Beta {beta_val:.4f} <= 0")
+                continue
+
+            win = None
+            if hl_window_factor:
+                win = calculate_half_life_window(
+                    x_col=f"{t_x}_log",
+                    y_col=f"{t_y}_log",
+                    beta=beta_val,
+                    df=df_val,
+                    window_factor=hl_window_factor,
                 )
+
+                if win is None:
+                    logger.debug(f"Pair {pair} REJECTED. Half-Life failed.")
+                    continue
+
+            res_row = row.to_dict()
+            res_row['validation_beta'] = beta_val
+            res_row['validation_window'] = win
+
+            valid_results.append(res_row)
 
         except Exception as e:
             logger.error(f"Validation error for {pair} on test data: {e}")
             continue
 
-    final_df_source = final_df_source.loc[valid_pairs_indices]
-
-    if final_df_source.empty:
-        logger.warning(
-            "All pairs were filtered out during Pre-Trade Validation (Negative Beta on Test Set)."
-        )
+    if not valid_results:
+        logger.warning("All pairs were filtered out during Pre-Trade Validation.")
         return pd.DataFrame()
+
+    final_df_source = pd.DataFrame(valid_results)
 
     logger.info(f"Pairs remaining after validation: {len(final_df_source)}")
 

@@ -13,7 +13,7 @@ class TradeExecutor:
         signal: float,
         z_score: float | None,
         exit_threshold: float,
-    ) -> float:
+    ) -> tuple[float, bool]:
         """
         Determines the target position based on strategy rules (Z-score, TP, SL).
         Used by heuristic strategies. RL agents skip this and provide 'action' directly.
@@ -22,29 +22,29 @@ class TradeExecutor:
         stop_loss_thr = position_state.sl_thr
 
         if z_score is None:
-            return 0.0
+            return 0.0, False
 
         if prev_position != 0:
             is_long = prev_position > 0
 
             if (is_long and signal < 0) or (not is_long and signal > 0):
-                return signal
+                return signal, False
 
             if is_long:
                 hit_tp = z_score >= -exit_threshold
                 hit_sl = stop_loss_thr is not None and z_score <= -stop_loss_thr
                 if hit_tp or hit_sl:
-                    return 0.0
+                    return 0.0, hit_sl
             else:
                 hit_tp = z_score <= exit_threshold
                 hit_sl = stop_loss_thr is not None and z_score >= stop_loss_thr
                 if hit_tp or hit_sl:
-                    return 0.0
+                    return 0.0, hit_sl
 
-            return prev_position
+            return prev_position, False
 
         else:
-            return signal
+            return signal, False
 
     @classmethod
     def execute(
@@ -58,6 +58,8 @@ class TradeExecutor:
         beta: float,
         equity: float,
         exec_logger: ExecLogger,
+        std: float | None,
+        sl_lock: bool,
     ) -> tuple[float, float]:
         """
         Mechanically aligns the portfolio with the target 'action'.
@@ -88,7 +90,7 @@ class TradeExecutor:
             fees_total += fees
             current_equity = equity + pnl - fees
 
-        if action != 0:
+        if action != 0 and not sl_lock:
             _, fees = cls._open_position(
                 fee_rate=fee_rate,
                 stop_loss_thr=stop_loss_thr,
@@ -99,6 +101,7 @@ class TradeExecutor:
                 price_y=price_y,
                 equity=current_equity,
                 exec_logger=exec_logger,
+                std=std,
             )
             fees_total += fees
 
@@ -116,6 +119,7 @@ class TradeExecutor:
         price_y: float,
         equity: float,
         exec_logger: ExecLogger,
+        std: float,
     ) -> tuple[float, float]:
         wx = 1 / (beta + 1)
         wy = beta / (beta + 1)
@@ -141,6 +145,8 @@ class TradeExecutor:
             prev_dif=entry_dif,
             entry_equity=pos_cash,
             sl_thr=stop_loss_thr,
+            entry_beta=beta,
+            entry_std=std,
         )
 
         fees = pos_cash * fee_rate

@@ -19,6 +19,9 @@ class PositionState:
     time_in_pos: int = 0
     sl_thr: float | None = None
     open_time: pd.Timestamp | None = None
+    entry_beta: float | None = None
+    entry_std: float | None = None
+    sl_lock: bool = False
 
     def update_position(
         self,
@@ -31,6 +34,8 @@ class PositionState:
         prev_dif,
         entry_equity,
         sl_thr,
+        entry_beta,
+        entry_std,
     ):
         self.position = position
         self.q_x = q_x
@@ -41,6 +46,8 @@ class PositionState:
         self.prev_dif = prev_dif
         self.entry_equity = entry_equity
         self.sl_thr = sl_thr
+        self.entry_beta = entry_beta
+        self.entry_std = entry_std
 
     def clear_position(self):
         self.position = 0.0
@@ -52,6 +59,8 @@ class PositionState:
         self.prev_dif = None
         self.entry_equity = 0.0
         self.time_in_pos = 0
+        self.entry_beta = None
+        self.entry_std = None
 
 
 class ExecLogger:

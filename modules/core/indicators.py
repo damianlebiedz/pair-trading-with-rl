@@ -188,46 +188,22 @@ def calculate_beta(
         return current_beta
 
 
-def calculate_z_score(
+def calculate_spread_statistics(
     x_col: str, y_col: str, beta: float, df: pd.DataFrame
-) -> tuple[float | None, float, float, float]:
-    """
-    Calculates the Z-Score of the spread based on the provided data window.
-
-    The function computes the spread as: spread = x - (beta * y).
-    It uses the Mean and Std Dev of the *entire* provided DataFrame 'df'
-    to normalize the *last* spread value.
-
-    Note:
-        To simulate a rolling window, 'df' should contain only the last N rows
-        (lookback window). Including the current observation in mean/std calculation
-        (Standard Z-Score) makes the indicator smoother than using historical-only
-        stats (Predictive Z-Score).
-
-    Args:
-        x_col: Column name for Asset X.
-        y_col: Column name for Asset Y.
-        beta: Hedge ratio.
-        df: DataFrame representing the rolling window (historical + current).
-
-    Returns:
-        tuple containing:
-            - z_score (float | None): Normalized spread value (None if std is 0).
-            - spread (float): The raw spread value at the last step.
-            - mean (float): Mean of the spread over the window.
-            - std (float): Standard deviation of the spread over the window.
-    """
+) -> tuple[float, float, float]:
     spread_series = df[x_col] - (beta * df[y_col])
     spread = spread_series.iloc[-1]
-
     mean = spread_series.mean()
     std = spread_series.std()
+    return spread, mean, std
 
+
+def calculate_z_score(
+    spread: float, mean: float, std: float
+) -> float | None:
     if std == 0:
-        return None, spread, mean, std
-    z_score = (spread - mean) / std
-
-    return z_score, spread, mean, std
+        return None
+    return (spread - mean) / std
 
 
 def calculate_half_life_window(
@@ -236,6 +212,8 @@ def calculate_half_life_window(
     beta: float,
     df: pd.DataFrame,
     window_factor: float,
+    min_window: int = 48,     # TODO: wynieść do cfg
+    max_window: int = 336,    # TODO
 ) -> int | None:
     """
     Estimates the mean-reversion Half-Life via the Ornstein-Uhlenbeck (OU) process
@@ -257,10 +235,12 @@ def calculate_half_life_window(
         beta: Hedge ratio.
         df: DataFrame containing price data.
         window_factor: Multiplier for the half-life to determine final window size.
+        min_window: minimum window size.
+        max_window: maximum window size.
 
     Returns:
         int | None: The calculated window size, or None if the spread is not mean-reverting
-        (beta <= 0 or lambda >= 0) or if the calculated window is invalid (< 2 or > data length).
+        (beta <= 0 or lambda >= 0) or if the calculated window is invalid.
     """
     if beta <= 0:
         return None
@@ -283,7 +263,7 @@ def calculate_half_life_window(
     half_life = -np.log(2) / lam
     window = int(half_life * window_factor)
 
-    if window < 2 or window > len(df):
+    if window < min_window or window > max_window:
         return None
 
     return window

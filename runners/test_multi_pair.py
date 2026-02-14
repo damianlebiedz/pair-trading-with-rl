@@ -67,6 +67,7 @@ def test_multi_pair(cfg: DictConfig):
             output_dir=output_dir,
             coint_type=cfg.pair_selection.coint_type,
             beta_method=cfg.performance.beta_method,
+            hl_window_factor=best_params["window_factor"],
         )
 
         logger.info(f"\n{ps_df}")

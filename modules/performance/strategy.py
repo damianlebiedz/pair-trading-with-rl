@@ -7,7 +7,7 @@ from modules.core.indicators import (
     calculate_beta,
     calculate_half_life_window,
     generate_signal,
-    KalmanState,
+    KalmanState, calculate_spread_statistics,
 )
 from modules.core.search_methods import random_search
 from modules.data_services.data_loaders import load_pair
@@ -172,6 +172,7 @@ class Strategy:
             df=df.iloc[start_pos:test_start_pos],
             beta_method=beta_method,
         )
+        market_beta = beta
 
         kf_state = None
         if self.beta_method == "kalman" and self.beta_hedge == "rolling":
@@ -245,33 +246,50 @@ class Strategy:
 
             if is_bankrupt:
                 z_score, spread, mean, std = None, None, None, None
+                market_std = None
                 total_net_pnl = -initial_cash
                 equity = 0.0
                 drawdown_pct = -1.0
                 signal = 0
             else:
+                market_beta = beta
+
                 if self.beta_hedge == "rolling" and i != test_start_pos:
                     if self.beta_method == "kalman":
-                        beta = kf_state.update(
+                        market_beta = kf_state.update(
                             obs_x=df[source_y_col].iloc[i],
                             obs_y=df[source_x_col].iloc[i],
                         )
-                    elif self.beta_method in ["ols", "johansen"]:
-                        beta = calculate_beta(
+                    elif self.beta_method in ["ols", "johansen"] and position_state.position == 0:
+                        market_beta = calculate_beta(
                             x_col=source_x_col,
                             y_col=source_y_col,
-                            df=df.iloc[start_pos + i - test_start_pos + 1 : i + 1],
+                            df=df.iloc[start_pos + i - test_start_pos + 1: i + 1],
                             beta_method=beta_method,
                         )
 
-                if win is None or beta <= 0:
-                    z_score, spread, mean, std = None, None, None, None
+                if position_state.position != 0 and position_state.entry_beta is not None:
+                    beta = position_state.entry_beta
                 else:
-                    z_score, spread, mean, std = calculate_z_score(
+                    beta = market_beta
+
+                if win is None or beta <= 0:
+                    z_score, spread, mean, std, market_std = None, None, None, None, None
+                else:
+                    spread, mean, market_std = calculate_spread_statistics(
                         x_col=source_x_col,
                         y_col=source_y_col,
                         beta=beta,
-                        df=df.iloc[i - win + 1 : i + 1],
+                        df=df.iloc[i - win + 1: i + 1],
+                    )
+                    if position_state.position != 0 and position_state.entry_std is not None:
+                        std = position_state.entry_std
+                    else:
+                        std = market_std
+                    z_score = calculate_z_score(
+                        spread=spread,
+                        mean=mean,
+                        std=std,
                     )
 
                 signal = generate_signal(
@@ -298,6 +316,13 @@ class Strategy:
                 else:
                     drawdown_pct = 0.0
 
+                if position_state.sl_lock:
+                    if z_score is not None and prev_z_score is not None:
+                        break_above = (prev_z_score > exit_threshold >= z_score)
+                        break_below = (prev_z_score < -exit_threshold <= z_score)
+                        if break_above or break_below:
+                            position_state.sl_lock = False
+
                 if self.agent:
                     current_state = AgentState(
                         z_score=z_score,
@@ -321,12 +346,14 @@ class Strategy:
                         current_state.sl_utilization = sl_utilization
                     action = self.agent.get_action(current_state)
                 else:
-                    action = TradeExecutor.decide(
+                    action, sl_lock = TradeExecutor.decide(
                         position_state=position_state,
                         signal=signal,
                         z_score=z_score,
                         exit_threshold=exit_threshold,
                     )
+                    if sl_lock:
+                        position_state.sl_lock = True
 
                 position_state.open_time = idx
 
@@ -340,6 +367,8 @@ class Strategy:
                     beta=beta,
                     equity=equity,
                     exec_logger=exec_logger,
+                    std=std,
+                    sl_lock=position_state.sl_lock,
                 )
 
                 prev_z_score = z_score
@@ -365,12 +394,15 @@ class Strategy:
                     "z_score": z_score,
                     "spread": spread,
                     "mean": mean,
-                    "std": std,
+                    "std": position_state.entry_std,
+                    "market_std": market_std,
                     "window": win,
-                    "beta": beta,
+                    "beta": position_state.entry_beta,
+                    "market_beta": market_beta,
                     "entry_thr": entry_threshold,
                     "exit_thr": exit_threshold,
                     "sl_thr": position_state.sl_thr,
+                    "sl_lock": int(position_state.sl_lock),
                     "q_x": position_state.q_x,
                     "q_y": position_state.q_y,
                     "w_x": position_state.w_x,
