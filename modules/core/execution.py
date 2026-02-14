@@ -68,9 +68,8 @@ class TradeExecutor:
         if action == prev_position:
             if prev_position != 0:
                 return cls._hold_position(
-                    position_state=position_state,
-                    price_x=price_x,
-                    price_y=price_y)
+                    position_state=position_state, price_x=price_x, price_y=price_y
+                )
             return 0.0, 0.0
 
         pnl_total = 0.0
@@ -83,7 +82,7 @@ class TradeExecutor:
                 position_state=position_state,
                 price_x=price_x,
                 price_y=price_y,
-                exec_logger=exec_logger
+                exec_logger=exec_logger,
             )
             pnl_total += pnl
             fees_total += fees
@@ -241,5 +240,5 @@ class TradeExecutor:
             position_state=position_state,
             price_x=price_x,
             price_y=price_y,
-            exec_logger=exec_logger
+            exec_logger=exec_logger,
         )

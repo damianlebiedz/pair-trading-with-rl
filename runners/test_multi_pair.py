@@ -22,8 +22,8 @@ logger = logging.getLogger(__name__)
 # =======================================================
 best_params = {
     "window_factor": 1,
-    "entry_threshold": 2.5,
-    "exit_threshold": 0.2,
+    "entry_threshold": 2.0,
+    "exit_threshold": 0.0,
     "stop_loss": 2,
 }
 # =======================================================
@@ -56,14 +56,17 @@ def test_multi_pair(cfg: DictConfig):
 
         ps_df = execute_pair_selection(
             tickers=cfg.tickers,
-            test_start=lists["pair_selection_test_start_list"][i],
-            test_end=lists["pair_selection_test_end_list"][i],
+            ps_start=lists["pair_selection_test_start_list"][i],
+            ps_end=lists["pair_selection_test_end_list"][i],
+            test_start=lists["test_win_start_list"][i],
+            test_end=lists["test_start_list"][i],
             interval=cfg.market.interval,
             method=cfg.pair_selection.method,
             ps_factor=cfg.pair_selection.ps_factor,
             top_n_factor=cfg.pair_selection.top_n_factor,
             output_dir=output_dir,
             coint_type=cfg.pair_selection.coint_type,
+            beta_method=cfg.performance.beta_method,
         )
 
         logger.info(f"\n{ps_df}")
@@ -137,6 +140,8 @@ def test_multi_pair(cfg: DictConfig):
                 initial_cash=cfg.market.initial_cash / cfg.pair_selection.top_n_factor,
                 risk_free_rate_annual=cfg.market.risk_free_rate_annual,
                 min_trades_per_pair=cfg.performance.optimization.min_trades_per_pair,
+                window=cfg.performance.window,
+                beta_hedge=cfg.performance.beta_hedge,
                 beta_method=cfg.performance.beta_method,
                 delayed_entry=cfg.performance.delayed_entry,
                 time_decay_sl=(

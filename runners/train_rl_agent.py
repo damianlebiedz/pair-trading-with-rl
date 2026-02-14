@@ -97,9 +97,7 @@ def train_a2c_agent(cfg: DictConfig):
     logger.info(f"Loaded data for {result.ticker_x}/{result.ticker_y}")
 
     def make_env():
-        env = PairsTradingEnv(
-            result=result, reward_scheme=cfg.rl_reward
-        )
+        env = PairsTradingEnv(result=result, reward_scheme=cfg.rl_reward)
         env.reset(seed=seed)
         return env
 

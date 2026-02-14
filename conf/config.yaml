@@ -2,7 +2,7 @@ pair_selection:
   ps_factor: 0.05 # 0.05 or 0.01
   top_n_factor: 10
   method: "second" # "both" or "second"
-  coint_type: "eg" # "eg" or "johansen"
+  coint_type: "johansen" # "eg" or "johansen"
 
   optimization:
     start: "2023-09-01"
@@ -13,10 +13,13 @@ pair_selection:
     end: "2023-12-01"
 
 performance:
-  beta_method: "ols" # "ols", "johansen" or "kalman"
+  beta_method: "kalman" # "ols", "johansen" or "kalman"
   delayed_entry: True # True or False
   time_decay_start: 0.5
   time_decay_end: 1.0
+
+  window: "half_life" # "fixed" or "half_life"
+  beta_hedge: "rolling" # "static" or "rolling"
 
   iterations: 12 # integer >= 1
 
@@ -36,19 +39,19 @@ performance:
     penalty_bad: -100
 
     # Parameters space
-    window_factor_min: 1.50
+    window_factor_min: 1.00
     window_factor_max: 4.00
 
-    fixed_window_factor_min: 1
-    fixed_window_factor_max: 1000
+    fixed_window_factor_min: 24
+    fixed_window_factor_max: 360
 
-    entry_threshold_min: 2.00
-    entry_threshold_max: 4.00
+    entry_threshold_min: 1.50
+    entry_threshold_max: 3.50
 
     exit_threshold_min: 0.00
-    exit_threshold_max: 1.00
+    exit_threshold_max: 0.50
 
-    stop_loss_min: 1.50
+    stop_loss_min: 1.05
     stop_loss_max: 3.00
 
     # Objective parameters

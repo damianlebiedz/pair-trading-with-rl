@@ -7,6 +7,7 @@ from modules.core.indicators import (
     calculate_beta,
     calculate_half_life_window,
     generate_signal,
+    KalmanState,
 )
 from modules.core.search_methods import random_search
 from modules.data_services.data_loaders import load_pair
@@ -36,7 +37,9 @@ class Strategy:
         initial_cash (float): Starting capital (the same for every trade).
         risk_free_rate_annual (float): Annual risk-free rate.
         min_trades_per_pair (int): Minimum number of trades per pair for the objective.
-        beta_method (str): Beta calculation method: "ols" or "johansen".
+        window (str): Window mode: "fixed" (manual size) or "half-life".
+        beta_hedge (str): Hedge ratio mode: "static" or "rolling".
+        beta_method (str): Beta calculation method: "ols", "johansen", or "kalman".
         delayed_entry (bool): Delayed execution or standard one.
         time_decay_sl (tuple(float, float)): Parameters 'time_decay_start' and 'time_decay_end' for time decay stop loss.
             - time_decay_start: decay will begin when position exists for at least time_decay_start * window intervals.
@@ -57,7 +60,9 @@ class Strategy:
         initial_cash: float,
         risk_free_rate_annual: float,
         min_trades_per_pair: int,
-        beta_method: Literal["ols", "johansen"],
+        window: Literal["fixed", "half_life"],
+        beta_hedge: Literal["static", "rolling"],
+        beta_method: Literal["ols", "johansen", "kalman"],
         delayed_entry: bool,
         time_decay_sl: tuple[float, float] | None = None,
         agent: RLAgentAdapter | None = None,
@@ -73,12 +78,25 @@ class Strategy:
         self.initial_cash = initial_cash
         self.risk_free_rate_annual = risk_free_rate_annual
         self.min_trades_per_pair = min_trades_per_pair
+        self.window = window
+        self.beta_hedge = beta_hedge
         self.beta_method = beta_method
         self.delayed_entry = delayed_entry
         self.time_decay_sl = time_decay_sl
         self.agent = agent
         self.vol_window = vol_window
         self.source = source
+
+        if window not in ["fixed", "half_life"]:
+            raise ValueError("Invalid window: should be 'fixed' or 'half_life'")
+
+        if beta_hedge not in ["static", "rolling"]:
+            raise ValueError("Invalid beta_hedge: should be 'static' or 'rolling'")
+
+        if beta_method not in ["ols", "johansen", "kalman"]:
+            raise ValueError(
+                "Invalid beta_method: should be 'ols', 'johansen', or 'kalman'"
+            )
 
         self.data = load_pair(
             x=ticker_x, y=ticker_y, start=start, end=end, interval=interval
@@ -155,13 +173,25 @@ class Strategy:
             beta_method=beta_method,
         )
 
-        win = calculate_half_life_window(
-            x_col=source_x_col,
-            y_col=source_y_col,
-            beta=beta,
-            df=df.iloc[win_start_pos:test_start_pos],
-            window_factor=window_factor,
-        )
+        kf_state = None
+        if self.beta_method == "kalman" and self.beta_hedge == "rolling":
+            kf_state = KalmanState()
+            warmup_data = df.iloc[start_pos:test_start_pos]
+            for i in range(len(warmup_data)):
+                obs_x = warmup_data[source_y_col].iloc[i]
+                obs_y = warmup_data[source_x_col].iloc[i]
+                kf_state.update(obs_x, obs_y)
+
+        if self.window == "fixed":
+            win = int(window_factor)
+        else:
+            win = calculate_half_life_window(
+                x_col=source_x_col,
+                y_col=source_y_col,
+                beta=beta,
+                df=df.iloc[win_start_pos:test_start_pos],
+                window_factor=window_factor,
+            )
 
         df[f"ret_{self.ticker_x}"] = df[source_x_col].diff().fillna(0.0)
         df[f"ret_{self.ticker_y}"] = df[source_y_col].diff().fillna(0.0)
@@ -220,15 +250,29 @@ class Strategy:
                 drawdown_pct = -1.0
                 signal = 0
             else:
-                if win is not None:
+                if self.beta_hedge == "rolling" and i != test_start_pos:
+                    if self.beta_method == "kalman":
+                        beta = kf_state.update(
+                            obs_x=df[source_y_col].iloc[i],
+                            obs_y=df[source_x_col].iloc[i],
+                        )
+                    elif self.beta_method in ["ols", "johansen"]:
+                        beta = calculate_beta(
+                            x_col=source_x_col,
+                            y_col=source_y_col,
+                            df=df.iloc[start_pos + i - test_start_pos + 1 : i + 1],
+                            beta_method=beta_method,
+                        )
+
+                if win is None or beta <= 0:
+                    z_score, spread, mean, std = None, None, None, None
+                else:
                     z_score, spread, mean, std = calculate_z_score(
                         x_col=source_x_col,
                         y_col=source_y_col,
                         beta=beta,
                         df=df.iloc[i - win + 1 : i + 1],
                     )
-                else:
-                    z_score, spread, mean, std = None, None, None, None
 
                 signal = generate_signal(
                     z_score=z_score,

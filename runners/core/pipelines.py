@@ -4,9 +4,11 @@ import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal
+import numpy as np
 import pandas as pd
 from omegaconf import DictConfig
 
+from modules.core.indicators import calculate_beta
 from modules.performance.models import StrategyResult
 from modules.core.statistical_tests import (
     johansen_cointegration,
@@ -234,6 +236,8 @@ def execute_testing(
 
 def execute_pair_selection(
     tickers: list[str],
+    ps_start: str,
+    ps_end: str,
     test_start: str,
     test_end: str,
     interval: str,
@@ -242,6 +246,7 @@ def execute_pair_selection(
     top_n_factor: float,
     output_dir: str,
     coint_type: Literal["eg", "johansen"],
+    beta_method: Literal["ols", "johansen", "kalman"],
     opt_start: str | None = None,
     opt_end: str | None = None,
 ) -> pd.DataFrame:
@@ -250,14 +255,17 @@ def execute_pair_selection(
         raise ValueError("'method' must be 'both' or 'second'")
 
     if coint_type not in ["eg", "johansen"]:
-        raise ValueError(f"Unknown cointegration type: {coint_type}")
+        raise ValueError("'coint_type' must be 'eg' or 'johansen'")
+
+    if beta_method not in ["ols", "johansen", "kalman"]:
+        raise ValueError("'beta_method' must be 'ols', 'johansen', or 'kalman'")
 
     logger.info(f"Running pair selection using '{coint_type}' cointegration test.")
 
     df_test = load_data(
         tickers=tickers,
-        start=test_start,
-        end=test_end,
+        start=ps_start,
+        end=ps_end,
         interval=interval,
     )
 
@@ -279,7 +287,7 @@ def execute_pair_selection(
 
     if selection_method == "second" or opt_start is None or opt_end is None:
         logger.info("Selection method: 'second' (filtering by test set only).")
-        start = test_start
+        start = ps_start
 
         if coint_type == "johansen":
             condition = (ps_df_test["max_eig_stat"] > factor) & (ps_df_test["beta"] > 0)
@@ -372,6 +380,58 @@ def execute_pair_selection(
         )
         return pd.DataFrame()
 
+    logger.info(
+        f"Validating {len(final_df_source)} candidates using '{beta_method}' on TEST period ({test_start} - {test_end})..."
+    )
+
+    df_val = load_data(
+        tickers=tickers,
+        start=test_start,
+        end=test_end,
+        interval=interval,
+    )
+
+    for col in df_val.columns:
+        if df_val[col].dtype in ["float64", "float32", "int64"]:
+            df_val[f"{col}_log"] = np.log(df_val[col] + 1e-8)
+
+    valid_pairs_indices = []
+
+    for idx, row in final_df_source.iterrows():
+        pair = row["pair"]
+        try:
+            t_x, t_y = pair.split("-")
+
+            beta_val = calculate_beta(
+                x_col=f"{t_x}_log",
+                y_col=f"{t_y}_log",
+                df=df_val,
+                beta_method=beta_method,
+            )
+
+            min_beta = 0.0
+            if beta_val > min_beta:
+                final_df_source.at[idx, "beta"] = beta_val
+                valid_pairs_indices.append(idx)
+            else:
+                logger.debug(
+                    f"Pair {pair} REJECTED. {beta_method} beta on test set: {beta_val:.4f} <= {min_beta}"
+                )
+
+        except Exception as e:
+            logger.error(f"Validation error for {pair} on test data: {e}")
+            continue
+
+    final_df_source = final_df_source.loc[valid_pairs_indices]
+
+    if final_df_source.empty:
+        logger.warning(
+            "All pairs were filtered out during Pre-Trade Validation (Negative Beta on Test Set)."
+        )
+        return pd.DataFrame()
+
+    logger.info(f"Pairs remaining after validation: {len(final_df_source)}")
+
     final_df = (
         final_df_source.sort_values(sort_column, ascending=ascending)
         .head(top_n_factor)
@@ -387,7 +447,7 @@ def execute_pair_selection(
 
     save_dataframe(
         df=final_df,
-        file_name=f"pair_selection_{method}_{coint_type}_{start}_{test_end}",
+        file_name=f"pair_selection_{method}_{coint_type}_{start}_{ps_end}",
         directory=output_dir,
     )
 

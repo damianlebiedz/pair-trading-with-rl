@@ -36,6 +36,8 @@ def test(cfg: DictConfig):
         initial_cash=cfg.market.initial_cash,
         risk_free_rate_annual=cfg.market.risk_free_rate_annual,
         min_trades_per_pair=cfg.performance.optimization.min_trades_per_pair,
+        window=cfg.performance.window,
+        beta_hedge=cfg.performance.beta_hedge,
         beta_method=cfg.performance.beta_method,
         delayed_entry=cfg.performance.delayed_entry,
         time_decay_sl=(
