@@ -84,17 +84,20 @@ class PairsTradingEnv(gym.Env):
         price_x = self.df.at[self.current_step, self.result.ticker_x]
         price_y = self.df.at[self.current_step, self.result.ticker_y]
         beta = self.df.at[self.current_step, "beta"]
+        std = self.df.at[self.current_step, "std"]
 
         step_pnl, step_fees = TradeExecutor.execute(
             fee_rate=self.result.fee_rate,
             position_state=self.position_state,
-            stop_loss_thr=None,  # RL agent handles exit via actions
+            stop_loss_thr=None,
             action=target_position,
             price_x=price_x,
             price_y=price_y,
             beta=beta,
             equity=self.equity,
             exec_logger=self.exec_logger,
+            std=std,
+            sl_lock=None,
         )
 
         self.equity += step_pnl
@@ -137,18 +140,16 @@ class PairsTradingEnv(gym.Env):
             drawdown_pct = (self.peak_equity - self.equity) / self.peak_equity
 
         self.state = AgentState(
-            z_score=row.get("z_score", 0.0),
-            std=row.get("std", 0.0),
-            beta=row.get("beta", 0.0),
+            z_score=row.get("z_score", None),
+            std=row.get("std", None),
+            beta=row.get("beta", None),
+            hurst=row.get("hurst", None),
             window=int(window),
-            signal=int(
-                self.position_state.position
-            ),  # Current actual position direction
+            signal=int(self.position_state.position),
             position=float(self.position_state.position),
             norm_time_in_pos=float(norm_time),
             drawdown_pct=float(drawdown_pct),
             current_market_vol=row.get("market_vol"),
-            sl_utilization=None,
         )
 
     def _get_observation(self) -> np.ndarray:
