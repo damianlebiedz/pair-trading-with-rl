@@ -160,10 +160,16 @@ class Strategy:
 
         beta_method = self.beta_method
 
-        test_start_pos = df.index.get_indexer([pd.to_datetime(test_start)], method='bfill')[0]
-        start_pos = df.index.get_indexer([pd.to_datetime(self.start)], method='bfill')[0]
-        win_start_pos = df.index.get_indexer([pd.to_datetime(win_test_start)], method='bfill')[0]
-        end_pos = df.index.get_indexer([pd.to_datetime(test_end)], method='bfill')[0]
+        test_start_pos = df.index.get_indexer(
+            [pd.to_datetime(test_start)], method="bfill"
+        )[0]
+        start_pos = df.index.get_indexer([pd.to_datetime(self.start)], method="bfill")[
+            0
+        ]
+        win_start_pos = df.index.get_indexer(
+            [pd.to_datetime(win_test_start)], method="bfill"
+        )[0]
+        end_pos = df.index.get_indexer([pd.to_datetime(test_end)], method="bfill")[0]
 
         if -1 in [test_start_pos, start_pos, win_start_pos, end_pos]:
             raise KeyError("Index not found in dataframe")
@@ -171,7 +177,7 @@ class Strategy:
         beta = calculate_beta(
             x_col=source_x_col,
             y_col=source_y_col,
-            df=df.iloc[start_pos:test_start_pos + 1],
+            df=df.iloc[start_pos : test_start_pos + 1],
             beta_method=beta_method,
         )
         market_beta = beta
@@ -179,7 +185,7 @@ class Strategy:
         kf_state = None
         if self.beta_method == "kalman" and self.beta_hedge == "rolling":
             kf_state = KalmanState()
-            warmup_data = df.iloc[start_pos:test_start_pos + 1]
+            warmup_data = df.iloc[start_pos : test_start_pos + 1]
             for i in range(len(warmup_data)):
                 obs_x = warmup_data[source_y_col].iloc[i]
                 obs_y = warmup_data[source_x_col].iloc[i]
@@ -192,7 +198,7 @@ class Strategy:
                 x_col=source_x_col,
                 y_col=source_y_col,
                 beta=beta,
-                df=df.iloc[win_start_pos:test_start_pos + 1],
+                df=df.iloc[win_start_pos : test_start_pos + 1],
                 valid_window=self.valid_window,
             )
 
