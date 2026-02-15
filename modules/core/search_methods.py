@@ -1,8 +1,7 @@
 from random import randint, uniform
-from typing import Callable
+from typing import Callable, Literal
 import numpy as np
 from joblib import Parallel, delayed
-from skopt import gp_minimize
 from skopt.space import Integer, Real
 
 
@@ -10,16 +9,16 @@ def random_search(
     strategy_func: Callable,
     param_space: list,
     static_params: dict,
-    metric: tuple[str, str],
-    n_iter: int = 1000,
-    replicates: int = 1,
-    penalty_bad: float = -100,
+    metric_type: Literal["gross", "net"],
+    n_iter: int,
+    replicates: int,
+    penalty_bad: float,
 ) -> tuple[dict, float]:
     def evaluate_point(p, idx) -> tuple[float, dict]:
         scores = []
         for _ in range(replicates):
             try:
-                val = strategy_func(**{**static_params, **p}, metric=metric)
+                val = strategy_func(**{**static_params, **p}, metric_type=metric_type)
                 if val is None or np.isnan(val) or val == 0 or np.isinf(val):
                     scores.append(penalty_bad)
                 else:
@@ -47,50 +46,4 @@ def random_search(
     )
 
     best_score, best_params = max(results, key=lambda x: x[0])
-    return best_params, best_score
-
-
-def bayesian_search(
-    strategy_func: Callable,
-    param_space: list,
-    static_params: dict,
-    metric: tuple[str, str],
-    n_iter: int = 50,
-    random_state: int = 42,
-    replicates: int = 1,
-    penalty_bad: int = -100,
-) -> tuple[dict, float]:
-    def objective(params_values):
-        pdict = {dim.name: val for dim, val in zip(param_space, params_values)}
-
-        scores = []
-        for _ in range(replicates):
-            try:
-                val = strategy_func(**{**static_params, **pdict}, metric=metric)
-                if val is None or np.isnan(val) or val == 0 or np.isinf(val):
-                    scores.append(penalty_bad)
-                else:
-                    scores.append(float(val))
-            except Exception as e:
-                print(f"[Opt Error] Params {pdict}: {e}")
-                scores.append(penalty_bad)
-
-        avg_score = float(np.mean(scores))
-
-        return -avg_score
-
-    result = gp_minimize(
-        func=objective,
-        dimensions=param_space,
-        n_calls=n_iter,
-        random_state=random_state,
-        verbose=True,
-    )
-
-    best_params_values = result.x
-    best_score_inverted = result.fun
-
-    best_params = {dim.name: val for dim, val in zip(param_space, best_params_values)}
-    best_score = -best_score_inverted
-
     return best_params, best_score

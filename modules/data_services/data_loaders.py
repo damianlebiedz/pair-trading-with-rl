@@ -17,9 +17,7 @@ def load_single_ticker(
     ticker_dir = base_dir / ticker
 
     if not ticker_dir.exists():
-        raise FileNotFoundError(
-            f"Directory not found: {ticker_dir} (Base dir was: {base_dir})"
-        )
+        raise FileNotFoundError(f"Directory not found: {ticker_dir}")
 
     files = list(ticker_dir.glob(f"*_{interval}.csv"))
     if not files:
@@ -32,7 +30,6 @@ def load_single_ticker(
     first_date = df["open_time"].min()
     last_date = df["open_time"].max()
 
-    # Optional: loose check to allow partial data if needed, strictly check range otherwise
     if first_date > pd.Timestamp(start) or last_date < pd.Timestamp(end):
         raise ValueError(
             f"Data for {ticker} not found for full {start}-{end} date range. Available: {first_date} to {last_date}"
@@ -50,7 +47,7 @@ def load_data(
     dfs = [load_single_ticker(t, start, end, interval, base_dir) for t in tickers]
 
     data = pd.concat(dfs, axis=1)
-    data = data[(data.index >= start) & (data.index <= end)]
+    data = data[(data.index > start) & (data.index <= end)]
 
     if data.empty:
         raise ValueError(
@@ -70,7 +67,7 @@ def load_pair(
     df_y = load_single_ticker(y, start, end, interval, base_dir)
 
     data = pd.concat([df_x, df_y], axis=1)
-    data = data[(data.index >= start) & (data.index <= end)]
+    data = data[(data.index > start) & (data.index <= end)]
 
     if data.empty:
         raise ValueError(

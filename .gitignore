@@ -4,7 +4,13 @@ __pycache__
 
 data/*
 !data/.ignore
-!data/asset_list.xlsm
+
+data_rl/*
+!data_rl/*/
+data_rl/*/*
+!data_rl/*/.ignore
 
 results/*
 !results/.ignore
+
+.env

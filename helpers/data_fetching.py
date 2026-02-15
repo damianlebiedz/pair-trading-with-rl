@@ -12,10 +12,12 @@ limit_per_request = 1000
 def fetch_data_from_binance(
     symbol: str, interval: str, start_str: str, end_str: str, date_format: str
 ) -> None:
-    ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    DATA_DIR = os.path.join(ROOT_DIR, "data")
+    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    data_dir = os.path.join(root_dir, "data")
+    os.makedirs(data_dir, exist_ok=True)
+
     filename = os.path.join(
-        DATA_DIR,
+        data_dir,
         symbol,
         f"{symbol}_{start_str.replace('.', '')}-{end_str.replace('.', '')}_{interval}.csv",
     )
@@ -96,7 +98,7 @@ def fetch_data_from_binance(
     ]
     df[num_cols] = df[num_cols].astype(float)
 
-    os.makedirs(os.path.join(DATA_DIR, symbol), exist_ok=True)
+    os.makedirs(os.path.join(data_dir, symbol), exist_ok=True)
     df.to_csv(filename, index=False, encoding="utf-8-sig")
     print(f"Data saved to: {filename}")
 

@@ -11,9 +11,8 @@ logger = logging.getLogger(__name__)
 ticker_x = "AVAXUSDT"
 ticker_y = "OPUSDT"
 best_params = {
-    "window_factor": 1,
-    "entry_threshold": 2.7,
-    "exit_threshold": 0.8,
+    "entry_threshold": 2.5,
+    "exit_threshold": 0.2,
     "stop_loss": 2,
 }
 # =======================================================
@@ -27,38 +26,37 @@ def test(cfg: DictConfig):
     logger.info("CONFIG:\n%s", OmegaConf.to_yaml(cfg))
 
     bt = Strategy(
-        ticker_x,
-        ticker_y,
-        # cfg.performance.test.beta_start,
-        # cfg.performance.test.end,
-        "2024-10-01",
-        "2024-12-01",
-        cfg.market.interval,
-        cfg.market.fee_rate,
-        cfg.market.initial_cash,
-        cfg.market.risk_free_rate_annual,
-        cfg.performance.optimization.min_trades_per_pair,
-        cfg.performance.window,
-        cfg.performance.beta_hedge,
-        cfg.performance.beta_method,
-        cfg.performance.delayed_entry,
-        cfg.performance.time_exit,
+        ticker_x=ticker_x,
+        ticker_y=ticker_y,
+        start=cfg.performance.test.win_start,
+        end=cfg.performance.test.end,
+        interval=cfg.market.interval,
+        fee_rate=cfg.market.fee_rate,
+        initial_cash=cfg.market.initial_cash,
+        risk_free_rate_annual=cfg.market.risk_free_rate_annual,
+        min_trades_per_pair=cfg.performance.optimization.min_trades_per_pair,
+        beta_hedge=cfg.performance.beta_hedge,
+        beta_method=cfg.performance.beta_method,
+        delayed_entry=cfg.performance.delayed_entry,
+        time_decay_sl=(
+            cfg.performance.time_decay_start,
+            cfg.performance.time_decay_end,
+        ),
+        valid_window=(cfg.performance.window_min, cfg.performance.window_max),
+        vol_window=cfg.performance.vol_window,
     )
 
     logger.info("--- Starting Test ---")
     execute_testing(
-        cfg,
-        bt,
-        best_params,
-        ticker_x,
-        ticker_y,
-        output_dir,
-        # cfg.performance.test.beta_start,
-        # cfg.performance.test.start,
-        # cfg.performance.test.end,
-        "2024-10-01",
-        "2024-11-01",
-        "2024-12-01",
+        cfg=cfg,
+        bt=bt,
+        best_params=best_params,
+        ticker_x=ticker_x,
+        ticker_y=ticker_y,
+        output_dir=output_dir,
+        win_test_start=cfg.performance.test.win_start,
+        test_start=cfg.performance.test.start,
+        test_end=cfg.performance.test.end,
         subdir="test",
     )
 

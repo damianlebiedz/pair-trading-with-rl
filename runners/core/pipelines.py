@@ -3,25 +3,27 @@ import os
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 import pandas as pd
 from omegaconf import DictConfig
 
-from modules.core.models import StrategyResult
-from modules.core.statistical_tests import johansen_cointegration
-from modules.data_services.data_loaders import load_data
+from modules.performance.models import StrategyResult
 from modules.data_services.data_utils import (
     save_strategy_result,
     load_btc_benchmark,
     save_dataframe,
     load_strategy_result,
-    load_dataframe,
 )
-from modules.multi_pair.multi_pair_optimizer import MultiPairOptimizer
-from modules.multi_pair.multi_pair_utils import aggregate_strategy_results
-from modules.performance.stats import calculate_multi_pair_stats
+from modules.performance.multi_pair_optimizer import MultiPairOptimizer
+from modules.data_services.merge_utils import (
+    aggregate_strategy_results,
+    stitch_strategy_results,
+)
+from modules.performance.objectives import SortinoWithPenalty
+from modules.performance.pair_selector import PairSelector
+from modules.performance.stats import calculate_stats
 from modules.performance.strategy import Strategy
-from modules.visualization.plots import plot_returns, plot_zscore_pos
+from modules.utils.plots import plot_returns, plot_zscore_pos, plot_spread_pos
 
 logger = logging.getLogger(__name__)
 
@@ -57,57 +59,35 @@ def setup_run_environment(calling_file: str) -> str:
     return output_dir
 
 
-def execute_optimization(
-    cfg: DictConfig,
-    bt: Strategy,
-    static_params: dict[str, Any],
-    param_space: list[Any],
-    metric: tuple[str, str],
-) -> dict[str, Any]:
+def setup_rl_run_environment(calling_file: str) -> str:
+    script_dir = os.path.dirname(os.path.abspath(calling_file))
+    project_root = os.path.abspath(os.path.join(script_dir, ".."))
 
-    win_opt_start = cfg.performance.optimization.win_start
-    opt_start = cfg.performance.optimization.start
-    opt_end = cfg.performance.optimization.end
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    output_dir = os.path.join(project_root, "data_rl")
 
-    best_params, best_score = bt.run_optimization(
-        static_params=static_params,
-        param_space=param_space,
-        metric=metric,
-        opt_start=opt_start,
-        opt_end=opt_end,
-        win_opt_start=win_opt_start,
-        n_iter=cfg.performance.optimization.n_iter,
-        replicates=cfg.performance.optimization.replicates,
-        penalty_bad=cfg.performance.optimization.penalty_bad,
+    os.makedirs(output_dir, exist_ok=True)
+
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+
+    formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     )
 
-    best_params.update(static_params)
-    log = (best_params, best_score)
-    logger.info(log)
+    file_handler = logging.FileHandler(os.path.join(output_dir, f"{timestamp}.log"))
+    file_handler.setFormatter(formatter)
+    root_logger.addHandler(file_handler)
 
-    return best_params
+    if not any(isinstance(h, logging.StreamHandler) for h in root_logger.handlers):
+        console_handler = logging.StreamHandler(sys.stdout)
+        console_handler.setFormatter(formatter)
+        root_logger.addHandler(console_handler)
 
+    logger.debug("--- RL Environment Setup ---")
+    logger.debug(f"Output Directory: {output_dir}")
 
-def execute_multi_pair_optimization(
-    cfg: DictConfig,
-    strategies: list[Strategy],
-    static_params: dict[str, Any],
-    param_space: list[Any],
-    metric: tuple[str, str],
-) -> dict[str, Any]:
-    logger.info(f"Starting Multi-Pair Optimization on {len(strategies)} pairs...")
-
-    optimizer = MultiPairOptimizer(strategies, cfg)
-
-    best_params, best_score = optimizer.run(
-        static_params=static_params, param_space=param_space, metric=metric
-    )
-
-    best_params.update(static_params)
-    log = (best_params, best_score)
-    logger.info(log)
-
-    return best_params
+    return output_dir
 
 
 def execute_testing(
@@ -126,13 +106,13 @@ def execute_testing(
     if subdir:
         output_dir = os.path.join(output_dir, subdir)
 
-    window_factor = best_params["window_factor"]
+    fixed_window = best_params["fixed_window"]
     entry_threshold = best_params["entry_threshold"]
     exit_threshold = best_params["exit_threshold"]
     stop_loss = best_params["stop_loss"]
 
     result = bt.run_strategy(
-        window_factor=window_factor,
+        fixed_window=fixed_window,
         entry_threshold=entry_threshold,
         exit_threshold=exit_threshold,
         stop_loss=stop_loss,
@@ -147,7 +127,20 @@ def execute_testing(
         directory=output_dir,
     )
 
+    save_dataframe(
+        df=result.exec_logger,
+        file_name=f"exec_logger_{ticker_x}_{ticker_y}_{test_start}_{test_end}",
+        directory=output_dir,
+    )
+
+    save_dataframe(
+        df=result.stats,
+        file_name=f"stats_{ticker_x}_{ticker_y}_{test_start}_{test_end}",
+        directory=output_dir,
+    )
+
     plot_zscore_pos(result, directory=output_dir, save=True)
+    plot_spread_pos(result, directory=output_dir, save=True)
     btc_data = load_btc_benchmark(
         test_start=test_start,
         test_end=test_end,
@@ -155,116 +148,133 @@ def execute_testing(
     )
     plot_returns(result, btc_data, directory=output_dir, save=True)
 
-    logger.info("Testing completed, returning StrategyResult.")
+    logger.debug("Testing completed, returning StrategyResult.")
 
     return result
 
 
 def execute_pair_selection(
     tickers: list[str],
-    test_start: str,
-    test_end: str,
+    ps_start: str,
+    ps_end: str,
+    test_win_start: str,
     interval: str,
-    method: str,
-    ps_factor: float,
     top_n_factor: float,
     output_dir: str,
-    opt_start: str | None = None,
-    opt_end: str | None = None,
+    coint_type: Literal["eg", "johansen"],
+    beta_method: Literal["ols", "johansen", "kalman"],
+    valid_window: tuple[int, int],
 ) -> pd.DataFrame:
-    selection_method = method
-    if selection_method not in ["both", "second"]:
-        raise ValueError("'method' must be 'both' or 'second'")
+    logger.info("Starting Pair Selection Pipeline.")
 
-    df_test = load_data(
+    selector = PairSelector(
+        coint_type=coint_type, beta_method=beta_method, valid_window=valid_window
+    )
+
+    final_df = selector.select_pairs(
         tickers=tickers,
-        start=test_start,
-        end=test_end,
+        ps_start=ps_start,
+        ps_end=ps_end,
+        test_win_start=test_win_start,
         interval=interval,
+        top_n=top_n_factor,
     )
-    ps_df_test = johansen_cointegration(df_test)
 
-    if ps_factor == 0.05:
-        factor = ps_df_test["crit_95"]
-    elif ps_factor == 0.01:
-        factor = ps_df_test["crit_99"]
-    else:
-        raise ValueError("ps_factor should be 0.05 or 0.01")
-
-    if selection_method == "second" or opt_start is None or opt_end is None:
-        condition = ps_df_test["max_eig_stat"] > factor
-        sort_column = "max_eig_stat"
-        logger.info("Selection method: 'second' (filtering by test set only).")
-
-        start = test_start
-
-    else:
-        df_opt = load_data(
-            tickers=tickers,
-            start=opt_start,
-            end=opt_end,
-            interval=interval,
-        )
-        ps_df_opt = johansen_cointegration(df_opt)
-
-        merged_df = pd.merge(
-            ps_df_opt, ps_df_test, on="pair", how="inner", suffixes=("_opt", "_test")
-        )
-
-        condition = (merged_df["max_eig_stat_opt"] > factor) & (
-            merged_df["max_eig_stat_test"] > factor
-        )
-        sort_column = "max_eig_stat_test"
-        logger.info(
-            "Selection method: 'both' (filtering by optimization AND test sets)."
-        )
-
-        start = opt_start
-
-    final_df = (
-        ps_df_test[condition]
-        .query("beta > 0")
-        .sort_values(sort_column, ascending=False)
-        .head(top_n_factor)
-        .reset_index(drop=True)
-        .round(4)
-    )
+    if final_df.empty:
+        logger.warning("No pairs selected.")
+        return pd.DataFrame()
 
     save_dataframe(
         df=final_df,
-        file_name=f"pair_selection_{method}_{start}_{test_end}",
+        file_name=f"pair_selection_{coint_type}_{ps_start}_{ps_end}",
         directory=output_dir,
     )
 
-    logger.info(f"Pair Selection completed. Selected {len(final_df)} pairs.")
+    logger.info(f"Pair Selection completed. Saved {len(final_df)} pairs.")
 
     return final_df
+
+
+def execute_multi_pair_optimization(
+    cfg: DictConfig,
+    strategies: list[Strategy],
+    static_params: dict[str, Any],
+    param_space: list[Any],
+    metric_type: Literal["gross", "net"],
+    objective_func: Literal["sortino"],
+    opt_start: str,
+    opt_end: str,
+    opt_win_start: str,
+    penalty_bad: float,
+    n_iter: int,
+    replicates: int,
+    interval: str,
+    risk_free_rate_annual: float,
+    min_trades_per_pair: int,
+    initial_cash: float,
+) -> dict[str, Any]:
+    logger.info(f"Starting Multi-Pair Optimization on {len(strategies)} pairs...")
+
+    if objective_func not in ["sortino"]:
+        raise ValueError("objective_func should be 'sortino'")
+
+    if objective_func == "sortino":
+        objective_func = SortinoWithPenalty(
+            min_trades_per_pair=cfg.performance.optimization.min_trades_per_pair,
+            penalty_bad=penalty_bad,
+        )
+
+    optimizer = MultiPairOptimizer(
+        strategies=strategies,
+        opt_start=opt_start,
+        opt_end=opt_end,
+        opt_win_start=opt_win_start,
+        penalty_bad=penalty_bad,
+        n_iter=n_iter,
+        replicates=replicates,
+        interval=interval,
+        risk_free_rate_annual=risk_free_rate_annual,
+        min_trades_per_pair=min_trades_per_pair,
+        initial_cash=initial_cash,
+        number_of_pairs=len(strategies),
+    )
+
+    best_params, best_score = optimizer.run(
+        static_params=static_params,
+        param_space=param_space,
+        metric_type=metric_type,
+        objective_func=objective_func,
+    )
+
+    best_params.update(static_params)
+    log = (best_params, best_score)
+    logger.info(log)
+
+    return best_params
 
 
 def merge_multi_pair_results(
     cfg: DictConfig,
     output_dir: str,
     results: list[StrategyResult],
-    individual_stats_dfs: list[pd.DataFrame],
-    total_initial_cash: float,
+    initial_cash: float,
     risk_free_rate_annual: float,
     test_start: str,
     test_end: str,
+    prefix: str | None = "",
 ) -> StrategyResult:
     """Merges multiple StrategyResult objects into one aggregate result and saves it."""
     if not results:
         raise ValueError("No results to merge")
 
-    merged_df = aggregate_strategy_results(results, total_initial_cash)
+    merged_df, merged_exec_res = aggregate_strategy_results(results, initial_cash)
 
-    stats = calculate_multi_pair_stats(
-        merged_df=merged_df,
-        individual_stats_dfs=individual_stats_dfs,
-        total_initial_cash=total_initial_cash,
+    stats = calculate_stats(
+        df=merged_df,
+        exec_log_df=merged_exec_res,
+        initial_cash=initial_cash,
         interval=results[0].interval,
         risk_free_rate_annual=risk_free_rate_annual,
-        number_of_pairs=len(results),
-        min_trades_per_pair=cfg.performance.optimization.min_trades_per_pair,
     )
 
     final_result = StrategyResult(
@@ -276,17 +286,24 @@ def merge_multi_pair_results(
         interval=results[0].interval,
         fee_rate=results[0].fee_rate,
         stats=stats,
+        exec_logger=merged_exec_res,
     )
 
     save_strategy_result(
         result=final_result,
-        file_name=f"returns_multi_pair_{test_start}_{test_end}",
+        file_name=f"{prefix}returns_multi_pair_{test_start}_{test_end}",
+        directory=output_dir,
+    )
+
+    save_dataframe(
+        df=merged_exec_res,
+        file_name=f"{prefix}exec_logger_multi_pair_{final_result.start}_{final_result.end}",
         directory=output_dir,
     )
 
     save_dataframe(
         df=final_result.stats,
-        file_name=f"stats_multi_pair_{test_start}_{test_end}",
+        file_name=f"{prefix}stats_multi_pair_{test_start}_{test_end}",
         directory=output_dir,
     )
 
@@ -295,9 +312,15 @@ def merge_multi_pair_results(
         test_end=final_result.end,
         interval=cfg.market.interval,
     )
-    plot_returns(final_result, btc_data, directory=output_dir, save=True)
+    plot_returns(
+        result=final_result,
+        btc_data=btc_data,
+        directory=output_dir,
+        save=True,
+        prefix=prefix,
+    )
 
-    logger.info("Merge Multi-Pair Results completed, returning StrategyResult.")
+    logger.debug("Merge Multi-Pair Results completed, returning StrategyResult.")
 
     return final_result
 
@@ -309,20 +332,21 @@ def merge_multi_period_results(
     ticker_y: str,
     initial_cash: float,
     risk_free_rate_annual: float,
+    prefix: str = "",
 ) -> StrategyResult | None:
     """
     Checks for multiple iteration folders (1, 2, ...) and merges results for a specific pair
-    chronologically in a staircase manner.
-    Loads stats from each period individually to aggregate them.
+    chronologically using the stitch_strategy_results helper.
     """
     base_path = Path(output_dir)
 
     if not (base_path / "1").exists():
-        raise ValueError(
+        logger.warning(
             f"Cannot perform multi-period merge when there is no multi periods in {output_dir}"
         )
+        return None
 
-    logger.info(
+    logger.debug(
         f"Detected multi-period structure in {output_dir}. Merging results for {ticker_x}-{ticker_y}..."
     )
 
@@ -332,85 +356,31 @@ def merge_multi_period_results(
     )
 
     results = []
-    collected_stats = []
 
     for d in iter_dirs:
-        pattern = f"returns_{ticker_x}_{ticker_y}_*.parquet"
+        pattern = f"{prefix}returns_{ticker_x}_{ticker_y}_*.parquet"
         files = list(d.glob(pattern))
 
         if not files:
             logger.warning(f"No result file found for {ticker_x}-{ticker_y} in {d}")
             continue
 
-        file_path = files[0]
-        file_stem = file_path.stem
-
+        file_stem = files[0].stem
         res = load_strategy_result(file_stem, directory=str(d))
         results.append(res)
-
-        stats_pattern = f"stats_{ticker_x}_{ticker_y}_*.parquet"
-        stats_files = list(d.glob(stats_pattern))
-
-        if not stats_files:
-            logger.warning(f"Stats file not found for {ticker_x}-{ticker_y} in {d}")
-        else:
-            stats_path = stats_files[0]
-            stats_filename = stats_path.stem
-
-            stats_df = load_dataframe(stats_filename, directory=str(d))
-
-            if "metric" in stats_df.columns:
-                stats_df = stats_df.set_index("metric")
-
-            collected_stats.append(stats_df)
 
     if not results:
         logger.warning("No results collected for merging.")
         return None
 
-    merged_dfs = []
-    offset_return = 0.0
-    offset_net = 0.0
-    offset_return_pct = 0.0
-    offset_net_pct = 0.0
+    final_df, final_exec_df = stitch_strategy_results(results)
 
-    for res in results:
-        df = res.data.copy()
-
-        if "open_time" in df.columns:
-            df = df.set_index("open_time")
-
-        if "total_return" in df.columns:
-            df["total_return"] += offset_return
-        if "net_return" in df.columns:
-            df["net_return"] += offset_net
-        if "total_return_pct" in df.columns:
-            df["total_return_pct"] += offset_return_pct
-        if "net_return_pct" in df.columns:
-            df["net_return_pct"] += offset_net_pct
-
-        merged_dfs.append(df)
-
-        if not df.empty:
-            if "total_return" in df.columns:
-                offset_return = df["total_return"].iloc[-1]
-            if "net_return" in df.columns:
-                offset_net = df["net_return"].iloc[-1]
-            if "total_return_pct" in df.columns:
-                offset_return_pct = df["total_return_pct"].iloc[-1]
-            if "net_return_pct" in df.columns:
-                offset_net_pct = df["net_return_pct"].iloc[-1]
-
-    final_df = pd.concat(merged_dfs).sort_index()
-
-    stats = calculate_multi_pair_stats(
-        merged_df=final_df,
-        individual_stats_dfs=collected_stats,
-        total_initial_cash=initial_cash,
+    stats = calculate_stats(
+        df=final_df,
+        exec_log_df=final_exec_df,
+        initial_cash=initial_cash,
         interval=results[0].interval,
         risk_free_rate_annual=risk_free_rate_annual,
-        number_of_pairs=0,
-        min_trades_per_pair=cfg.performance.optimization.min_trades_per_pair,
     )
 
     final_result = StrategyResult(
@@ -422,17 +392,24 @@ def merge_multi_period_results(
         interval=results[0].interval,
         fee_rate=results[0].fee_rate,
         stats=stats,
+        exec_logger=final_exec_df,
     )
 
     save_strategy_result(
         result=final_result,
-        file_name=f"returns_{ticker_x}_{ticker_y}_{final_result.start}_{final_result.end}",
+        file_name=f"{prefix}returns_{ticker_x}_{ticker_y}_{final_result.start}_{final_result.end}",
+        directory=output_dir,
+    )
+
+    save_dataframe(
+        df=final_exec_df,
+        file_name=f"{prefix}exec_logger_{ticker_x}_{ticker_y}_{final_result.start}_{final_result.end}",
         directory=output_dir,
     )
 
     save_dataframe(
         df=final_result.stats,
-        file_name=f"stats_{ticker_x}_{ticker_y}_{final_result.start}_{final_result.end}",
+        file_name=f"{prefix}stats_{ticker_x}_{ticker_y}_{final_result.start}_{final_result.end}",
         directory=output_dir,
     )
 
@@ -441,8 +418,14 @@ def merge_multi_period_results(
         test_end=final_result.end,
         interval=cfg.market.interval,
     )
-    plot_returns(final_result, btc_data, directory=output_dir, save=True)
+    plot_returns(
+        result=final_result,
+        btc_data=btc_data,
+        directory=output_dir,
+        save=True,
+        prefix=prefix,
+    )
 
-    logger.info(f"Merge Multi-Period Results for {ticker_x}-{ticker_y} completed.")
+    logger.debug(f"Merge Multi-Period Results for {ticker_x}-{ticker_y} completed.")
 
     return final_result

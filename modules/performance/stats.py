@@ -1,3 +1,4 @@
+import calendar
 from typing import Literal
 import numpy as np
 import pandas as pd
@@ -7,80 +8,52 @@ from modules.data_services.data_utils import get_steps
 
 def calculate_stats(
     df: pd.DataFrame,
+    exec_log_df: pd.DataFrame,
     initial_cash: float,
     interval: Literal["1d", "4h", "1h", "30m", "15m", "5m", "3m", "1m"],
     risk_free_rate_annual: float,
-    min_trades_per_pair: int,
 ) -> pd.DataFrame:
+    """
+    Calculates comprehensive strategy performance metrics combining:
+    1. Time-series analysis (Sharpe, CAGR, Drawdown etc.) based on the equity curve.
+    2. Trade execution analysis (Win Rate, Avg Trade etc.) based on the execution logger.
+    """
     steps_per_day = get_steps(interval)
-    periods_per_year = steps_per_day * 365
 
-    def calc_trade_array(
-        pnl_series: pd.Series, position_series: pd.Series
-    ) -> np.ndarray:
-        prev = 0
-        open_idx = None
-        trade_pnl = []
+    if not df.empty:
+        start_year = df.index[0].year
+        last_ts = df.index[-1]
+        end_year = last_ts.year
 
-        for i in range(len(pnl_series)):
-            pos = position_series.iloc[i]
+        if last_ts.month == 1 and last_ts.day == 1:
+            end_year -= 1
 
-            if prev == 0 and pos != 0:
-                open_idx = i
-            elif (
-                (prev < 0 <= pos)
-                or (prev > 0 >= pos)
-                or (prev != 0 and i == len(position_series) - 1)
-            ):
-                if open_idx is not None:
-                    pnl = pnl_series.iloc[i] - pnl_series.iloc[open_idx]
-                    trade_pnl.append(pnl)
-                open_idx = i if pos != 0 else None
-            prev = pos
+        if end_year < start_year:
+            end_year = start_year
 
-        return np.array(trade_pnl)
+        if start_year == end_year:
+            days_in_year = 366 if calendar.isleap(start_year) else 365
+        else:
+            days_in_year = 365.25
+    else:
+        days_in_year = 365
 
-    def compute_stats(pnl_series: pd.Series) -> dict:
+    periods_per_year = steps_per_day * days_in_year
+
+    def calculate_time_series_metrics(pnl_series: pd.Series) -> dict:
+        """Calculates risk-adjusted return metrics based on the continuous equity curve."""
+        pnl_series = pnl_series.iloc[1:]
+
         equity_curve = pnl_series + initial_cash
         returns = equity_curve.pct_change(fill_method=None).dropna()
 
         total_pnl = pnl_series.iloc[-1]
         total_return = total_pnl / initial_cash
 
-        pnl_series, position_series = pnl_series.align(df["position"], join="inner")
-        trade_pnl = calc_trade_array(pnl_series, position_series)
-
-        # Total wins / Total losses
-        total_wins = int(np.sum(trade_pnl > 0))
-        total_losses = int(np.sum(trade_pnl < 0))
-
-        # Win rate
-        total_trades = total_wins + total_losses
-        win_rate = total_wins / total_trades if total_trades > 0 else None
-
-        # Max win / Max lose
-        winning_trades = trade_pnl[trade_pnl > 0]
-        losing_trades = trade_pnl[trade_pnl < 0]
-        max_win_pct = (
-            winning_trades.max() / initial_cash if len(winning_trades) > 0 else None
-        )
-        max_lose_pct = (
-            losing_trades.min() / initial_cash if len(losing_trades) > 0 else None
-        )
-
-        # Avg win / Avg lose / Avg trade return
-        avg_win_trade_pct = (
-            winning_trades.mean() / initial_cash if total_wins > 0 else None
-        )
-        avg_lose_trade_pct = (
-            losing_trades.mean() / initial_cash if total_losses > 0 else None
-        )
-        avg_trade_ret_pct = (
-            np.mean(trade_pnl) / initial_cash if total_trades > 0 else None
-        )
-
         # Volatility
         period_volatility = returns.std() if not pd.isna(returns.std()) else None
+
+        actual_periods = len(returns)
         annual_volatility = (
             period_volatility * np.sqrt(periods_per_year)
             if period_volatility is not None
@@ -89,7 +62,7 @@ def calculate_stats(
 
         # CAGR (Compound Annual Growth Rate)
         if len(equity_curve) > 0 and equity_curve.iloc[0] > 0:
-            years = len(equity_curve) / periods_per_year
+            years = actual_periods / periods_per_year
             if years <= 0 or equity_curve.iloc[-1] <= 0:
                 cagr = None
             else:
@@ -145,38 +118,93 @@ def calculate_stats(
             cagr / abs(max_drawdown) if max_drawdown != 0 and cagr is not None else None
         )
 
-        # Objective
-        objective = (
-            -100
-            if total_trades < min_trades_per_pair or sortino_ratio_annual is None
-            else sortino_ratio_annual
-        )
-
         return {
             "total_return": total_return,
             "cagr": cagr,
             "volatility": period_volatility,
             "volatility_annual": annual_volatility,
             "max_drawdown": max_drawdown,
-            "win_count": total_wins,
-            "lose_count": total_losses,
-            "win_rate": win_rate,
-            "max_win": max_win_pct,
-            "max_lose": max_lose_pct,
-            "avg_win_return": avg_win_trade_pct,
-            "avg_lose_return": avg_lose_trade_pct,
-            "avg_trade_return": avg_trade_ret_pct,
             "sharpe_ratio": sharpe_ratio,
             "sharpe_ratio_annual": sharpe_ratio_annual,
             "sortino_ratio": sortino_ratio,
             "sortino_ratio_annual": sortino_ratio_annual,
             "calmar_ratio": calmar_ratio,
             "calmar_ratio_annual": calmar_ratio_annual,
-            "objective": objective,
         }
 
-    gross_stats = compute_stats(df["total_return"])
-    net_stats = compute_stats(df["net_return"])
+    def calculate_trade_metrics(is_net: bool) -> dict:
+        """Calculates quantitative metrics based on closed positions from the execution log."""
+        if exec_log_df.empty:
+            return {
+                "win_count": 0,
+                "lose_count": 0,
+                "win_rate": None,
+                "max_win": None,
+                "max_lose": None,
+                "avg_win_return": None,
+                "avg_lose_return": None,
+                "avg_trade_return": None,
+            }
+
+        close_positions = exec_log_df[exec_log_df["position"] == 0.0].copy()
+
+        if close_positions.empty:
+            return {
+                "win_count": 0,
+                "lose_count": 0,
+                "win_rate": None,
+                "max_win": None,
+                "max_lose": None,
+                "avg_win_return": None,
+                "avg_lose_return": None,
+                "avg_trade_return": None,
+            }
+
+        if is_net:
+            # Net: PnL - Fees
+            fees = close_positions["fees"]
+            trade_returns = (close_positions["pnl"] - fees) / close_positions[
+                "entry_equity"
+            ]
+        else:
+            # Gross: PnL only
+            trade_returns = close_positions["pnl"] / close_positions["entry_equity"]
+
+        wins = trade_returns[trade_returns >= 0]
+        losses = trade_returns[trade_returns < 0]
+
+        win_count = len(wins)
+        lose_count = len(losses)
+        total_trades = win_count + lose_count
+
+        win_rate = win_count / total_trades if total_trades > 0 else None
+
+        max_win = trade_returns.max() if not trade_returns.empty else None
+        max_lose = trade_returns.min() if not trade_returns.empty else None
+
+        avg_trade_ret = trade_returns.mean() if total_trades > 0 else None
+        avg_win_ret = wins.mean() if win_count > 0 else None
+        avg_lose_ret = losses.mean() if lose_count > 0 else None
+
+        return {
+            "win_count": win_count,
+            "lose_count": lose_count,
+            "win_rate": win_rate,
+            "max_win": max_win,
+            "max_lose": max_lose,
+            "avg_win_return": avg_win_ret,
+            "avg_lose_return": avg_lose_ret,
+            "avg_trade_return": avg_trade_ret,
+        }
+
+    gross_ts_stats = calculate_time_series_metrics(df["total_pnl"])
+    net_ts_stats = calculate_time_series_metrics(df["total_net_pnl"])
+
+    gross_trade_stats = calculate_trade_metrics(is_net=False)
+    net_trade_stats = calculate_trade_metrics(is_net=True)
+
+    gross_stats = {**gross_ts_stats, **gross_trade_stats}
+    net_stats = {**net_ts_stats, **net_trade_stats}
 
     metrics_order = [
         "total_return",
@@ -198,142 +226,14 @@ def calculate_stats(
         "sortino_ratio_annual",
         "calmar_ratio",
         "calmar_ratio_annual",
-        "objective",
     ]
 
     stats_df = pd.DataFrame(
         {
             "metric": metrics_order,
-            "gross": [gross_stats[m] for m in metrics_order],
-            "net": [net_stats[m] for m in metrics_order],
+            "gross": [gross_stats.get(m) for m in metrics_order],
+            "net": [net_stats.get(m) for m in metrics_order],
         }
     ).set_index("metric")
 
     return stats_df.round(4)
-
-
-def calculate_multi_pair_stats(
-    merged_df: pd.DataFrame,
-    individual_stats_dfs: list[pd.DataFrame],
-    total_initial_cash: float,
-    interval: str,
-    risk_free_rate_annual: float,
-    number_of_pairs: int,
-    min_trades_per_pair: int,
-) -> pd.DataFrame:
-    """
-    Calculates statistics for a multi-pair portfolio.
-    Hybrid approach:
-    - Time-series metrics (Sharpe, DD, CAGR) are calculated on the merged equity curve.
-    - Trade metrics (Win rate, Counts) are aggregated from individual results.
-    """
-
-    merged_df_for_calc = merged_df.copy()
-    if "position" not in merged_df_for_calc.columns:
-        merged_df_for_calc["position"] = 0
-
-    portfolio_stats = calculate_stats(
-        df=merged_df_for_calc,
-        initial_cash=total_initial_cash,
-        interval=interval,
-        risk_free_rate_annual=risk_free_rate_annual,
-        min_trades_per_pair=min_trades_per_pair,
-    )
-
-    agg_stats = {"gross": {}, "net": {}}
-
-    min_total_trades = min_trades_per_pair * number_of_pairs
-
-    for col in ["gross", "net"]:
-        ind_series = [stats_df[col] for stats_df in individual_stats_dfs]
-
-        valid_series = [s for s in ind_series if s["win_count"] + s["lose_count"] > 0]
-
-        if not valid_series:
-            agg_stats[col] = portfolio_stats[col].to_dict()
-            agg_stats[col]["objective"] = -100.0
-            continue
-
-        total_wins = sum(s["win_count"] for s in valid_series)
-        total_losses = sum(s["lose_count"] for s in valid_series)
-        total_trades = total_wins + total_losses
-
-        win_rate = total_wins / total_trades if total_trades > 0 else None
-
-        def weighted_avg(values, weights):
-            valid_data = [(v, w) for v, w in zip(values, weights) if not pd.isna(v)]
-
-            if not valid_data:
-                return None
-
-            clean_vals = [x[0] for x in valid_data]
-            clean_wgts = [x[1] for x in valid_data]
-
-            if sum(clean_wgts) == 0:
-                return None
-
-            return np.average(clean_vals, weights=clean_wgts)
-
-        trade_counts = [s["win_count"] + s["lose_count"] for s in valid_series]
-
-        avg_win_return = weighted_avg(
-            [s["avg_win_return"] for s in valid_series], trade_counts
-        )
-
-        avg_lose_return = weighted_avg(
-            [s["avg_lose_return"] for s in valid_series], trade_counts
-        )
-
-        avg_trade_return = weighted_avg(
-            [s["avg_trade_return"] for s in valid_series], trade_counts
-        )
-
-        wins = [
-            s["max_win"]
-            for s in valid_series
-            if s["max_win"] is not None and not np.isnan(s["max_win"])
-        ]
-        losses = [
-            s["max_lose"]
-            for s in valid_series
-            if s["max_lose"] is not None and not np.isnan(s["max_lose"])
-        ]
-
-        max_win = max(wins) if wins else None
-        max_lose = min(losses) if losses else None
-
-        current_stats = portfolio_stats[col].to_dict()
-        raw_objective = current_stats["sortino_ratio_annual"]
-
-        if total_trades < min_total_trades:
-            objective = -100.0
-        else:
-            objective = raw_objective
-
-        current_stats.update(
-            {
-                "win_count": total_wins,
-                "lose_count": total_losses,
-                "win_rate": win_rate,
-                "avg_win_return": avg_win_return,
-                "avg_lose_return": avg_lose_return,
-                "avg_trade_return": avg_trade_return,
-                "max_win": max_win,
-                "max_lose": max_lose,
-                "objective": objective,
-            }
-        )
-
-        agg_stats[col] = current_stats
-
-    metrics_order = portfolio_stats.index
-
-    final_df = pd.DataFrame(
-        {
-            "metric": metrics_order,
-            "gross": [agg_stats["gross"].get(m) for m in metrics_order],
-            "net": [agg_stats["net"].get(m) for m in metrics_order],
-        }
-    ).set_index("metric")
-
-    return final_df.round(4)

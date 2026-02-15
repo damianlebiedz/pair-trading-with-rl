@@ -8,7 +8,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import json
 
-from modules.core.models import StrategyResult
+from modules.performance.models import StrategyResult
 from modules.data_services.data_loaders import load_data, get_project_root
 
 
@@ -63,9 +63,9 @@ def load_btc_benchmark(test_start: str, test_end: str, interval: str) -> pd.Data
         end=test_end,
         interval=interval,
     )
-    btc_data["BTC_return"] = btc_data["BTCUSDT"].pct_change()
-    btc_data.loc[btc_data.index[0], "BTC_return"] = 0.0
-    btc_data["BTC_c_return"] = (1 + btc_data["BTC_return"]).cumprod() - 1
+    btc_data["BTC_pct"] = btc_data["BTCUSDT"].pct_change()
+    btc_data.loc[btc_data.index[0], "BTC_pct"] = 0.0
+    btc_data["BTC_return"] = (1 + btc_data["BTC_pct"]).cumprod() - 1
 
     return btc_data
 
@@ -107,6 +107,7 @@ def save_strategy_result(
         "interval": result.interval,
         "fee_rate": float(result.fee_rate),
         "stats_json": result.stats.to_json(),
+        "exec_logger_json": result.exec_logger.to_json(),
     }
 
     custom_meta_key = "strategy_params".encode("utf-8")
@@ -156,4 +157,5 @@ def load_strategy_result(
         interval=meta["interval"],
         fee_rate=float(meta["fee_rate"]),
         stats=pd.read_json(StringIO(meta["stats_json"])),
+        exec_logger=pd.read_json(StringIO(meta["exec_logger_json"])),
     )

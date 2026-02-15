@@ -1,26 +1,35 @@
+defaults:
+  - override /rl_algo: "a2c_baseline" # "a2c_baseline" or "recurrent_ppo"
+
 pair_selection:
-  ps_factor: 0.05
   top_n_factor: 10
-  method: "second" # "both" or "second"
+  coint_type: "johansen" # "eg" or "johansen"
+  beta_validation: False
+  window_validation: False
 
-  optimization:
-    start: "2023-09-01"
-    end: "2023-11-01"
-
-  test:
-    start: "2023-10-01"
-    end: "2023-12-01"
+  start: "2023-11-01"
+  end: "2024-01-01"
 
 performance:
-  window: "static" # "rolling", "static" or "fixed"
-  beta_hedge: "static" # "rolling", "static", "no_hedge"
-  beta_method: "johansen" # "ols" or "johansen"
+  beta_method: "kalman" # "ols", "johansen" or "kalman"
   delayed_entry: True # True or False
-  time_exit: True # True or False
+  time_decay_start: 0.5
+  time_decay_end: 1.0
+
+  beta_hedge: "static" # "static" or "rolling"
 
   iterations: 12 # integer >= 1
 
+  rl_reward: "pnl" # "pnl" or "risk_adj"
+
+  vol_window: 24
+  window_min: 48
+  window_max: 336
+
   optimization:
+    objective_func: "sortino" # "sortino"
+    metric_type: "net" # "gross" or "net"
+
     win_start: "2023-11-01"
     start: "2023-12-01"
     end: "2024-01-01"
@@ -30,20 +39,16 @@ performance:
     replicates: 1
     penalty_bad: -100
 
+    fixed_window: False
+
     # Parameters space
-    window_factor_min: 1.50
-    window_factor_max: 4.00
-
-    fixed_window_factor_min: 1
-    fixed_window_factor_max: 1000
-
-    entry_threshold_min: 2.00
-    entry_threshold_max: 4.00
+    entry_threshold_min: 1.50
+    entry_threshold_max: 3.50
 
     exit_threshold_min: 0.00
-    exit_threshold_max: 1.00
+    exit_threshold_max: 0.50
 
-    stop_loss_min: 1.50
+    stop_loss_min: 1.05
     stop_loss_max: 3.00
 
     # Objective parameters
