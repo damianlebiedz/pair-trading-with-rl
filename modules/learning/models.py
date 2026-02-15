@@ -41,16 +41,23 @@ class AgentState:
     current_market_vol: float
 
     def get_state_arr(self, normalize: bool = True) -> np.ndarray:
-        arr = np.array([
-            _f(self.z_score),
-            _f(self.std) * 10.0 if normalize else _f(self.std),
-            float(self.beta),
-            float(self.hurst),
-            _f(self.window) / 200.0 if normalize else _f(self.window),
-            float(self.signal),
-            float(self.position),
-            float(self.norm_time_in_pos),
-            float(self.drawdown_pct),
-            float(self.current_market_vol) * 50.0 if normalize else float(self.current_market_vol),
-        ], dtype=np.float32)
+        arr = np.array(
+            [
+                _f(self.z_score),
+                _f(self.std) * 10.0 if normalize else _f(self.std),
+                float(self.beta),
+                float(self.hurst),
+                _f(self.window) / 200.0 if normalize else _f(self.window),
+                float(self.signal),
+                float(self.position),
+                float(self.norm_time_in_pos),
+                float(self.drawdown_pct),
+                (
+                    float(self.current_market_vol) * 50.0
+                    if normalize
+                    else float(self.current_market_vol)
+                ),
+            ],
+            dtype=np.float32,
+        )
         return arr

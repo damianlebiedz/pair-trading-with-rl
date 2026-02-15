@@ -12,14 +12,16 @@ class RLAgentAdapter:
 
     def get_action(self, state: AgentState) -> float:
         obs = state.get_state_arr(normalize=True).reshape(1, -1)
-        is_recurrent = hasattr(self.model, "policy") and "LstmPolicy" in str(type(self.model.policy))
+        is_recurrent = hasattr(self.model, "policy") and "LstmPolicy" in str(
+            type(self.model.policy)
+        )
 
         if is_recurrent:
             action, self._lstm_states = self.model.predict(
                 obs,
                 state=self._lstm_states,
                 episode_start=self._last_episode_start,
-                deterministic=not self.training_mode
+                deterministic=not self.training_mode,
             )
             self._last_episode_start = np.array([False])
         else:

@@ -20,10 +20,7 @@ from runners.core.pipelines import setup_rl_run_environment
 logger = logging.getLogger(__name__)
 load_dotenv()
 
-ALGO_MAP = {
-    "a2c": A2C,
-    "recurrent_ppo": RecurrentPPO
-}
+ALGO_MAP = {"a2c": A2C, "recurrent_ppo": RecurrentPPO}
 
 
 class LogEquityCallback(BaseCallback):
@@ -168,7 +165,7 @@ def train_agent(cfg: DictConfig):
                     obs,
                     state=lstm_states,
                     episode_start=episode_starts,
-                    deterministic=True
+                    deterministic=True,
                 )
                 obs, rewards, dones, info = vec_env.step(action)
                 episode_starts = dones

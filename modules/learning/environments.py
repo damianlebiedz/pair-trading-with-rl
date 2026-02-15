@@ -25,7 +25,9 @@ class PairsTradingEnv(gym.Env):
         self.result = result
         self.df = result.data.reset_index(drop=True)
 
-        valid_indices = self.df.dropna(subset=["z_score", "hurst", "market_vol", "std", "beta"]).index
+        valid_indices = self.df.dropna(
+            subset=["z_score", "hurst", "market_vol", "std", "beta"]
+        ).index
         self.warmup_offset = valid_indices[0] if not valid_indices.empty else 0
 
         self.position_state = PositionState()
