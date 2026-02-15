@@ -15,7 +15,7 @@ performance:
 
   beta_hedge: "static" # "static" or "rolling"
 
-  iterations: 1 # integer >= 1
+  iterations: 12 # integer >= 1
 
   rl_reward: "pnl" # "pnl" or "risk_adj"
 

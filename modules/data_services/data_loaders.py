@@ -47,7 +47,7 @@ def load_data(
     dfs = [load_single_ticker(t, start, end, interval, base_dir) for t in tickers]
 
     data = pd.concat(dfs, axis=1)
-    data = data[(data.index >= start) & (data.index <= end)]
+    data = data[(data.index > start) & (data.index <= end)]
 
     if data.empty:
         raise ValueError(
@@ -67,7 +67,7 @@ def load_pair(
     df_y = load_single_ticker(y, start, end, interval, base_dir)
 
     data = pd.concat([df_x, df_y], axis=1)
-    data = data[(data.index >= start) & (data.index <= end)]
+    data = data[(data.index > start) & (data.index <= end)]
 
     if data.empty:
         raise ValueError(

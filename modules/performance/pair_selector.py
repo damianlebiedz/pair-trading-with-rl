@@ -132,7 +132,7 @@ class PairSelector:
 
         for col in df_val.columns:
             if df_val[col].dtype in ["float64", "float32"]:
-                df_val[f"{col}_log"] = np.log(df_val[col] + 1e-8)
+                df_val[f"{col}_log"] = np.log(df_val[col])
 
         validated_pairs = []
 
