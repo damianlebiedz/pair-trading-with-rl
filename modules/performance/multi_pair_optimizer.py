@@ -1,7 +1,6 @@
 import logging
 from typing import Any, Literal
 import pandas as pd
-from omegaconf import DictConfig
 import numpy as np
 
 from modules.core.search_methods import random_search
@@ -14,19 +13,33 @@ logger = logging.getLogger(__name__)
 
 
 class MultiPairOptimizer:
-    def __init__(self, strategies: list[Strategy], cfg: DictConfig):
+    def __init__(
+        self,
+        strategies: list[Strategy],
+        opt_start: str,
+        opt_end: str,
+        opt_win_start: int,
+        penalty_bad: float,
+        n_iter: int,
+        replicates: int,
+        interval: str,
+        risk_free_rate_annual: float,
+        min_trades_per_pair: int,
+        initial_cash: float,
+        number_of_pairs: int,
+    ):
         self.strategies = strategies
-        self.cfg = cfg
-        self.opt_start = cfg.performance.optimization.start
-        self.opt_end = cfg.performance.optimization.end
-        self.win_opt_start = cfg.performance.optimization.win_start
-        self.penalty_bad = cfg.performance.optimization.penalty_bad
-        self.interval = strategies[0].interval
-        self.risk_free_rate_annual = strategies[0].risk_free_rate_annual
-        self.min_trades_per_pair = cfg.performance.optimization.min_trades_per_pair
-
-        self.total_initial_cash = sum(s.initial_cash for s in strategies)
-        self.number_of_pairs = len(strategies)
+        self.opt_start = opt_start
+        self.opt_end = opt_end
+        self.opt_win_start = opt_win_start
+        self.penalty_bad = penalty_bad
+        self.n_iter = n_iter
+        self.replicates = replicates
+        self.interval = interval
+        self.risk_free_rate_annual = risk_free_rate_annual
+        self.min_trades_per_pair = min_trades_per_pair
+        self.initial_cash = initial_cash
+        self.number_of_pairs = number_of_pairs
 
     def objective(
         self,
@@ -44,6 +57,10 @@ class MultiPairOptimizer:
 
         The goal is to find a parameter set that creates a stable portfolio, rather than
         optimizing each pair individually.
+
+        Locking parameters (static_params):
+            static_params = {'stop_loss': 1.05}         # 'stop_loss' will be constant 1.05 for all iterations.
+            static_params = {'stop_loss': None}         # Trade without 'stop_loss'.
 
         Args:
             static_params (dict): Constant parameters fixed during this optimization run.
@@ -71,26 +88,34 @@ class MultiPairOptimizer:
             individual_stats_dfs = []
 
             for strat in self.strategies:
-                res = strat.run_strategy(
-                    fixed_window=fixed_window,
-                    entry_threshold=entry_threshold,
-                    exit_threshold=exit_threshold,
-                    stop_loss=stop_loss,
-                    test_start=self.opt_start,
-                    test_end=self.opt_end,
-                    win_test_start=self.win_opt_start,
-                )
-                results.append(res)
-                individual_stats_dfs.append(res.stats)
+                try:
+                    res = strat.run_strategy(
+                        fixed_window=fixed_window,
+                        entry_threshold=entry_threshold,
+                        exit_threshold=exit_threshold,
+                        stop_loss=stop_loss,
+                        test_start=self.opt_start,
+                        test_end=self.opt_end,
+                        win_test_start=self.opt_win_start,
+                    )
+                    results.append(res)
+                    individual_stats_dfs.append(res.stats)
+
+                except Exception as e:
+                    logger.error(
+                        f"[MultiPairOpt Error] during {strat.ticker_x}-{strat.ticker_y}: {e}"
+                    )
+                    raise e
 
             merged_df, merged_exec_res = aggregate_strategy_results(
-                results, self.total_initial_cash
+                results=results,
+                initial_cash=self.initial_cash,
             )
 
             stats = calculate_stats(
                 df=merged_df,
                 exec_log_df=merged_exec_res,
-                initial_cash=self.total_initial_cash,
+                initial_cash=self.initial_cash,
                 interval=self.interval,
                 risk_free_rate_annual=self.risk_free_rate_annual,
             )
@@ -130,8 +155,8 @@ class MultiPairOptimizer:
             param_space=param_space,
             static_params=static_params,
             metric_type=metric_type,
-            n_iter=self.cfg.performance.optimization.n_iter,
-            replicates=self.cfg.performance.optimization.replicates,
+            n_iter=self.n_iter,
+            replicates=self.replicates,
             penalty_bad=self.penalty_bad,
         )
 

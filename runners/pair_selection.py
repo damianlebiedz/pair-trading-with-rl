@@ -18,13 +18,13 @@ def pair_selection(cfg: DictConfig):
         tickers=cfg.tickers,
         ps_start=cfg.pair_selection.start,
         ps_end=cfg.pair_selection.end,
-        test_start=cfg.pair_selection.test.start,
-        test_end=cfg.pair_selection.test.end,
+        test_win_start=cfg.pair_selection.test.start,
         interval=cfg.market.interval,
         top_n_factor=cfg.pair_selection.top_n_factor,
         output_dir=output_dir,
         coint_type=cfg.pair_selection.coint_type,
         beta_method=cfg.performance.beta_method,
+        valid_window=(cfg.performance.window_min, cfg.performance.window_max),
     )
 
     logger.info(f"\n{df}")

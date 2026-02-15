@@ -141,8 +141,11 @@ def aggregate_strategy_results(
     merged_df["total_return"] = merged_df["total_pnl"] / initial_cash
     merged_df["total_net_return"] = merged_df["total_net_pnl"] / initial_cash
 
-    merged_exec_log_df = (
-        pd.concat(exec_dfs).sort_values(by="open_time").reset_index(drop=True)
-    )
+    if exec_dfs:
+        merged_exec_log_df = (
+            pd.concat(exec_dfs).sort_values(by="open_time").reset_index(drop=True)
+        )
+    else:
+        merged_exec_log_df = pd.DataFrame()
 
     return merged_df, merged_exec_log_df

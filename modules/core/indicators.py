@@ -191,6 +191,25 @@ def calculate_beta(
 def calculate_spread_statistics(
     x_col: str, y_col: str, beta: float, df: pd.DataFrame
 ) -> tuple[float, float, float]:
+    """
+    Calculates basic spread statistics for a pair of assets.
+
+    This function derives the spread time series based on the formula:
+    spread = x - beta * y. It then computes the most recent spread value,
+    the rolling mean, and the standard deviation for the provided data window.
+
+    Args:
+        x_col (str): Column name for the dependent asset (X).
+        y_col (str): Column name for the independent asset (Y, hedge).
+        beta (float): The hedge ratio (beta) used to construct the spread.
+        df (pd.DataFrame): DataFrame containing price series for both assets.
+
+    Returns:
+        tuple[float, float, float]: A tuple containing:
+            - spread (float): The current (last) value of the spread series.
+            - mean (float): The arithmetic mean of the spread in the current window.
+            - std (float): The standard deviation of the spread in the current window.
+    """
     spread_series = df[x_col] - (beta * df[y_col])
 
     spread = spread_series.iloc[-1]
@@ -205,9 +224,27 @@ def calculate_hurst(
 ) -> float:
     """
     Calculates the Hurst Exponent to determine the time series memory.
-    H < 0.5: Mean reverting series.
-    H = 0.5: Random walk (Geometric Brownian Motion).
-    H > 0.5: Trending series.
+
+    The Hurst exponent (H) characterizes the long-term memory of a time series.
+    It is used to identify whether a series is mean-reverting, trending, or
+    following a random walk.
+
+    Hurst Exponent Interpretation:
+        - H < 0.5: Mean-reverting series (anti-persistent).
+        - H = 0.5: Random walk (Geometric Brownian Motion).
+        - H > 0.5: Trending series (persistent).
+
+    Args:
+        x_col (str): Column name for asset X.
+        y_col (str): Column name for asset Y.
+        beta (float): The hedge ratio used to construct the spread.
+        df (pd.DataFrame): DataFrame containing price series.
+        max_lags (int, optional): The maximum number of lags to consider
+            for the calculation. Defaults to 20.
+
+    Returns:
+        float: The calculated Hurst Exponent. Returns 0.5 as a fallback if
+            there is insufficient data or an error occurs.
     """
     lags = range(2, max_lags)
     tau = []
@@ -234,6 +271,22 @@ def calculate_hurst(
 
 
 def calculate_z_score(spread: float, mean: float, std: float) -> float | None:
+    """
+    Calculates the Z-Score (standard score) for a specific spread value.
+
+    The Z-Score measures how many standard deviations the current spread is
+    from its historical mean. In pairs trading, it is the primary indicator
+    used to identify entry and exit signals.
+
+    Args:
+        spread (float): The current value of the spread.
+        mean (float): The mean value of the spread over the lookback period.
+        std (float): The standard deviation of the spread over the lookback period.
+
+    Returns:
+        float | None: The calculated Z-Score value, or None if the standard
+            deviation is zero (avoiding division by zero).
+    """
     if std == 0:
         return None
     return (spread - mean) / std
@@ -244,8 +297,7 @@ def calculate_half_life_window(
     y_col: str,
     beta: float,
     df: pd.DataFrame,
-    min_window: int = 48,  # TODO: wynieść do cfg
-    max_window: int = 336,  # TODO
+    valid_window: tuple[int, int],
 ) -> int | None:
     """
     Estimates the mean-reversion Half-Life via the Ornstein-Uhlenbeck (OU) process
@@ -265,8 +317,7 @@ def calculate_half_life_window(
         y_col: Column name for asset Y.
         beta: Hedge ratio.
         df: DataFrame containing price data.
-        min_window: minimum window size.
-        max_window: maximum window size.
+        valid_window: min and max values of window.
 
     Returns:
         int | None: The calculated window size, or None if the spread is not mean-reverting
@@ -292,7 +343,7 @@ def calculate_half_life_window(
 
     half_life = -np.log(2) / lam
 
-    if half_life < min_window or half_life > max_window:
+    if half_life < valid_window[0] or half_life > valid_window[1]:
         return None
 
-    return half_life
+    return int(half_life)

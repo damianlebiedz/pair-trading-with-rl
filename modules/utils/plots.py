@@ -3,6 +3,8 @@ from pathlib import Path
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
+from modules.performance.models import StrategyResult
+
 
 def get_project_root() -> Path:
     return Path(__file__).resolve().parents[2]
@@ -463,10 +465,11 @@ def plot_spread_pos(
 
 
 def plot_returns(
-    result,
+    result: StrategyResult,
     btc_data: pd.DataFrame | None = None,
     directory: str | None = None,
     save: bool = True,
+    prefix: str | None = "",
 ) -> None:
     df = result.data.copy()
 
@@ -586,7 +589,7 @@ def plot_returns(
         spikethickness=1,
     )
 
-    filename = f"returns_{result.ticker_x}_{result.ticker_y}_{result.start}_{result.end}.html".replace(
+    filename = f"{prefix}returns_{result.ticker_x}_{result.ticker_y}_{result.start}_{result.end}.html".replace(
         ":", "_"
     )
 

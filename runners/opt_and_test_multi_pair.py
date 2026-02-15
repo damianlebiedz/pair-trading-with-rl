@@ -52,6 +52,8 @@ def opt_and_test_multi_pair(cfg: DictConfig):
         if number_of_iterations == 1:
             output_dir = root
 
+        logger.info(f"--- Running Iteration {i+1} ---")
+
         param_space = [
             Real(
                 cfg.performance.optimization.entry_threshold_min,
@@ -81,20 +83,17 @@ def opt_and_test_multi_pair(cfg: DictConfig):
         else:
             static_params["fixed_window"] = None
 
-        logger.info(f"Saving results to: {output_dir}")
-        logger.info("CONFIG:\n%s", OmegaConf.to_yaml(cfg))
-
         ps_df = execute_pair_selection(
             tickers=cfg.tickers,
             ps_start=lists["pair_selection_start_list"][i],
             ps_end=lists["pair_selection_end_list"][i],
-            test_start=lists["test_start_list"][i],
-            test_end=lists["test_end_list"][i],
+            test_win_start=lists["test_win_start_list"][i],
             interval=cfg.market.interval,
             top_n_factor=cfg.pair_selection.top_n_factor,
             output_dir=output_dir,
             coint_type=cfg.pair_selection.coint_type,
             beta_method=cfg.performance.beta_method,
+            valid_window=(cfg.performance.window_min, cfg.performance.window_max),
         )
 
         logger.info(f"\n{ps_df}")
@@ -175,6 +174,8 @@ def opt_and_test_multi_pair(cfg: DictConfig):
                     cfg.performance.time_decay_start,
                     cfg.performance.time_decay_end,
                 ),
+                valid_window=(cfg.performance.window_min, cfg.performance.window_max),
+                vol_window=cfg.performance.vol_window,
             )
             strategies.append(bt)
             strategies_map[pair_name] = bt
@@ -186,9 +187,20 @@ def opt_and_test_multi_pair(cfg: DictConfig):
             param_space=param_space,
             metric_type=cfg.performance.optimization.metric_type,
             objective_func=cfg.performance.optimization.objective_func,
+            opt_start=lists["opt_start_list"][i],
+            opt_end=lists["opt_end_list"][i],
+            opt_win_start=lists["opt_win_start_list"][i],
+            penalty_bad=cfg.performance.optimization.penalty_bad,
+            n_iter=cfg.performance.optimization.n_iter,
+            replicates=cfg.performance.optimization.replicates,
+            interval=cfg.market.interval,
+            risk_free_rate_annual=cfg.market.risk_free_rate_annual,
+            min_trades_per_pair=cfg.performance.optimization.min_trades_per_pair,
+            initial_cash=cfg.market.initial_cash,
         )
 
         test_results = []
+        opt_results = []
 
         logger.info("--- Running Tests with Optimized Parameters ---")
 
@@ -198,8 +210,8 @@ def opt_and_test_multi_pair(cfg: DictConfig):
 
             logger.info(f"Testing pair: {pair_name}")
 
-            logger.info("--- Starting Test of Optimization ---")
-            execute_testing(
+            logger.debug("--- Starting Test of Optimization ---")
+            result_opt = execute_testing(
                 cfg=cfg,
                 bt=bt,
                 best_params=best_params,
@@ -212,7 +224,7 @@ def opt_and_test_multi_pair(cfg: DictConfig):
                 subdir="opt",
             )
 
-            logger.info("--- Starting Test ---")
+            logger.debug("--- Starting Test ---")
             result_test = execute_testing(
                 cfg=cfg,
                 bt=bt,
@@ -226,9 +238,21 @@ def opt_and_test_multi_pair(cfg: DictConfig):
                 subdir="test",
             )
 
+            opt_results.append(result_opt)
             test_results.append(result_test)
 
-        logger.info("--- Merging Multi-Pair Results ---")
+        logger.debug("--- Merging Multi-Pair Results ---")
+
+        merge_multi_pair_results(
+            cfg=cfg,
+            output_dir=output_dir,
+            results=opt_results,
+            initial_cash=cfg.market.initial_cash,
+            risk_free_rate_annual=cfg.market.risk_free_rate_annual,
+            test_start=lists["test_start_list"][i],
+            test_end=lists["test_end_list"][i],
+            prefix="opt_",
+        )
 
         merge_multi_pair_results(
             cfg=cfg,
@@ -238,6 +262,7 @@ def opt_and_test_multi_pair(cfg: DictConfig):
             risk_free_rate_annual=cfg.market.risk_free_rate_annual,
             test_start=lists["test_start_list"][i],
             test_end=lists["test_end_list"][i],
+            prefix="test_",
         )
 
     merge_multi_period_results(
@@ -247,7 +272,20 @@ def opt_and_test_multi_pair(cfg: DictConfig):
         ticker_y="pair",
         initial_cash=cfg.market.initial_cash,
         risk_free_rate_annual=cfg.market.risk_free_rate_annual,
+        prefix="opt_",
     )
+
+    merge_multi_period_results(
+        cfg=cfg,
+        output_dir=root,
+        ticker_x="multi",
+        ticker_y="pair",
+        initial_cash=cfg.market.initial_cash,
+        risk_free_rate_annual=cfg.market.risk_free_rate_annual,
+        prefix="test_",
+    )
+
+    logger.info(f"Results merged and saved in {root}.")
 
 
 if __name__ == "__main__":

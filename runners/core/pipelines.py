@@ -90,81 +90,6 @@ def setup_rl_run_environment(calling_file: str) -> str:
     return output_dir
 
 
-def execute_optimization(
-    cfg: DictConfig,
-    bt: Strategy,
-    static_params: dict[str, Any],
-    param_space: list[Any],
-    metric_type: Literal["gross", "net"],
-    objective_func: Literal["sortino"],
-) -> dict[str, Any]:
-
-    win_opt_start = cfg.performance.optimization.win_start
-    opt_start = cfg.performance.optimization.start
-    opt_end = cfg.performance.optimization.end
-
-    if objective_func not in ["sortino"]:
-        raise ValueError("objective_func should be 'sortino'")
-
-    if objective_func == "sortino":
-        objective_func = SortinoWithPenalty(
-            min_trades_per_pair=cfg.performance.optimization.min_trades_per_pair
-        )
-
-    best_params, best_score = bt.run_optimization(
-        static_params=static_params,
-        param_space=param_space,
-        metric_type=metric_type,
-        objective_func=objective_func,
-        opt_start=opt_start,
-        opt_end=opt_end,
-        win_opt_start=win_opt_start,
-        n_iter=cfg.performance.optimization.n_iter,
-        replicates=cfg.performance.optimization.replicates,
-        penalty_bad=cfg.performance.optimization.penalty_bad,
-    )
-
-    best_params.update(static_params)
-    log = (best_params, best_score)
-    logger.info(log)
-
-    return best_params
-
-
-def execute_multi_pair_optimization(
-    cfg: DictConfig,
-    strategies: list[Strategy],
-    static_params: dict[str, Any],
-    param_space: list[Any],
-    metric_type: Literal["gross", "net"],
-    objective_func: Literal["sortino"],
-) -> dict[str, Any]:
-    logger.info(f"Starting Multi-Pair Optimization on {len(strategies)} pairs...")
-
-    if objective_func not in ["sortino"]:
-        raise ValueError("objective_func should be 'sortino'")
-
-    if objective_func == "sortino":
-        objective_func = SortinoWithPenalty(
-            min_trades_per_pair=cfg.performance.optimization.min_trades_per_pair
-        )
-
-    optimizer = MultiPairOptimizer(strategies, cfg)
-
-    best_params, best_score = optimizer.run(
-        static_params=static_params,
-        param_space=param_space,
-        metric_type=metric_type,
-        objective_func=objective_func,
-    )
-
-    best_params.update(static_params)
-    log = (best_params, best_score)
-    logger.info(log)
-
-    return best_params
-
-
 def execute_testing(
     cfg: DictConfig,
     bt: Strategy,
@@ -232,24 +157,25 @@ def execute_pair_selection(
     tickers: list[str],
     ps_start: str,
     ps_end: str,
-    test_start: str,
-    test_end: str,
+    test_win_start: str,
     interval: str,
     top_n_factor: float,
     output_dir: str,
     coint_type: Literal["eg", "johansen"],
     beta_method: Literal["ols", "johansen", "kalman"],
+    valid_window: tuple[int, int],
 ) -> pd.DataFrame:
     logger.info("Starting Pair Selection Pipeline.")
 
-    selector = PairSelector(coint_type=coint_type, beta_method=beta_method)
+    selector = PairSelector(
+        coint_type=coint_type, beta_method=beta_method, valid_window=valid_window
+    )
 
     final_df = selector.select_pairs(
         tickers=tickers,
         ps_start=ps_start,
         ps_end=ps_end,
-        test_start=test_start,
-        test_end=test_end,
+        test_win_start=test_win_start,
         interval=interval,
         top_n=top_n_factor,
     )
@@ -269,6 +195,64 @@ def execute_pair_selection(
     return final_df
 
 
+def execute_multi_pair_optimization(
+    cfg: DictConfig,
+    strategies: list[Strategy],
+    static_params: dict[str, Any],
+    param_space: list[Any],
+    metric_type: Literal["gross", "net"],
+    objective_func: Literal["sortino"],
+    opt_start: str,
+    opt_end: str,
+    opt_win_start: str,
+    penalty_bad: float,
+    n_iter: int,
+    replicates: int,
+    interval: str,
+    risk_free_rate_annual: float,
+    min_trades_per_pair: int,
+    initial_cash: float,
+) -> dict[str, Any]:
+    logger.info(f"Starting Multi-Pair Optimization on {len(strategies)} pairs...")
+
+    if objective_func not in ["sortino"]:
+        raise ValueError("objective_func should be 'sortino'")
+
+    if objective_func == "sortino":
+        objective_func = SortinoWithPenalty(
+            min_trades_per_pair=cfg.performance.optimization.min_trades_per_pair,
+            penalty_bad=penalty_bad,
+        )
+
+    optimizer = MultiPairOptimizer(
+        strategies=strategies,
+        opt_start=opt_start,
+        opt_end=opt_end,
+        opt_win_start=opt_win_start,
+        penalty_bad=penalty_bad,
+        n_iter=n_iter,
+        replicates=replicates,
+        interval=interval,
+        risk_free_rate_annual=risk_free_rate_annual,
+        min_trades_per_pair=min_trades_per_pair,
+        initial_cash=initial_cash,
+        number_of_pairs=len(strategies),
+    )
+
+    best_params, best_score = optimizer.run(
+        static_params=static_params,
+        param_space=param_space,
+        metric_type=metric_type,
+        objective_func=objective_func,
+    )
+
+    best_params.update(static_params)
+    log = (best_params, best_score)
+    logger.info(log)
+
+    return best_params
+
+
 def merge_multi_pair_results(
     cfg: DictConfig,
     output_dir: str,
@@ -277,6 +261,7 @@ def merge_multi_pair_results(
     risk_free_rate_annual: float,
     test_start: str,
     test_end: str,
+    prefix: str | None = "",
 ) -> StrategyResult:
     """Merges multiple StrategyResult objects into one aggregate result and saves it."""
     if not results:
@@ -306,19 +291,19 @@ def merge_multi_pair_results(
 
     save_strategy_result(
         result=final_result,
-        file_name=f"returns_multi_pair_{test_start}_{test_end}",
+        file_name=f"{prefix}returns_multi_pair_{test_start}_{test_end}",
         directory=output_dir,
     )
 
     save_dataframe(
         df=merged_exec_res,
-        file_name=f"exec_logger_multi_pair_{final_result.start}_{final_result.end}",
+        file_name=f"{prefix}exec_logger_multi_pair_{final_result.start}_{final_result.end}",
         directory=output_dir,
     )
 
     save_dataframe(
         df=final_result.stats,
-        file_name=f"stats_multi_pair_{test_start}_{test_end}",
+        file_name=f"{prefix}stats_multi_pair_{test_start}_{test_end}",
         directory=output_dir,
     )
 
@@ -327,9 +312,15 @@ def merge_multi_pair_results(
         test_end=final_result.end,
         interval=cfg.market.interval,
     )
-    plot_returns(final_result, btc_data, directory=output_dir, save=True)
+    plot_returns(
+        result=final_result,
+        btc_data=btc_data,
+        directory=output_dir,
+        save=True,
+        prefix=prefix,
+    )
 
-    logger.info("Merge Multi-Pair Results completed, returning StrategyResult.")
+    logger.debug("Merge Multi-Pair Results completed, returning StrategyResult.")
 
     return final_result
 
@@ -341,6 +332,7 @@ def merge_multi_period_results(
     ticker_y: str,
     initial_cash: float,
     risk_free_rate_annual: float,
+    prefix: str = "",
 ) -> StrategyResult | None:
     """
     Checks for multiple iteration folders (1, 2, ...) and merges results for a specific pair
@@ -354,7 +346,7 @@ def merge_multi_period_results(
         )
         return None
 
-    logger.info(
+    logger.debug(
         f"Detected multi-period structure in {output_dir}. Merging results for {ticker_x}-{ticker_y}..."
     )
 
@@ -366,7 +358,7 @@ def merge_multi_period_results(
     results = []
 
     for d in iter_dirs:
-        pattern = f"returns_{ticker_x}_{ticker_y}_*.parquet"
+        pattern = f"{prefix}returns_{ticker_x}_{ticker_y}_*.parquet"
         files = list(d.glob(pattern))
 
         if not files:
@@ -405,19 +397,19 @@ def merge_multi_period_results(
 
     save_strategy_result(
         result=final_result,
-        file_name=f"returns_{ticker_x}_{ticker_y}_{final_result.start}_{final_result.end}",
+        file_name=f"{prefix}returns_{ticker_x}_{ticker_y}_{final_result.start}_{final_result.end}",
         directory=output_dir,
     )
 
     save_dataframe(
         df=final_exec_df,
-        file_name=f"exec_logger_{ticker_x}_{ticker_y}_{final_result.start}_{final_result.end}",
+        file_name=f"{prefix}exec_logger_{ticker_x}_{ticker_y}_{final_result.start}_{final_result.end}",
         directory=output_dir,
     )
 
     save_dataframe(
         df=final_result.stats,
-        file_name=f"stats_{ticker_x}_{ticker_y}_{final_result.start}_{final_result.end}",
+        file_name=f"{prefix}stats_{ticker_x}_{ticker_y}_{final_result.start}_{final_result.end}",
         directory=output_dir,
     )
 
@@ -426,8 +418,14 @@ def merge_multi_period_results(
         test_end=final_result.end,
         interval=cfg.market.interval,
     )
-    plot_returns(final_result, btc_data, directory=output_dir, save=True)
+    plot_returns(
+        result=final_result,
+        btc_data=btc_data,
+        directory=output_dir,
+        save=True,
+        prefix=prefix,
+    )
 
-    logger.info(f"Merge Multi-Period Results for {ticker_x}-{ticker_y} completed.")
+    logger.debug(f"Merge Multi-Period Results for {ticker_x}-{ticker_y} completed.")
 
     return final_result

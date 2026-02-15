@@ -9,8 +9,8 @@ from modules.core.indicators import (
     generate_signal,
     KalmanState,
     calculate_spread_statistics,
+    calculate_hurst,
 )
-from modules.core.search_methods import random_search
 from modules.data_services.data_loaders import load_pair
 from modules.data_services.data_utils import add_log_prices
 from modules.performance.models import (
@@ -18,7 +18,6 @@ from modules.performance.models import (
     StrategyResult,
     ExecLogger,
 )
-from modules.performance.objectives import ObjectiveScheme
 from modules.rl.agents import RLAgentAdapter
 from modules.performance.stats import calculate_stats
 from modules.rl.models import AgentState
@@ -46,6 +45,7 @@ class Strategy:
             - time_decay_end: stop loss threshold will be equal to exit threshold after time_decay_end * window intervals.
         agent (RLAgentAdapter): RL Agent, if None - trade without agent, otherwise - use agent's actions.
         vol_window (int): Volatility window size. Default = 24 (one day in '1h' interval).
+        valid_window (tuple(int, int)): Min and max Z-Score window.
         source (str): Type of prices. Default = "log".
     """
 
@@ -63,9 +63,10 @@ class Strategy:
         beta_hedge: Literal["static", "rolling"],
         beta_method: Literal["ols", "johansen", "kalman"],
         delayed_entry: bool,
+        vol_window: int,
+        valid_window: tuple[int, int],
         time_decay_sl: tuple[float, float] | None = None,
         agent: RLAgentAdapter | None = None,
-        vol_window: int = 24,
         source: str = "log",
     ):
         self.ticker_x = ticker_x
@@ -83,6 +84,7 @@ class Strategy:
         self.time_decay_sl = time_decay_sl
         self.agent = agent
         self.vol_window = vol_window
+        self.valid_window = valid_window
         self.source = source
 
         if beta_hedge not in ["static", "rolling"]:
@@ -92,6 +94,9 @@ class Strategy:
             raise ValueError(
                 "Invalid beta_method: should be 'ols', 'johansen', or 'kalman'"
             )
+
+        if valid_window[0] > valid_window[1]:
+            raise ValueError(f"'valid_window' should be (min, max): {valid_window}")
 
         self.data = load_pair(
             x=ticker_x, y=ticker_y, start=start, end=end, interval=interval
@@ -185,6 +190,7 @@ class Strategy:
                 y_col=source_y_col,
                 beta=beta,
                 df=df.iloc[win_start_pos:test_start_pos],
+                valid_window=self.valid_window,
             )
 
         df[f"ret_{self.ticker_x}"] = df[source_x_col].diff().fillna(0.0)
@@ -238,7 +244,8 @@ class Strategy:
             idx = df.index[i]
 
             if is_bankrupt:
-                z_score, spread, mean, std, market_std = (
+                z_score, spread, mean, std, market_std, hurst = (
+                    None,
                     None,
                     None,
                     None,
@@ -278,7 +285,8 @@ class Strategy:
                     beta = market_beta
 
                 if win is None or beta <= 0:
-                    z_score, spread, mean, std, market_std = (
+                    z_score, spread, mean, std, market_std, hurst = (
+                        None,
                         None,
                         None,
                         None,
@@ -336,11 +344,19 @@ class Strategy:
                         if break_above or break_below:
                             position_state.sl_lock = False
 
+                hurst = calculate_hurst(
+                    x_col=source_x_col,
+                    y_col=source_y_col,
+                    beta=market_beta,
+                    df=df.iloc[start_pos + i - test_start_pos + 1 : i + 1],
+                )
+
                 if self.agent:
                     current_state = AgentState(
                         z_score=z_score,
                         std=market_std,
                         beta=market_beta,
+                        hurst=hurst,
                         window=win,
                         signal=signal,
                         position=position_state.position,
@@ -403,6 +419,7 @@ class Strategy:
                     "window": win,
                     "beta": position_state.entry_beta,
                     "market_beta": market_beta,
+                    "hurst": hurst,
                     "entry_thr": entry_threshold,
                     "exit_thr": exit_threshold,
                     "sl_thr": position_state.sl_thr,
@@ -532,85 +549,3 @@ class Strategy:
             stats=stats,
             exec_logger=exec_log_df,
         )
-
-    def run_optimization(
-        self,
-        static_params: dict,
-        param_space: list,
-        metric_type: Literal["gross", "net"],
-        objective_func: ObjectiveScheme,
-        opt_start: str,
-        opt_end: str,
-        win_opt_start: str,
-        n_iter: int | None = None,
-        replicates: int | None = None,
-        penalty_bad: float | None = None,
-    ) -> tuple[dict, float]:
-        """
-        Runs optimization to find the best parameter combination for the strategy.
-
-        Locking parameters (static_params):
-            static_params = {'stop_loss': 1.05}         # 'stop_loss' will be constant 1.05 for all iterations.
-            static_params = {'stop_loss': None}         # Trade without 'stop_loss'.
-
-        Args:
-            static_params (dict): Dictionary of parameters to keep constant (not optimized).
-            param_space (list): List of skopt Dimensions (Integer/Real) for parameters to optimize.
-            metric_type (Literal['gross', 'net']): metric type for objective function.
-            objective_func (ObjectiveScheme): objective function to maximize.
-            opt_start (str): Start date for optimization period.
-            opt_end (str): End date for optimization period.
-            win_opt_start (str): Start date for Z-score OU (Half-Life)-based window calculation.
-            n_iter (int, optional): Number of optimization iterations.
-            replicates (int, optional): Number of runs per param set to average results (reduces noise).
-            penalty_bad (float, optional): Score assigned to failed/invalid runs.
-
-        Returns:
-            tuple[dict, float]: Best parameters found and the corresponding score.
-        """
-
-        def objective_wrapper(
-            fixed_window: int | None,
-            entry_threshold: float,
-            exit_threshold: float,
-            stop_loss: float | None,
-            **kwargs,
-        ) -> float:
-            try:
-                current_metric_type = kwargs.get("metric_type", metric_type)
-
-                result = self.run_strategy(
-                    fixed_window=fixed_window,
-                    entry_threshold=entry_threshold,
-                    exit_threshold=exit_threshold,
-                    stop_loss=stop_loss,
-                    test_start=opt_start,
-                    test_end=opt_end,
-                    win_test_start=win_opt_start,
-                )
-
-                score = objective_func.calculate(
-                    stats=result.stats, metric_type=current_metric_type
-                )
-
-                if isinstance(score, pd.Series):
-                    score = score.iloc[0]
-                if pd.isna(score):
-                    return penalty_bad
-                return score
-
-            except Exception as e:
-                print(f"Error in optimization run: {e}")
-                return penalty_bad
-
-        best_params, best_score = random_search(
-            strategy_func=objective_wrapper,
-            param_space=param_space,
-            static_params=static_params,
-            metric_type=metric_type,
-            n_iter=n_iter,
-            replicates=replicates,
-            penalty_bad=penalty_bad,
-        )
-
-        return best_params, best_score

@@ -16,6 +16,7 @@ class AgentState:
         z_score (float | None): Current z-score of the spread between the two assets.
         std (float | None): Rolling standard deviation of the spread.
         beta (float): Hedge ratio between the two assets, used to size positions.
+        hurst (float): Hurst Exponent value.
         window (int | None): Lookback window length used for z-score calculation.
         signal (int): Trading signal at current timestep: -1 (short), 0 (hold), 1 (long).
         position (float): Current position in the strategy (-1, 0, 1 scaled by capital).
@@ -32,6 +33,7 @@ class AgentState:
     z_score: float | None
     std: float | None
     beta: float
+    hurst: float
     window: int | None
     signal: int
     position: float
@@ -45,6 +47,7 @@ class AgentState:
                 _f(self.z_score),
                 _f(self.std),
                 float(self.beta),
+                float(self.hurst),
                 _f(self.window),
                 float(self.signal),
                 float(self.position),

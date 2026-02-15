@@ -58,13 +58,13 @@ def test_multi_pair(cfg: DictConfig):
             tickers=cfg.tickers,
             ps_start=lists["pair_selection_start_list"][i],
             ps_end=lists["pair_selection_end_list"][i],
-            test_start=lists["test_win_start_list"][i],
-            test_end=lists["test_start_list"][i],
+            test_win_start=lists["test_win_start_list"][i],
             interval=cfg.market.interval,
             top_n_factor=cfg.pair_selection.top_n_factor,
             output_dir=output_dir,
             coint_type=cfg.pair_selection.coint_type,
             beta_method=cfg.performance.beta_method,
+            valid_window=(cfg.performance.window_min, cfg.performance.window_max),
         )
 
         logger.info("\n%s", ps_df.to_string())
@@ -145,6 +145,8 @@ def test_multi_pair(cfg: DictConfig):
                     cfg.performance.time_decay_start,
                     cfg.performance.time_decay_end,
                 ),
+                valid_window=(cfg.performance.window_min, cfg.performance.window_max),
+                vol_window=cfg.performance.vol_window,
             )
 
             strategies.append(bt)
@@ -195,6 +197,8 @@ def test_multi_pair(cfg: DictConfig):
         initial_cash=cfg.market.initial_cash,
         risk_free_rate_annual=cfg.market.risk_free_rate_annual,
     )
+
+    logger.info(f"Results merged and saved in {root}.")
 
 
 if __name__ == "__main__":

@@ -23,6 +23,7 @@ class PairSelector:
         self,
         coint_type: Literal["eg", "johansen"],
         beta_method: Literal["ols", "johansen", "kalman"],
+        valid_window: tuple[int, int],
         source: str = "log",
     ):
         """
@@ -40,6 +41,7 @@ class PairSelector:
                 - 'ols': Ordinary Least Squares (static).
                 - 'johansen': Vector Error Correction Model (static).
                 - 'kalman': Kalman Filter (dynamic state space).
+            valid_window: Min and max values of Z-Score window.
             source: Data transformation applied before analysis (default: 'log').
 
         Raises:
@@ -47,6 +49,7 @@ class PairSelector:
         """
         self.coint_type = coint_type
         self.beta_method = beta_method
+        self.valid_window = valid_window
         self.source = source
 
         if coint_type not in ["eg", "johansen"]:
@@ -55,13 +58,15 @@ class PairSelector:
         if beta_method not in ["ols", "johansen", "kalman"]:
             raise ValueError("'beta_method' must be 'ols', 'johansen', or 'kalman'")
 
+        if valid_window[0] > valid_window[1]:
+            raise ValueError(f"'valid_window' should be (min, max): {valid_window}")
+
     def select_pairs(
         self,
         tickers: list[str],
         ps_start: str,
         ps_end: str,
-        test_start: str,
-        test_end: str,
+        test_win_start: str,
         interval: str,
         top_n: int,
     ) -> pd.DataFrame:
@@ -99,8 +104,7 @@ class PairSelector:
             tickers: List of asset tickers to analyze.
             ps_start: Start date for the Scoring/Ranking data.
             ps_end: End date for the Scoring/Ranking data.
-            test_start: Start date for the Validation/Calibration data.
-            test_end: End date for the Validation/Calibration data.
+            test_win_start: Start date for the Validation/Calibration data.
             interval: Data timeframe (e.g., '1h').
             top_n: Number of pairs to select.
 
@@ -123,7 +127,7 @@ class PairSelector:
         )
 
         df_val = load_data(
-            tickers=tickers, start=test_start, end=test_end, interval=interval
+            tickers=tickers, start=test_win_start, end=ps_end, interval=interval
         )
 
         for col in df_val.columns:
@@ -166,6 +170,7 @@ class PairSelector:
                     y_col=f"{t_y}_log",
                     beta=beta,
                     df=df_val,
+                    valid_window=self.valid_window,
                 )
                 if win is None:
                     continue

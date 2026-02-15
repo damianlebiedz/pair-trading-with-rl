@@ -30,12 +30,12 @@ class SortinoWithPenalty(ObjectiveScheme):
 
     Args:
         min_trades_per_pair (int): Minimum required number of trades to consider the result valid.
-        penalty_value (float, optional): Score to return if constraints are not met. Defaults to -100.0.
+        penalty_bad (float, optional): Score to return if constraints are not met.
     """
 
-    def __init__(self, min_trades_per_pair: int, penalty_value: float = -100.0):
+    def __init__(self, min_trades_per_pair: int, penalty_bad: float):
         self.min_trades = min_trades_per_pair
-        self.penalty_value = penalty_value
+        self.penalty_bad = penalty_bad
 
     def calculate(
         self, stats: pd.DataFrame, metric_type: Literal["gross", "net"]
@@ -59,10 +59,10 @@ class SortinoWithPenalty(ObjectiveScheme):
             sortino = metrics.get("sortino_ratio_annual")
 
             if total_trades < self.min_trades or sortino is None:
-                return self.penalty_value
+                return self.penalty_bad
 
             return float(sortino)
 
         except KeyError as e:
             print(f"Error calculating objective: {e}")
-            return self.penalty_value
+            return self.penalty_bad

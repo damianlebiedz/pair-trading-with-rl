@@ -42,6 +42,8 @@ def test(cfg: DictConfig):
             cfg.performance.time_decay_start,
             cfg.performance.time_decay_end,
         ),
+        valid_window=(cfg.performance.window_min, cfg.performance.window_max),
+        vol_window=cfg.performance.vol_window,
     )
 
     logger.info("--- Starting Test ---")

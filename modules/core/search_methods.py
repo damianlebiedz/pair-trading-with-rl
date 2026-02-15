@@ -10,9 +10,9 @@ def random_search(
     param_space: list,
     static_params: dict,
     metric_type: Literal["gross", "net"],
-    n_iter: int = 1000,
-    replicates: int = 1,
-    penalty_bad: float = -100,
+    n_iter: int,
+    replicates: int,
+    penalty_bad: float,
 ) -> tuple[dict, float]:
     def evaluate_point(p, idx) -> tuple[float, dict]:
         scores = []
