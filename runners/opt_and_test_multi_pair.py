@@ -31,14 +31,12 @@ def opt_and_test_multi_pair(cfg: DictConfig):
     root = setup_run_environment(__file__)
 
     config = {
-        "pair_selection_opt_start": cfg.pair_selection.optimization.start,
-        "pair_selection_test_start": cfg.pair_selection.test.start,
-        "pair_selection_opt_end": cfg.pair_selection.optimization.end,
-        "pair_selection_test_end": cfg.pair_selection.test.end,
-        "opt_beta_start": cfg.performance.optimization.beta_start,
+        "pair_selection_start": cfg.pair_selection.start,
+        "pair_selection_end": cfg.pair_selection.end,
+        "opt_win_start": cfg.performance.optimization.win_start,
         "opt_start": cfg.performance.optimization.start,
         "opt_end": cfg.performance.optimization.end,
-        "test_beta_start": cfg.performance.test.beta_start,
+        "test_win_start": cfg.performance.test.win_start,
         "test_start": cfg.performance.test.start,
         "test_end": cfg.performance.test.end,
     }
@@ -56,11 +54,6 @@ def opt_and_test_multi_pair(cfg: DictConfig):
 
         param_space = [
             Real(
-                cfg.performance.optimization.window_factor_min,
-                cfg.performance.optimization.window_factor_max,
-                name="window_factor",
-            ),
-            Real(
                 cfg.performance.optimization.entry_threshold_min,
                 cfg.performance.optimization.entry_threshold_max,
                 name="entry_threshold",
@@ -77,21 +70,31 @@ def opt_and_test_multi_pair(cfg: DictConfig):
             ),
         ]
 
+        if cfg.performance.optimization.fixed_window:
+            param_space.append(
+                Real(
+                    cfg.performance.optimization.fixed_window_min,
+                    cfg.performance.optimization.fixed_window_max,
+                    name="fixed_window",
+                ),
+            )
+        else:
+            static_params["fixed_window"] = None
+
         logger.info(f"Saving results to: {output_dir}")
         logger.info("CONFIG:\n%s", OmegaConf.to_yaml(cfg))
 
         ps_df = execute_pair_selection(
             tickers=cfg.tickers,
-            test_start=lists["pair_selection_test_start_list"][i],
-            test_end=lists["pair_selection_test_end_list"][i],
+            ps_start=lists["pair_selection_start_list"][i],
+            ps_end=lists["pair_selection_end_list"][i],
+            test_start=lists["test_start_list"][i],
+            test_end=lists["test_end_list"][i],
             interval=cfg.market.interval,
-            method=cfg.pair_selection.method,
-            ps_factor=cfg.pair_selection.ps_factor,
             top_n_factor=cfg.pair_selection.top_n_factor,
             output_dir=output_dir,
             coint_type=cfg.pair_selection.coint_type,
-            opt_start=lists["pair_selection_opt_start_list"][i],
-            opt_end=lists["pair_selection_opt_end_list"][i],
+            beta_method=cfg.performance.beta_method,
         )
 
         logger.info(f"\n{ps_df}")
@@ -158,13 +161,14 @@ def opt_and_test_multi_pair(cfg: DictConfig):
             bt = Strategy(
                 ticker_x=ticker_x,
                 ticker_y=ticker_y,
-                start=lists["opt_beta_start_list"][i],
+                start=lists["opt_win_start_list"][i],
                 end=lists["test_end_list"][i],
                 interval=cfg.market.interval,
                 fee_rate=cfg.market.fee_rate,
                 initial_cash=cfg.market.initial_cash / cfg.pair_selection.top_n_factor,
                 risk_free_rate_annual=cfg.market.risk_free_rate_annual,
                 min_trades_per_pair=cfg.performance.optimization.min_trades_per_pair,
+                beta_hedge=cfg.performance.beta_hedge,
                 beta_method=cfg.performance.beta_method,
                 delayed_entry=cfg.performance.delayed_entry,
                 time_decay_sl=(
@@ -202,7 +206,7 @@ def opt_and_test_multi_pair(cfg: DictConfig):
                 ticker_x=ticker_x,
                 ticker_y=ticker_y,
                 output_dir=output_dir,
-                win_test_start=lists["opt_beta_start_list"][i],
+                win_test_start=lists["opt_win_start_list"][i],
                 test_start=lists["opt_start_list"][i],
                 test_end=lists["opt_end_list"][i],
                 subdir="opt",
@@ -216,7 +220,7 @@ def opt_and_test_multi_pair(cfg: DictConfig):
                 ticker_x=ticker_x,
                 ticker_y=ticker_y,
                 output_dir=output_dir,
-                win_test_start=lists["test_beta_start_list"][i],
+                win_test_start=lists["test_win_start_list"][i],
                 test_start=lists["test_start_list"][i],
                 test_end=lists["test_end_list"][i],
                 subdir="test",

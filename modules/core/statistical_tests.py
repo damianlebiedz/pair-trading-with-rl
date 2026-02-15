@@ -22,13 +22,11 @@ def engle_granger_cointegration(df: pd.DataFrame) -> pd.DataFrame:
         y_vals = df_clean[y].values
 
         score, p_value, _ = coint(x_vals, y_vals)
-        beta, _ = np.polyfit(y_vals, x_vals, 1)
 
         results.append(
             {
                 "pair": f"{x}-{y}",
                 "p_value": p_value,
-                "beta": beta,
             }
         )
 
@@ -62,9 +60,6 @@ def johansen_cointegration(
         crit_95 = johansen_res.cvt[0, 1]
         crit_99 = johansen_res.cvt[0, 2]
 
-        eigvec = johansen_res.evec[:, 0]
-        beta = -eigvec[1] / eigvec[0]
-
         results.append(
             {
                 "pair": f"{x}-{y}",
@@ -72,7 +67,6 @@ def johansen_cointegration(
                 "max_eig_stat": max_eig_stat,
                 "crit_95": crit_95,
                 "crit_99": crit_99,
-                "beta": beta,
             }
         )
 

@@ -16,16 +16,15 @@ def pair_selection(cfg: DictConfig):
 
     df = execute_pair_selection(
         tickers=cfg.tickers,
+        ps_start=cfg.pair_selection.start,
+        ps_end=cfg.pair_selection.end,
         test_start=cfg.pair_selection.test.start,
         test_end=cfg.pair_selection.test.end,
         interval=cfg.market.interval,
-        method=cfg.pair_selection.method,
-        ps_factor=cfg.pair_selection.ps_factor,
         top_n_factor=cfg.pair_selection.top_n_factor,
         output_dir=output_dir,
         coint_type=cfg.pair_selection.coint_type,
-        opt_start=cfg.pair_selection.optimization.start,
-        opt_end=cfg.pair_selection.optimization.end,
+        beta_method=cfg.performance.beta_method,
     )
 
     logger.info(f"\n{df}")

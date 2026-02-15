@@ -4,17 +4,10 @@ import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal
-import numpy as np
 import pandas as pd
 from omegaconf import DictConfig
 
-from modules.core.indicators import calculate_beta, calculate_half_life_window
 from modules.performance.models import StrategyResult
-from modules.core.statistical_tests import (
-    johansen_cointegration,
-    engle_granger_cointegration,
-)
-from modules.data_services.data_loaders import load_data
 from modules.data_services.data_utils import (
     save_strategy_result,
     load_btc_benchmark,
@@ -27,6 +20,7 @@ from modules.data_services.merge_utils import (
     stitch_strategy_results,
 )
 from modules.performance.objectives import SortinoWithPenalty
+from modules.performance.pair_selector import PairSelector
 from modules.performance.stats import calculate_stats
 from modules.performance.strategy import Strategy
 from modules.utils.plots import plot_returns, plot_zscore_pos, plot_spread_pos
@@ -187,13 +181,13 @@ def execute_testing(
     if subdir:
         output_dir = os.path.join(output_dir, subdir)
 
-    window_factor = best_params["window_factor"]
+    fixed_window = best_params["fixed_window"]
     entry_threshold = best_params["entry_threshold"]
     exit_threshold = best_params["exit_threshold"]
     stop_loss = best_params["stop_loss"]
 
     result = bt.run_strategy(
-        window_factor=window_factor,
+        fixed_window=fixed_window,
         entry_threshold=entry_threshold,
         exit_threshold=exit_threshold,
         stop_loss=stop_loss,
@@ -229,7 +223,7 @@ def execute_testing(
     )
     plot_returns(result, btc_data, directory=output_dir, save=True)
 
-    logger.info("Testing completed, returning StrategyResult.")
+    logger.debug("Testing completed, returning StrategyResult.")
 
     return result
 
@@ -241,237 +235,36 @@ def execute_pair_selection(
     test_start: str,
     test_end: str,
     interval: str,
-    method: str,
-    ps_factor: float,
     top_n_factor: float,
     output_dir: str,
     coint_type: Literal["eg", "johansen"],
     beta_method: Literal["ols", "johansen", "kalman"],
-    opt_start: str | None = None,
-    opt_end: str | None = None,
-    hl_window_factor: float | None = None,
 ) -> pd.DataFrame:
-    selection_method = method
-    if selection_method not in ["both", "second"]:
-        raise ValueError("'method' must be 'both' or 'second'")
+    logger.info("Starting Pair Selection Pipeline.")
 
-    if coint_type not in ["eg", "johansen"]:
-        raise ValueError("'coint_type' must be 'eg' or 'johansen'")
+    selector = PairSelector(coint_type=coint_type, beta_method=beta_method)
 
-    if beta_method not in ["ols", "johansen", "kalman"]:
-        raise ValueError("'beta_method' must be 'ols', 'johansen', or 'kalman'")
-
-    logger.info(f"Running pair selection using '{coint_type}' cointegration test.")
-
-    df_test = load_data(
+    final_df = selector.select_pairs(
         tickers=tickers,
-        start=ps_start,
-        end=ps_end,
+        ps_start=ps_start,
+        ps_end=ps_end,
+        test_start=test_start,
+        test_end=test_end,
         interval=interval,
-    )
-
-    if coint_type == "johansen":
-        ps_df_test = johansen_cointegration(df_test)
-        if ps_factor == 0.05:
-            crit_col = "crit_95"
-        elif ps_factor == 0.01:
-            crit_col = "crit_99"
-        else:
-            raise ValueError("ps_factor should be 0.05 or 0.01 for Johansen")
-
-        factor = ps_df_test[crit_col]
-
-    else:
-        ps_df_test = engle_granger_cointegration(df_test)
-        factor = ps_factor
-        crit_col = None
-
-    if selection_method == "second" or opt_start is None or opt_end is None:
-        logger.info("Selection method: 'second' (filtering by test set only).")
-        start = ps_start
-
-        if coint_type == "johansen":
-            condition = (ps_df_test["max_eig_stat"] > factor) & (ps_df_test["beta"] > 0)
-            sort_column = "max_eig_stat"
-            ascending = False
-        else:
-            condition = (ps_df_test["p_value"] < factor) & (ps_df_test["beta"] > 0)
-            sort_column = "p_value"
-            ascending = True
-
-        final_df_source = ps_df_test[condition]
-
-    else:
-        logger.info(
-            "Selection method: 'both' (filtering by optimization AND test sets)."
-        )
-        start = opt_start
-
-        df_opt = load_data(
-            tickers=tickers,
-            start=opt_start,
-            end=opt_end,
-            interval=interval,
-        )
-
-        if coint_type == "johansen":
-            ps_df_opt = johansen_cointegration(df_opt)
-
-            merged_df = pd.merge(
-                ps_df_opt,
-                ps_df_test,
-                on="pair",
-                how="inner",
-                suffixes=("_opt", "_test"),
-            )
-
-            if merged_df.empty:
-                logger.warning(
-                    "Intersection of Opt and Test sets is empty. No pairs to analyze."
-                )
-                return pd.DataFrame()
-
-            crit_col_test = f"{crit_col}_test"
-            crit_col_opt = f"{crit_col}_opt"
-
-            condition = (
-                (merged_df["max_eig_stat_opt"] > merged_df[crit_col_opt])
-                & (merged_df["max_eig_stat_test"] > merged_df[crit_col_test])
-                & (merged_df["beta_opt"] > 0)
-                & (merged_df["beta_test"] > 0)
-            )
-            sort_column = "max_eig_stat_test"
-            ascending = False
-
-        else:
-            ps_df_opt = engle_granger_cointegration(df_opt)
-
-            merged_df = pd.merge(
-                ps_df_opt,
-                ps_df_test,
-                on="pair",
-                how="inner",
-                suffixes=("_opt", "_test"),
-            )
-
-            if merged_df.empty:
-                logger.warning(
-                    "Intersection of Opt and Test sets is empty. No pairs to analyze."
-                )
-                return pd.DataFrame()
-
-            condition = (
-                (merged_df["p_value_opt"] < factor)
-                & (merged_df["p_value_test"] < factor)
-                & (merged_df["beta_opt"] > 0)
-                & (merged_df["beta_test"] > 0)
-            )
-            sort_column = "p_value_test"
-            ascending = True
-
-        final_df_source = merged_df[condition]
-
-        if not final_df_source.empty:
-            final_df_source = final_df_source.copy()
-            final_df_source["beta"] = final_df_source["beta_test"]
-
-    if final_df_source.empty:
-        logger.warning(
-            f"No pairs met the statistical significance criteria (method='{method}', type='{coint_type}')."
-        )
-        return pd.DataFrame()
-
-    logger.info(
-        f"Validating {len(final_df_source)} candidates using '{beta_method}' on TEST period ({test_start} - {test_end})..."
-    )
-
-    df_val = load_data(
-        tickers=tickers,
-        start=test_start,
-        end=test_end,
-        interval=interval,
-    )
-
-    for col in df_val.columns:
-        if df_val[col].dtype in ["float64", "float32", "int64"]:
-            df_val[f"{col}_log"] = np.log(df_val[col] + 1e-8)
-
-    final_df_source = final_df_source.copy()
-    final_df_source["validation_beta"] = np.nan
-    final_df_source["validation_window"] = np.nan
-
-    valid_results = []
-
-    final_df_source = final_df_source.drop_duplicates(subset=['pair'])
-
-    for idx, row in final_df_source.iterrows():
-        pair = row["pair"]
-        try:
-            t_x, t_y = pair.split("-")
-
-            beta_val = calculate_beta(
-                x_col=f"{t_x}_log",
-                y_col=f"{t_y}_log",
-                df=df_val,
-                beta_method=beta_method,
-            )
-
-            if beta_val <= 0.0:
-                logger.debug(f"Pair {pair} REJECTED. Beta {beta_val:.4f} <= 0")
-                continue
-
-            win = None
-            if hl_window_factor:
-                win = calculate_half_life_window(
-                    x_col=f"{t_x}_log",
-                    y_col=f"{t_y}_log",
-                    beta=beta_val,
-                    df=df_val,
-                    window_factor=hl_window_factor,
-                )
-
-                if win is None:
-                    logger.debug(f"Pair {pair} REJECTED. Half-Life failed.")
-                    continue
-
-            res_row = row.to_dict()
-            res_row['validation_beta'] = beta_val
-            res_row['validation_window'] = win
-
-            valid_results.append(res_row)
-
-        except Exception as e:
-            logger.error(f"Validation error for {pair} on test data: {e}")
-            continue
-
-    if not valid_results:
-        logger.warning("All pairs were filtered out during Pre-Trade Validation.")
-        return pd.DataFrame()
-
-    final_df_source = pd.DataFrame(valid_results)
-
-    logger.info(f"Pairs remaining after validation: {len(final_df_source)}")
-
-    final_df = (
-        final_df_source.sort_values(sort_column, ascending=ascending)
-        .head(top_n_factor)
-        .reset_index(drop=True)
-        .round(4)
+        top_n=top_n_factor,
     )
 
     if final_df.empty:
-        logger.warning(
-            "Pairs met significance criteria but were filtered out due to negative beta."
-        )
+        logger.warning("No pairs selected.")
         return pd.DataFrame()
 
     save_dataframe(
         df=final_df,
-        file_name=f"pair_selection_{method}_{coint_type}_{start}_{ps_end}",
+        file_name=f"pair_selection_{coint_type}_{ps_start}_{ps_end}",
         directory=output_dir,
     )
 
-    logger.info(f"Pair Selection completed. Selected {len(final_df)} pairs.")
+    logger.info(f"Pair Selection completed. Saved {len(final_df)} pairs.")
 
     return final_df
 

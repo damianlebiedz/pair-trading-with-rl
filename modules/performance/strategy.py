@@ -7,7 +7,8 @@ from modules.core.indicators import (
     calculate_beta,
     calculate_half_life_window,
     generate_signal,
-    KalmanState, calculate_spread_statistics,
+    KalmanState,
+    calculate_spread_statistics,
 )
 from modules.core.search_methods import random_search
 from modules.data_services.data_loaders import load_pair
@@ -37,7 +38,6 @@ class Strategy:
         initial_cash (float): Starting capital (the same for every trade).
         risk_free_rate_annual (float): Annual risk-free rate.
         min_trades_per_pair (int): Minimum number of trades per pair for the objective.
-        window (str): Window mode: "fixed" (manual size) or "half-life".
         beta_hedge (str): Hedge ratio mode: "static" or "rolling".
         beta_method (str): Beta calculation method: "ols", "johansen", or "kalman".
         delayed_entry (bool): Delayed execution or standard one.
@@ -60,7 +60,6 @@ class Strategy:
         initial_cash: float,
         risk_free_rate_annual: float,
         min_trades_per_pair: int,
-        window: Literal["fixed", "half_life"],
         beta_hedge: Literal["static", "rolling"],
         beta_method: Literal["ols", "johansen", "kalman"],
         delayed_entry: bool,
@@ -78,7 +77,6 @@ class Strategy:
         self.initial_cash = initial_cash
         self.risk_free_rate_annual = risk_free_rate_annual
         self.min_trades_per_pair = min_trades_per_pair
-        self.window = window
         self.beta_hedge = beta_hedge
         self.beta_method = beta_method
         self.delayed_entry = delayed_entry
@@ -86,9 +84,6 @@ class Strategy:
         self.agent = agent
         self.vol_window = vol_window
         self.source = source
-
-        if window not in ["fixed", "half_life"]:
-            raise ValueError("Invalid window: should be 'fixed' or 'half_life'")
 
         if beta_hedge not in ["static", "rolling"]:
             raise ValueError("Invalid beta_hedge: should be 'static' or 'rolling'")
@@ -112,7 +107,7 @@ class Strategy:
         exit_threshold: float,
         test_start: str,
         test_end: str,
-        window_factor: float | int,
+        fixed_window: int | None,
         win_test_start: str,
         stop_loss: float | None,
     ) -> pd.DataFrame:
@@ -139,9 +134,8 @@ class Strategy:
             exit_threshold (float): Z-score threshold for exiting positions (reversion to mean).
             test_start (str): Start date string (YYYY-MM-DD) for the backtest loop.
             test_end (str): End date string (YYYY-MM-DD) for the backtest loop.
-            window_factor (float | int): Parameter determining the lookback window size.
-                - If fixed window: integer size (e.g., 100).
-                - If rolling window: float multiplier for Half-Life calculation.
+            fixed_window (int | None): Parameter determining the lookback window size.
+                - If None: window size = half life.
             win_test_start (str): Start date for data used to calculate the initial window/beta.
             stop_loss (float | None): Stop-loss distance from entry threshold. None to disable.
 
@@ -183,15 +177,14 @@ class Strategy:
                 obs_y = warmup_data[source_x_col].iloc[i]
                 kf_state.update(obs_x, obs_y)
 
-        if self.window == "fixed":
-            win = int(window_factor)
+        if fixed_window:
+            win = int(fixed_window)
         else:
             win = calculate_half_life_window(
                 x_col=source_x_col,
                 y_col=source_y_col,
                 beta=beta,
                 df=df.iloc[win_start_pos:test_start_pos],
-                window_factor=window_factor,
             )
 
         df[f"ret_{self.ticker_x}"] = df[source_x_col].diff().fillna(0.0)
@@ -245,8 +238,13 @@ class Strategy:
             idx = df.index[i]
 
             if is_bankrupt:
-                z_score, spread, mean, std = None, None, None, None
-                market_std = None
+                z_score, spread, mean, std, market_std = (
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                )
                 total_net_pnl = -initial_cash
                 equity = 0.0
                 drawdown_pct = -1.0
@@ -260,29 +258,44 @@ class Strategy:
                             obs_x=df[source_y_col].iloc[i],
                             obs_y=df[source_x_col].iloc[i],
                         )
-                    elif self.beta_method in ["ols", "johansen"] and position_state.position == 0:
+                    elif (
+                        self.beta_method in ["ols", "johansen"]
+                        and position_state.position == 0
+                    ):
                         market_beta = calculate_beta(
                             x_col=source_x_col,
                             y_col=source_y_col,
-                            df=df.iloc[start_pos + i - test_start_pos + 1: i + 1],
+                            df=df.iloc[start_pos + i - test_start_pos + 1 : i + 1],
                             beta_method=beta_method,
                         )
 
-                if position_state.position != 0 and position_state.entry_beta is not None:
+                if (
+                    position_state.position != 0
+                    and position_state.entry_beta is not None
+                ):
                     beta = position_state.entry_beta
                 else:
                     beta = market_beta
 
                 if win is None or beta <= 0:
-                    z_score, spread, mean, std, market_std = None, None, None, None, None
+                    z_score, spread, mean, std, market_std = (
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                    )
                 else:
                     spread, mean, market_std = calculate_spread_statistics(
                         x_col=source_x_col,
                         y_col=source_y_col,
                         beta=beta,
-                        df=df.iloc[i - win + 1: i + 1],
+                        df=df.iloc[i - win + 1 : i + 1],
                     )
-                    if position_state.position != 0 and position_state.entry_std is not None:
+                    if (
+                        position_state.position != 0
+                        and position_state.entry_std is not None
+                    ):
                         std = position_state.entry_std
                     else:
                         std = market_std
@@ -318,32 +331,23 @@ class Strategy:
 
                 if position_state.sl_lock:
                     if z_score is not None and prev_z_score is not None:
-                        break_above = (prev_z_score > exit_threshold >= z_score)
-                        break_below = (prev_z_score < -exit_threshold <= z_score)
+                        break_above = prev_z_score > exit_threshold >= z_score
+                        break_below = prev_z_score < -exit_threshold <= z_score
                         if break_above or break_below:
                             position_state.sl_lock = False
 
                 if self.agent:
                     current_state = AgentState(
                         z_score=z_score,
-                        std=std,
-                        beta=beta,
+                        std=market_std,
+                        beta=market_beta,
                         window=win,
                         signal=signal,
                         position=position_state.position,
                         norm_time_in_pos=position_state.time_in_pos / win if win else 0,
                         drawdown_pct=drawdown_pct,
                         current_market_vol=df["market_vol"].iloc[i],
-                        sl_utilization=None,
                     )
-                    if stop_loss_thr and entry_threshold:
-                        max_pain_dist = stop_loss_thr - entry_threshold
-                        if max_pain_dist > 0 and z_score is not None:
-                            current_pain_dist = abs(z_score) - entry_threshold
-                            sl_utilization = current_pain_dist / max_pain_dist
-                        else:
-                            sl_utilization = 0.0
-                        current_state.sl_utilization = sl_utilization
                     action = self.agent.get_action(current_state)
                 else:
                     action, sl_lock = TradeExecutor.decide(
@@ -473,7 +477,7 @@ class Strategy:
 
     def run_strategy(
         self,
-        window_factor: float | int,
+        fixed_window: int | None,
         entry_threshold: float,
         exit_threshold: float,
         stop_loss: float | None,
@@ -485,14 +489,7 @@ class Strategy:
         Executes the strategy backtest with specific parameters.
 
         Args:
-            window_factor (float | int): Dual-purpose parameter controlling the lookback window.
-                The interpretation depends strictly on the `window` mode defined in `__init__`:
-                * If window="fixed":
-                    `window_factor` is the exact window size (Integer).
-                    Example: `100` means the strategy looks back exactly 100 bars.
-                * If window="rolling" or "static":
-                    `window_factor` is the Half-Life multiplier (Float).
-                    Example: `2.5` means the window size is calculated as `2.5 * Half_Life`.
+            fixed_window (int | None): Fixed lookback window size.
             entry_threshold (float): Z-score threshold to open a position.
             exit_threshold (float): Z-score threshold to close a position.
             stop_loss (float): Stop loss multiplier (e.g., 1.05 for 5% from entry_threshold), None if trade without SL.
@@ -511,7 +508,7 @@ class Strategy:
             exit_threshold=exit_threshold,
             test_start=test_start,
             test_end=test_end,
-            window_factor=window_factor,
+            fixed_window=fixed_window,
             win_test_start=win_test_start,
             stop_loss=stop_loss,
         )
@@ -552,26 +549,7 @@ class Strategy:
         """
         Runs optimization to find the best parameter combination for the strategy.
 
-        Scenario A: Fixed Window Size (window="fixed"):
-        -> 'window_factor' represents the exact window length (int)
-
-            from skopt.space import Integer, Real
-            param_space = [
-                Integer(10, 300, name='window_factor'), # Search window size from 10 to 300
-                Real(1.0, 3.0, name='entry_threshold'),
-            ]
-
-        Scenario B: Dynamic Window (window="rolling" or "static"):
-        -> 'window_factor' represents the Half-Life multiplier (float)
-
-            from skopt.space import Real
-            param_space = [
-                Real(0.5, 4.0, name='window_factor'),   # Search multiplier from 0.5 to 4.0
-                Real(1.0, 3.0, name='entry_threshold'),
-            ]
-
-        Scenario C: Locking parameters (static_params):
-
+        Locking parameters (static_params):
             static_params = {'stop_loss': 1.05}         # 'stop_loss' will be constant 1.05 for all iterations.
             static_params = {'stop_loss': None}         # Trade without 'stop_loss'.
 
@@ -592,7 +570,7 @@ class Strategy:
         """
 
         def objective_wrapper(
-            window_factor: float | int,
+            fixed_window: int | None,
             entry_threshold: float,
             exit_threshold: float,
             stop_loss: float | None,
@@ -602,7 +580,7 @@ class Strategy:
                 current_metric_type = kwargs.get("metric_type", metric_type)
 
                 result = self.run_strategy(
-                    window_factor=window_factor,
+                    fixed_window=fixed_window,
                     entry_threshold=entry_threshold,
                     exit_threshold=exit_threshold,
                     stop_loss=stop_loss,

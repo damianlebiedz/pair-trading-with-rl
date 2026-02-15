@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 # =======================================================
 best_params = {
-    "window_factor": 1,
+    "fixed_window": None,
     "entry_threshold": 2.0,
     "exit_threshold": 0.0,
     "stop_loss": 2,
@@ -34,8 +34,8 @@ def test_multi_pair(cfg: DictConfig):
     root = setup_run_environment(__file__)
 
     config = {
-        "pair_selection_test_start": cfg.pair_selection.test.start,
-        "pair_selection_test_end": cfg.pair_selection.test.end,
+        "pair_selection_start": cfg.pair_selection.start,
+        "pair_selection_end": cfg.pair_selection.end,
         "test_win_start": cfg.performance.test.win_start,
         "test_start": cfg.performance.test.start,
         "test_end": cfg.performance.test.end,
@@ -56,21 +56,18 @@ def test_multi_pair(cfg: DictConfig):
 
         ps_df = execute_pair_selection(
             tickers=cfg.tickers,
-            ps_start=lists["pair_selection_test_start_list"][i],
-            ps_end=lists["pair_selection_test_end_list"][i],
+            ps_start=lists["pair_selection_start_list"][i],
+            ps_end=lists["pair_selection_end_list"][i],
             test_start=lists["test_win_start_list"][i],
             test_end=lists["test_start_list"][i],
             interval=cfg.market.interval,
-            method=cfg.pair_selection.method,
-            ps_factor=cfg.pair_selection.ps_factor,
             top_n_factor=cfg.pair_selection.top_n_factor,
             output_dir=output_dir,
             coint_type=cfg.pair_selection.coint_type,
             beta_method=cfg.performance.beta_method,
-            hl_window_factor=best_params["window_factor"],
         )
 
-        logger.info(f"\n{ps_df}")
+        logger.info("\n%s", ps_df.to_string())
         selected_pairs_names = ps_df["pair"].tolist()
 
         if not selected_pairs_names:
@@ -141,7 +138,6 @@ def test_multi_pair(cfg: DictConfig):
                 initial_cash=cfg.market.initial_cash / cfg.pair_selection.top_n_factor,
                 risk_free_rate_annual=cfg.market.risk_free_rate_annual,
                 min_trades_per_pair=cfg.performance.optimization.min_trades_per_pair,
-                window=cfg.performance.window,
                 beta_hedge=cfg.performance.beta_hedge,
                 beta_method=cfg.performance.beta_method,
                 delayed_entry=cfg.performance.delayed_entry,
@@ -156,11 +152,13 @@ def test_multi_pair(cfg: DictConfig):
 
         test_results = []
 
+        logger.info(f"--- Testing {len(selected_pairs_names)} Pairs ---")
+
         for pair_name in selected_pairs_names:
             ticker_x, ticker_y = pair_name.split("-")
             bt = strategies_map[pair_name]
 
-            logger.info(f"--- Testing pair: {pair_name} ---")
+            logger.debug(f"--- Testing pair: {pair_name} ---")
 
             result_test = execute_testing(
                 cfg=cfg,

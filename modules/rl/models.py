@@ -22,8 +22,6 @@ class AgentState:
         norm_time_in_pos (float): Normalized time in current position (0.0–1.0), where 1.0 means equal to window length.
         drawdown_pct (float): Current drawdown as a fraction of peak equity.
         current_market_vol (float): Instantaneous market volatility, computed as average of both assets' rolling volatility.
-        sl_utilization (float | None): Fraction of stop-loss distance currently “used”.
-            0.0 means just entered, 1.0 means hit stop-loss threshold. None if not applicable.
 
     Methods:
         get_state_arr() -> np.ndarray:
@@ -40,7 +38,6 @@ class AgentState:
     norm_time_in_pos: float
     drawdown_pct: float
     current_market_vol: float
-    sl_utilization: float | None
 
     def get_state_arr(self) -> np.ndarray:
         return np.array(
@@ -54,7 +51,6 @@ class AgentState:
                 float(self.norm_time_in_pos),
                 float(self.drawdown_pct),
                 float(self.current_market_vol),
-                _f(self.sl_utilization),
             ],
             dtype=np.float32,
         )

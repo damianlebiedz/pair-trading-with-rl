@@ -11,7 +11,6 @@ logger = logging.getLogger(__name__)
 ticker_x = "AVAXUSDT"
 ticker_y = "OPUSDT"
 best_params = {
-    "window_factor": 1,
     "entry_threshold": 2.5,
     "exit_threshold": 0.2,
     "stop_loss": 2,
@@ -36,7 +35,6 @@ def test(cfg: DictConfig):
         initial_cash=cfg.market.initial_cash,
         risk_free_rate_annual=cfg.market.risk_free_rate_annual,
         min_trades_per_pair=cfg.performance.optimization.min_trades_per_pair,
-        window=cfg.performance.window,
         beta_hedge=cfg.performance.beta_hedge,
         beta_method=cfg.performance.beta_method,
         delayed_entry=cfg.performance.delayed_entry,

@@ -192,15 +192,48 @@ def calculate_spread_statistics(
     x_col: str, y_col: str, beta: float, df: pd.DataFrame
 ) -> tuple[float, float, float]:
     spread_series = df[x_col] - (beta * df[y_col])
+
     spread = spread_series.iloc[-1]
     mean = spread_series.mean()
     std = spread_series.std()
+
     return spread, mean, std
 
 
-def calculate_z_score(
-    spread: float, mean: float, std: float
-) -> float | None:
+def calculate_hurst(
+    x_col: str, y_col: str, beta: float, df: pd.DataFrame, max_lags: int = 20
+) -> float:
+    """
+    Calculates the Hurst Exponent to determine the time series memory.
+    H < 0.5: Mean reverting series.
+    H = 0.5: Random walk (Geometric Brownian Motion).
+    H > 0.5: Trending series.
+    """
+    lags = range(2, max_lags)
+    tau = []
+
+    spread_series = df[x_col] - (beta * df[y_col])
+    series_val = spread_series.values
+
+    if len(series_val) < max_lags * 2:
+        return 0.5
+
+    for lag in lags:
+        diff = series_val[lag:] - series_val[:-lag]
+        if len(diff) == 0:
+            continue
+        tau.append(np.std(diff))
+
+    if not tau:
+        return 0.5
+
+    m = np.polyfit(np.log(lags), np.log(tau), 1)
+    hurst = m[0]
+
+    return hurst
+
+
+def calculate_z_score(spread: float, mean: float, std: float) -> float | None:
     if std == 0:
         return None
     return (spread - mean) / std
@@ -211,9 +244,8 @@ def calculate_half_life_window(
     y_col: str,
     beta: float,
     df: pd.DataFrame,
-    window_factor: float,
-    min_window: int = 48,     # TODO: wynieść do cfg
-    max_window: int = 336,    # TODO
+    min_window: int = 48,  # TODO: wynieść do cfg
+    max_window: int = 336,  # TODO
 ) -> int | None:
     """
     Estimates the mean-reversion Half-Life via the Ornstein-Uhlenbeck (OU) process
@@ -227,14 +259,12 @@ def calculate_half_life_window(
     4. Validate λ: If λ >= 0, the process is not mean-reverting (explosive or random walk),
        and the function returns None.
     5. Calculate Half-Life: -ln(2) / λ.
-    6. Derive Window: floor(Half-Life * window_factor).
 
     Args:
         x_col: Column name for asset X.
         y_col: Column name for asset Y.
         beta: Hedge ratio.
         df: DataFrame containing price data.
-        window_factor: Multiplier for the half-life to determine final window size.
         min_window: minimum window size.
         max_window: maximum window size.
 
@@ -261,9 +291,8 @@ def calculate_half_life_window(
         return None
 
     half_life = -np.log(2) / lam
-    window = int(half_life * window_factor)
 
-    if window < min_window or window > max_window:
+    if half_life < min_window or half_life > max_window:
         return None
 
-    return window
+    return half_life

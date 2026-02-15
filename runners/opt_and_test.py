@@ -24,15 +24,7 @@ static_params = {}
 def opt_and_test(cfg: DictConfig):
     output_dir = setup_run_environment(__file__)
 
-    if cfg.performance.window == "fixed":
-        window_factor_min = cfg.performance.optimization.fixed_window_factor_min
-        window_factor_max = cfg.performance.optimization.fixed_window_factor_max
-    else:
-        window_factor_min = cfg.performance.optimization.window_factor_min
-        window_factor_max = cfg.performance.optimization.window_factor_max
-
     param_space = [
-        Real(window_factor_min, window_factor_max, name="window_factor"),
         Real(
             cfg.performance.optimization.entry_threshold_min,
             cfg.performance.optimization.entry_threshold_max,
@@ -50,19 +42,31 @@ def opt_and_test(cfg: DictConfig):
         ),
     ]
 
+    if cfg.performance.optimization.fixed_window:
+        param_space.append(
+            Real(
+                cfg.performance.optimization.fixed_window_min,
+                cfg.performance.optimization.fixed_window_max,
+                name="fixed_window",
+            ),
+        )
+    else:
+        static_params["fixed_window"] = None
+
     logger.info(f"Saving results to: {output_dir}")
     logger.info("CONFIG:\n%s", OmegaConf.to_yaml(cfg))
 
     bt = Strategy(
         ticker_x=ticker_x,
         ticker_y=ticker_y,
-        start=cfg.performance.optimization.beta_start,
+        start=cfg.performance.optimization.win_start,
         end=cfg.performance.test.end,
         interval=cfg.market.interval,
         fee_rate=cfg.market.fee_rate,
         initial_cash=cfg.market.initial_cash,
         risk_free_rate_annual=cfg.market.risk_free_rate_annual,
         min_trades_per_pair=cfg.performance.optimization.min_trades_per_pair,
+        beta_hedge=cfg.performance.beta_hedge,
         beta_method=cfg.performance.beta_method,
         delayed_entry=cfg.performance.delayed_entry,
         time_decay_sl=(
@@ -90,7 +94,7 @@ def opt_and_test(cfg: DictConfig):
         ticker_x=ticker_x,
         ticker_y=ticker_y,
         output_dir=output_dir,
-        win_test_start=cfg.performance.optimization.beta_start,
+        win_test_start=cfg.performance.optimization.win_start,
         test_start=cfg.performance.optimization.start,
         test_end=cfg.performance.optimization.end,
         subdir="opt",
@@ -104,7 +108,7 @@ def opt_and_test(cfg: DictConfig):
         ticker_x=ticker_x,
         ticker_y=ticker_y,
         output_dir=output_dir,
-        win_test_start=cfg.performance.test.beta_start,
+        win_test_start=cfg.performance.test.win_start,
         test_start=cfg.performance.test.start,
         test_end=cfg.performance.test.end,
         subdir="test",

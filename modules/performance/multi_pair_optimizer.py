@@ -47,7 +47,7 @@ class MultiPairOptimizer:
 
         Args:
             static_params (dict): Constant parameters fixed during this optimization run.
-            param_dict (dict): The specific set of variable parameters (e.g., window_factor,
+            param_dict (dict): The specific set of variable parameters (e.g., fixed_window,
                 thresholds) being tested in this iteration.
             metric_type (Literal["gross", "net"]): Whether to evaluate based on Gross PnL
                 or Net PnL (after fees).
@@ -62,7 +62,7 @@ class MultiPairOptimizer:
         try:
             params = {**static_params, **param_dict}
 
-            window_factor = params.get("window_factor")
+            fixed_window = params.get("fixed_window")
             entry_threshold = params.get("entry_threshold")
             exit_threshold = params.get("exit_threshold")
             stop_loss = params.get("stop_loss")
@@ -72,7 +72,7 @@ class MultiPairOptimizer:
 
             for strat in self.strategies:
                 res = strat.run_strategy(
-                    window_factor=window_factor,
+                    fixed_window=fixed_window,
                     entry_threshold=entry_threshold,
                     exit_threshold=exit_threshold,
                     stop_loss=stop_loss,
