@@ -1,3 +1,6 @@
+defaults:
+  - override /rl_algo: "a2c_baseline" # "a2c_baseline" or "recurrent_ppo"
+
 pair_selection:
   top_n_factor: 10
   coint_type: "johansen" # "eg" or "johansen"

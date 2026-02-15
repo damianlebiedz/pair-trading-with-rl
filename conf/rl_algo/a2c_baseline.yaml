@@ -1,0 +1,7 @@
+algo_name: "a2c_baseline"
+policy_type: "MlpPolicy"  # Policy Network
+
+learning_rate: 0.0007   # Step size for the optimizer
+n_steps: 5              # Number of steps to collect before updating (A2C updates very frequently)
+gamma: 0.99             # Discount factor for future rewards
+ent_coef: 0.01          # Entropy coefficient to encourage exploration

@@ -1,7 +1,7 @@
 defaults:
   - _self_
   - config
-  - a2c_baseline
+  - rl_algo: a2c_baseline
   - override hydra/job_logging: none
 
 hydra:
@@ -28,3 +28,8 @@ market:
   fee_rate: 0.001
   risk_free_rate_annual: 0.00
   interval: "1h"
+
+rl:
+  seed: 42
+  total_timesteps: 1000000
+  verbose: 1

@@ -8,8 +8,8 @@ from modules.performance.models import (
     PositionState,
 )
 from modules.core.execution import TradeExecutor
-from modules.rl.models import AgentState
-from modules.rl.rewards import RewardScheme
+from modules.learning.models import AgentState
+from modules.learning.rewards import RewardScheme
 
 
 class PairsTradingEnv(gym.Env):
@@ -24,6 +24,9 @@ class PairsTradingEnv(gym.Env):
 
         self.result = result
         self.df = result.data.reset_index(drop=True)
+
+        valid_indices = self.df.dropna(subset=["z_score", "hurst", "market_vol", "std", "beta"]).index
+        self.warmup_offset = valid_indices[0] if not valid_indices.empty else 0
 
         self.position_state = PositionState()
         self.exec_logger = ExecLogger()
@@ -65,7 +68,7 @@ class PairsTradingEnv(gym.Env):
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
 
-        self.current_step = 0
+        self.current_step = self.warmup_offset
         self.equity = self.initial_equity
         self.peak_equity = self.initial_equity
 

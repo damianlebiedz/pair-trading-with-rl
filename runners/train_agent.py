@@ -1,10 +1,12 @@
 import logging
 from pathlib import Path
 import hydra
+import numpy as np
 import wandb
 from dotenv import load_dotenv
 from omegaconf import DictConfig, OmegaConf
 from stable_baselines3 import A2C
+from sb3_contrib import RecurrentPPO
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.utils import set_random_seed
 from stable_baselines3.common.vec_env import DummyVecEnv
@@ -12,11 +14,16 @@ import os
 from wandb.integration.sb3 import WandbCallback
 
 from modules.data_services.data_utils import load_strategy_result
-from modules.rl.environments import PairsTradingEnv
+from modules.learning.environments import PairsTradingEnv
 from runners.core.pipelines import setup_rl_run_environment
 
 logger = logging.getLogger(__name__)
 load_dotenv()
+
+ALGO_MAP = {
+    "a2c": A2C,
+    "recurrent_ppo": RecurrentPPO
+}
 
 
 class LogEquityCallback(BaseCallback):
@@ -45,10 +52,10 @@ class LogEquityCallback(BaseCallback):
 
 
 @hydra.main(version_base=None, config_path="../conf", config_name="base")
-def train_a2c_agent(cfg: DictConfig):
+def train_agent(cfg: DictConfig):
     rl_root = setup_rl_run_environment(__file__)
 
-    seed = cfg.seed
+    seed = cfg.rl.seed
     set_random_seed(seed)
     logger.info(f"Random seed set to: {seed}")
 
@@ -104,19 +111,24 @@ def train_a2c_agent(cfg: DictConfig):
     vec_env = DummyVecEnv([make_env])
     vec_env.seed(seed)
 
-    model = A2C(
+    algo_config = cfg.algo
+    algo_class = ALGO_MAP.get(algo_config.name)
+    model_params = OmegaConf.to_container(algo_config.params, resolve=True)
+
+    model = algo_class(
         cfg.policy_type,
         vec_env,
-        verbose=cfg.verbose,
+        verbose=cfg.rl.verbose,
         tensorboard_log=log_dir,
         learning_rate=cfg.learning_rate,
         n_steps=cfg.n_steps,
         gamma=cfg.gamma,
         ent_coef=cfg.ent_coef,
         seed=seed,
+        **model_params,
     )
 
-    logger.info(f"Starting A2C training (Run ID: {run.id})...")
+    logger.info(f"Starting {algo_config.name} training (Run ID: {run.id})...")
 
     callbacks = [
         WandbCallback(
@@ -128,18 +140,18 @@ def train_a2c_agent(cfg: DictConfig):
     ]
 
     try:
-        model.learn(total_timesteps=cfg.total_timesteps, callback=callbacks)
+        model.learn(total_timesteps=cfg.rl.total_timesteps, callback=callbacks)
         logger.info("Training finished.")
 
-        final_model_name = f"a2c_{run.id}_seed{seed}"
+        final_model_name = f"{algo_config.name}_{run.id}_seed{seed}"
         save_path = f"{model_dir}/{final_model_name}"
         model.save(save_path)
 
         if wandb.run is not None:
             model_artifact = wandb.Artifact(
-                name=f"a2c_model_{run.id}",
+                name=f"{algo_config.name}_model_{run.id}",
                 type="model",
-                description="Trained A2C model",
+                description=f"Trained {algo_config.name} model",
                 metadata={"seed": seed, "steps": cfg.total_timesteps},
             )
             model_artifact.add_file(f"{save_path}.zip")
@@ -147,11 +159,20 @@ def train_a2c_agent(cfg: DictConfig):
             logger.info("Logged model artifact to W&B.")
 
             obs = vec_env.reset()
+            lstm_states = None
+            episode_starts = np.ones((vec_env.num_envs,), dtype=bool)
             total_reward = 0
 
             while True:
-                action, _ = model.predict(obs, deterministic=True)
+                action, lstm_states = model.predict(
+                    obs,
+                    state=lstm_states,
+                    episode_start=episode_starts,
+                    deterministic=True
+                )
                 obs, rewards, dones, info = vec_env.step(action)
+                episode_starts = dones
+
                 total_reward += rewards[0]
                 if dones[0]:
                     break
@@ -161,13 +182,13 @@ def train_a2c_agent(cfg: DictConfig):
 
     except KeyboardInterrupt:
         logger.info("Training interrupted manually. Saving current model...")
-        final_model_name = f"a2c_{run.id}_seed{seed}_interrupted"
+        final_model_name = f"{algo_config.name}_{run.id}_seed{seed}_interrupted"
         save_path = f"{model_dir}/{final_model_name}"
         model.save(save_path)
 
         if wandb.run is not None:
             model_artifact = wandb.Artifact(
-                name=f"a2c_model_{run.id}_interrupted", type="model"
+                name=f"{algo_config.name}_model_{run.id}_interrupted", type="model"
             )
             model_artifact.add_file(f"{save_path}.zip")
             wandb.log_artifact(model_artifact)
@@ -177,4 +198,4 @@ def train_a2c_agent(cfg: DictConfig):
 
 
 if __name__ == "__main__":
-    train_a2c_agent()
+    train_agent()

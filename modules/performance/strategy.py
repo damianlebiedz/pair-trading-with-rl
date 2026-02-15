@@ -18,9 +18,9 @@ from modules.performance.models import (
     StrategyResult,
     ExecLogger,
 )
-from modules.rl.agents import RLAgentAdapter
+from modules.learning.agents import RLAgentAdapter
 from modules.performance.stats import calculate_stats
-from modules.rl.models import AgentState
+from modules.learning.models import AgentState
 
 
 class Strategy:
