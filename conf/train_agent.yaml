@@ -1,4 +1,5 @@
 defaults:
+  - _self_
   - base
   - rl_algo: a2c_baseline # 'a2c_baseline' or 'recurrent_ppo'
 
