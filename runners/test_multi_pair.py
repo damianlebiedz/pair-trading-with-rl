@@ -14,7 +14,8 @@ from runners.core.pipelines import (
     execute_testing,
     setup_run_environment,
     merge_multi_pair_results,
-    merge_multi_period_results, setup_rl_run_environment,
+    merge_multi_period_results,
+    setup_rl_run_environment,
 )
 from runners.core.utils import generate_date_lists, load_model
 

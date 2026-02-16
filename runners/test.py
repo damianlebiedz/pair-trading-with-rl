@@ -6,7 +6,11 @@ from omegaconf import OmegaConf, DictConfig
 
 from modules.learning.agents import RLAgentAdapter
 from modules.performance.strategy import Strategy
-from runners.core.pipelines import execute_testing, setup_run_environment, setup_rl_run_environment
+from runners.core.pipelines import (
+    execute_testing,
+    setup_run_environment,
+    setup_rl_run_environment,
+)
 from runners.core.utils import load_model
 
 logger = logging.getLogger(__name__)

@@ -100,7 +100,9 @@ class Strategy:
             )
 
         if window_method not in ["fixed", "static", "rolling"]:
-            raise ValueError("Invalid window_method: should be 'fixed' or 'static' or 'rolling'")
+            raise ValueError(
+                "Invalid window_method: should be 'fixed' or 'static' or 'rolling'"
+            )
 
         if valid_window[0] > valid_window[1]:
             raise ValueError(f"'valid_window' should be (min, max): {valid_window}")
@@ -171,7 +173,9 @@ class Strategy:
 
         beta_method = self.beta_method
 
-        test_start_pos = df.index.get_indexer([pd.to_datetime(test_start)], method="bfill")[0]
+        test_start_pos = df.index.get_indexer(
+            [pd.to_datetime(test_start)], method="bfill"
+        )[0]
         target_date = pd.to_datetime(win_test_start)
         win_start_pos = df.index.get_indexer([target_date], method="bfill")[0]
         if df.index[win_start_pos] == target_date:
