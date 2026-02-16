@@ -197,28 +197,28 @@ def test_multi(cfg: DictConfig):
 
             test_results.append(result_test)
 
-        logger.info("--- Merging Multi-Pair Results ---")
+        if len(test_results) > 1:
+            merge_multi_pair_results(
+                cfg=cfg,
+                output_dir=output_dir,
+                results=test_results,
+                initial_cash=cfg.market.initial_cash,
+                risk_free_rate_annual=cfg.market.risk_free_rate_annual,
+                test_start=lists["test_start_list"][i],
+                test_end=lists["test_end_list"][i],
+            )
 
-        merge_multi_pair_results(
+    if number_of_iterations > 1:
+        merge_multi_period_results(
             cfg=cfg,
-            output_dir=output_dir,
-            results=test_results,
+            output_dir=root,
+            ticker_x="multi",
+            ticker_y="pair",
             initial_cash=cfg.market.initial_cash,
             risk_free_rate_annual=cfg.market.risk_free_rate_annual,
-            test_start=lists["test_start_list"][i],
-            test_end=lists["test_end_list"][i],
         )
 
-    merge_multi_period_results(
-        cfg=cfg,
-        output_dir=root,
-        ticker_x="multi",
-        ticker_y="pair",
-        initial_cash=cfg.market.initial_cash,
-        risk_free_rate_annual=cfg.market.risk_free_rate_annual,
-    )
-
-    logger.info(f"Results merged and saved in {root}.")
+    logger.info(f"Results saved in {root}.")
 
 
 if __name__ == "__main__":
