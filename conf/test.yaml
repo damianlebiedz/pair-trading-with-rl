@@ -17,7 +17,6 @@ performance:
   time_decay_end: 1.0
 
   rl: False
-  rl_reward: "pnl" # "pnl" or "risk_adj"
 
   vol_window: 24
   window_min: 48

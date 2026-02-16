@@ -1,3 +1,5 @@
 defaults:
   - base
   - rl_algo: a2c_baseline # 'a2c_baseline' or 'recurrent_ppo'
+
+rl_reward: "vol_penalty" # "pnl", "risk_adj", "vol_penalty", or "diff_sharpe"
