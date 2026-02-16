@@ -1,7 +1,7 @@
-fixed_window: None
-entry_threshold: None
-exit_threshold: None
-stop_loss: None
+fixed_window: null
+entry_threshold: null
+exit_threshold: null
+stop_loss: null
 
 pair_selection:
   top_n_factor: 10
@@ -59,4 +59,4 @@ performance:
     end: "2024-02-01"
 
 defaults:
-  - /base
+  - base

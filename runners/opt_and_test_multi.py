@@ -22,7 +22,7 @@ from runners.core.utils import generate_date_lists
 logger = logging.getLogger(__name__)
 
 
-@hydra.main(version_base=None, config_path="../conf", config_name="runners/opt_and_test_multi")
+@hydra.main(version_base=None, config_path="../conf", config_name="opt_and_test_multi")
 def opt_and_test_multi(cfg: DictConfig):
     root = setup_run_environment(__file__)
 

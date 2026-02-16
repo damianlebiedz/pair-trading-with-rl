@@ -10,7 +10,6 @@ hydra:
 wandb:
   project: "research-paper"
   entity: null
-  group: "a2c"
   mode: "online"
 
 paths:

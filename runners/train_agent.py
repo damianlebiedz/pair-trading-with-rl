@@ -48,7 +48,7 @@ class LogEquityCallback(BaseCallback):
         return True
 
 
-@hydra.main(version_base=None, config_path="../conf", config_name="base")
+@hydra.main(version_base=None, config_path="../conf", config_name="train_agent")
 def train_agent(cfg: DictConfig):
     rl_root = setup_rl_run_environment(__file__)
 
@@ -108,7 +108,7 @@ def train_agent(cfg: DictConfig):
     vec_env = DummyVecEnv([make_env])
     vec_env.seed(seed)
 
-    algo_config = cfg.algo
+    algo_config = cfg.rl_algo.algo_name
     algo_class = ALGO_MAP.get(algo_config.name)
     model_params = OmegaConf.to_container(algo_config.params, resolve=True)
 

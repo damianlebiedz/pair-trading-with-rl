@@ -1,7 +1,7 @@
 ticker_x: "AVAXUSDT"
 ticker_y: "OPUSDT"
 
-fixed_window: None  # integer if window_method = 'fixed', else None
+fixed_window: null  # integer if window_method = 'fixed', else null
 entry_threshold: 2.5
 exit_threshold: 0.2
 stop_loss: 2
@@ -29,5 +29,5 @@ performance:
     end: "2024-02-01"
 
 defaults:
-  - /base
+  - base
   - rl_algo: "a2c_baseline" # "a2c_baseline" or "recurrent_ppo"
