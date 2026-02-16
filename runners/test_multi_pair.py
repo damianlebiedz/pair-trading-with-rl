@@ -141,6 +141,7 @@ def test_multi_pair(cfg: DictConfig):
                 beta_hedge=cfg.performance.beta_hedge,
                 beta_method=cfg.performance.beta_method,
                 delayed_entry=cfg.performance.delayed_entry,
+                sl_lock=cfg.performance.sl_lock,
                 time_decay_sl=(
                     cfg.performance.time_decay_start,
                     cfg.performance.time_decay_end,

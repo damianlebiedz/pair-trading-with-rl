@@ -63,6 +63,7 @@ class Strategy:
         beta_hedge: Literal["static", "rolling"],
         beta_method: Literal["ols", "johansen", "kalman"],
         delayed_entry: bool,
+        sl_lock: bool,
         vol_window: int,
         valid_window: tuple[int, int],
         time_decay_sl: tuple[float, float] | None = None,
@@ -81,6 +82,7 @@ class Strategy:
         self.beta_hedge = beta_hedge
         self.beta_method = beta_method
         self.delayed_entry = delayed_entry
+        self.sl_lock = sl_lock
         self.time_decay_sl = time_decay_sl
         self.agent = agent
         self.vol_window = vol_window
@@ -381,7 +383,7 @@ class Strategy:
                         z_score=z_score,
                         exit_threshold=exit_threshold,
                     )
-                    if sl_lock:
+                    if sl_lock and self.sl_lock:
                         position_state.sl_lock = True
 
                 position_state.open_time = idx

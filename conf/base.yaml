@@ -1,7 +1,6 @@
 defaults:
   - _self_
   - config
-  - rl_algo: a2c_baseline
   - override hydra/job_logging: none
 
 hydra:

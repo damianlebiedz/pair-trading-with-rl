@@ -1,11 +1,9 @@
 defaults:
-  - override /rl_algo: "a2c_baseline" # "a2c_baseline" or "recurrent_ppo"
+  - rl_algo: "a2c_baseline" # "a2c_baseline" or "recurrent_ppo"
 
 pair_selection:
-  top_n_factor: 10
+  top_n_factor: 20
   coint_type: "johansen" # "eg" or "johansen"
-  beta_validation: False
-  window_validation: False
 
   start: "2023-11-01"
   end: "2024-01-01"
@@ -13,6 +11,7 @@ pair_selection:
 performance:
   beta_method: "kalman" # "ols", "johansen" or "kalman"
   delayed_entry: True # True or False
+  sl_lock: True
   time_decay_start: 0.5
   time_decay_end: 1.0
 
@@ -23,6 +22,7 @@ performance:
   rl_reward: "pnl" # "pnl" or "risk_adj"
 
   vol_window: 24
+
   window_min: 48
   window_max: 336
 
@@ -35,7 +35,7 @@ performance:
     end: "2024-01-01"
 
     # Search parameters
-    n_iter: 300
+    n_iter: 200
     replicates: 1
     penalty_bad: -100
 
@@ -52,7 +52,7 @@ performance:
     stop_loss_max: 3.00
 
     # Objective parameters
-    min_trades_per_pair: 5
+    min_trades_per_pair: 10
 
   test:
     win_start: "2023-12-01"

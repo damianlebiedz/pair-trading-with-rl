@@ -75,8 +75,8 @@ def opt_and_test_multi_pair(cfg: DictConfig):
         if cfg.performance.optimization.fixed_window:
             param_space.append(
                 Real(
-                    cfg.performance.optimization.fixed_window_min,
-                    cfg.performance.optimization.fixed_window_max,
+                    cfg.performance.window_min,
+                    cfg.performance.window_max,
                     name="fixed_window",
                 ),
             )
@@ -96,7 +96,7 @@ def opt_and_test_multi_pair(cfg: DictConfig):
             valid_window=(cfg.performance.window_min, cfg.performance.window_max),
         )
 
-        logger.info(f"\n{ps_df}")
+        logger.info("\n%s", ps_df.to_string())
         selected_pairs_names = ps_df["pair"].tolist()
 
         if not selected_pairs_names:
@@ -170,6 +170,7 @@ def opt_and_test_multi_pair(cfg: DictConfig):
                 beta_hedge=cfg.performance.beta_hedge,
                 beta_method=cfg.performance.beta_method,
                 delayed_entry=cfg.performance.delayed_entry,
+                sl_lock=cfg.performance.sl_lock,
                 time_decay_sl=(
                     cfg.performance.time_decay_start,
                     cfg.performance.time_decay_end,
