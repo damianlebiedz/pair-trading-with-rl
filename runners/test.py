@@ -11,21 +11,20 @@ from runners.core.utils import load_model
 
 logger = logging.getLogger(__name__)
 
-# =======================================================
-ticker_x = "AVAXUSDT"
-ticker_y = "OPUSDT"
-best_params = {
-    "fixed_window": None,
-    "entry_threshold": 2.5,
-    "exit_threshold": 0.2,
-    "stop_loss": 2,
-}
-# =======================================================
-
 
 @hydra.main(version_base=None, config_path="../conf", config_name="base")
 def test(cfg: DictConfig):
     output_dir = setup_run_environment(__file__)
+
+    ticker_x = cfg.ticker_x
+    ticker_y = cfg.ticker_y
+
+    best_params = {
+        "fixed_window": cfg.fixed_window,
+        "entry_threshold": cfg.entry_threshold,
+        "exit_threshold": cfg.exit_threshold,
+        "stop_loss": cfg.stop_loss,
+    }
 
     rl_output_dir = None
     if cfg.performance.rl:

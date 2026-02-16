@@ -21,14 +21,20 @@ from runners.core.utils import generate_date_lists
 
 logger = logging.getLogger(__name__)
 
-# =======================================================
-static_params = {}
-# =======================================================
-
 
 @hydra.main(version_base=None, config_path="../conf", config_name="base")
 def opt_and_test_multi_pair(cfg: DictConfig):
     root = setup_run_environment(__file__)
+
+    static_params = {}
+    if cfg.fixed_window is not None:
+        static_params["fixed_window"] = cfg.fixed_window
+    if cfg.entry_threshold is not None:
+        static_params["entry_threshold"] = cfg.entry_threshold
+    if cfg.exit_threshold is not None:
+        static_params["exit_threshold"] = cfg.exit_threshold
+    if cfg.stop_loss is not None:
+        static_params["stop_loss"] = cfg.stop_loss
 
     config = {
         "pair_selection_start": cfg.pair_selection.start,

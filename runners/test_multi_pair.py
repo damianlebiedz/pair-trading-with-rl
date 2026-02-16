@@ -20,19 +20,17 @@ from runners.core.utils import generate_date_lists, load_model
 
 logger = logging.getLogger(__name__)
 
-# =======================================================
-best_params = {
-    "fixed_window": None,
-    "entry_threshold": 2.0,
-    "exit_threshold": 0.0,
-    "stop_loss": 2,
-}
-# =======================================================
 
-
-@hydra.main(version_base=None, config_path="../conf", config_name="base")
-def test_multi_pair(cfg: DictConfig):
+@hydra.main(version_base=None, config_path="../conf", config_name="runners/test_multi")
+def test_multi(cfg: DictConfig):
     root = setup_run_environment(__file__)
+
+    best_params = {
+        "fixed_window": cfg.fixed_window,
+        "entry_threshold": cfg.entry_threshold,
+        "exit_threshold": cfg.exit_threshold,
+        "stop_loss": cfg.stop_loss,
+    }
 
     rl_output_dir = None
     if cfg.performance.rl:
@@ -224,4 +222,4 @@ def test_multi_pair(cfg: DictConfig):
 
 
 if __name__ == "__main__":
-    test_multi_pair()
+    test_multi()
