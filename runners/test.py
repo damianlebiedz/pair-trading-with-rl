@@ -16,7 +16,7 @@ from runners.core.utils import load_model
 logger = logging.getLogger(__name__)
 
 
-@hydra.main(version_base=None, config_path="../conf", config_name="base")
+@hydra.main(version_base=None, config_path="../conf", config_name="runners/test")
 def test(cfg: DictConfig):
     output_dir = setup_run_environment(__file__)
 
