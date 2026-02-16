@@ -4,6 +4,7 @@ import hydra
 import pandas as pd
 from omegaconf import OmegaConf, DictConfig
 
+from modules.learning.agents import RLAgentAdapter
 from modules.performance.models import StrategyResult
 from modules.data_services.data_loaders import load_data
 from modules.data_services.data_utils import save_dataframe, save_strategy_result
@@ -13,9 +14,9 @@ from runners.core.pipelines import (
     execute_testing,
     setup_run_environment,
     merge_multi_pair_results,
-    merge_multi_period_results,
+    merge_multi_period_results, setup_rl_run_environment,
 )
-from runners.core.utils import generate_date_lists
+from runners.core.utils import generate_date_lists, load_model
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,10 @@ best_params = {
 @hydra.main(version_base=None, config_path="../conf", config_name="base")
 def test_multi_pair(cfg: DictConfig):
     root = setup_run_environment(__file__)
+
+    rl_output_dir = None
+    if cfg.performance.rl:
+        rl_output_dir = setup_rl_run_environment(__file__)
 
     config = {
         "pair_selection_start": cfg.pair_selection.start,
@@ -125,6 +130,16 @@ def test_multi_pair(cfg: DictConfig):
         strategies = []
         strategies_map = {}
 
+        agent = None
+        if cfg.performance.rl:
+            model_path = os.path.join(rl_output_dir, "models")
+            try:
+                model = load_model(path=model_path)
+                agent = RLAgentAdapter(model=model, training_mode=False)
+                logger.info("RL Agent loaded successfully and shared across pairs.")
+            except Exception as e:
+                logger.error(f"Failed to load RL model: {e}")
+
         for pair_name in selected_pairs_names:
             ticker_x, ticker_y = pair_name.split("-")
 
@@ -140,6 +155,7 @@ def test_multi_pair(cfg: DictConfig):
                 min_trades_per_pair=cfg.performance.optimization.min_trades_per_pair,
                 beta_hedge=cfg.performance.beta_hedge,
                 beta_method=cfg.performance.beta_method,
+                window_method=cfg.performance.window_method,
                 delayed_entry=cfg.performance.delayed_entry,
                 sl_lock=cfg.performance.sl_lock,
                 time_decay_sl=(
@@ -148,6 +164,7 @@ def test_multi_pair(cfg: DictConfig):
                 ),
                 valid_window=(cfg.performance.window_min, cfg.performance.window_max),
                 vol_window=cfg.performance.vol_window,
+                agent=agent,
             )
 
             strategies.append(bt)
@@ -160,6 +177,10 @@ def test_multi_pair(cfg: DictConfig):
         for pair_name in selected_pairs_names:
             ticker_x, ticker_y = pair_name.split("-")
             bt = strategies_map[pair_name]
+
+            if bt.agent is not None:
+                bt.agent.reset_agent()
+                logger.debug(f"Agent memory reset for pair {pair_name}")
 
             logger.debug(f"--- Testing pair: {pair_name} ---")
 

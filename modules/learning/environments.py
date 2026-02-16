@@ -90,6 +90,7 @@ class PairsTradingEnv(gym.Env):
         price_y = self.df.at[self.current_step, self.result.ticker_y]
         beta = self.df.at[self.current_step, "beta"]
         std = self.df.at[self.current_step, "std"]
+        win = self.df.at[self.current_step, "win"]
 
         step_pnl, step_fees = TradeExecutor.execute(
             fee_rate=self.result.fee_rate,
@@ -99,6 +100,7 @@ class PairsTradingEnv(gym.Env):
             price_x=price_x,
             price_y=price_y,
             beta=beta,
+            win=win,
             equity=self.equity,
             exec_logger=self.exec_logger,
             std=std,

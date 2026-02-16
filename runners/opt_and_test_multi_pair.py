@@ -72,7 +72,7 @@ def opt_and_test_multi_pair(cfg: DictConfig):
             ),
         ]
 
-        if cfg.performance.optimization.fixed_window:
+        if cfg.performance.window_method == "fixed":
             param_space.append(
                 Real(
                     cfg.performance.window_min,
@@ -169,6 +169,7 @@ def opt_and_test_multi_pair(cfg: DictConfig):
                 min_trades_per_pair=cfg.performance.optimization.min_trades_per_pair,
                 beta_hedge=cfg.performance.beta_hedge,
                 beta_method=cfg.performance.beta_method,
+                window_method=cfg.performance.window_method,
                 delayed_entry=cfg.performance.delayed_entry,
                 sl_lock=cfg.performance.sl_lock,
                 time_decay_sl=(
