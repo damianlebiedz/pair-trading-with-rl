@@ -176,13 +176,12 @@ class Strategy:
         if -1 in [test_start_pos, start_pos, win_start_pos, end_pos]:
             raise KeyError("Index not found in dataframe")
 
-        beta = calculate_beta(
+        market_beta = calculate_beta(
             x_col=source_x_col,
             y_col=source_y_col,
             df=df.iloc[start_pos : test_start_pos + 1],
             beta_method=beta_method,
         )
-        market_beta = beta
 
         kf_state = None
         if self.beta_method == "kalman" and self.beta_hedge == "rolling":
@@ -199,7 +198,7 @@ class Strategy:
             win = calculate_half_life_window(
                 x_col=source_x_col,
                 y_col=source_y_col,
-                beta=beta,
+                beta=market_beta,
                 df=df.iloc[win_start_pos : test_start_pos + 1],
                 valid_window=self.valid_window,
             )
@@ -268,8 +267,6 @@ class Strategy:
                 drawdown_pct = -1.0
                 signal = 0
             else:
-                market_beta = beta
-
                 if self.beta_hedge == "rolling" and i != test_start_pos:
                     if self.beta_method == "kalman":
                         market_beta = kf_state.update(
@@ -295,7 +292,7 @@ class Strategy:
                 else:
                     beta = market_beta
 
-                if win is None or beta <= 0:
+                if win is None or market_beta <= 0:
                     z_score, spread, mean, std, market_std, hurst = (
                         None,
                         None,
