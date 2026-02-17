@@ -14,7 +14,7 @@ performance:
   iterations: 12 # integer >= 1
 
   beta_method: "kalman" # "ols", "johansen" or "kalman"
-  beta_hedge: "static" # "static" or "rolling"
+  beta_hedge: "rolling" # "static" or "rolling"
   window_method: "rolling" # "fixed", "static", or "rolling"
 
   delayed_entry: True # True or False
