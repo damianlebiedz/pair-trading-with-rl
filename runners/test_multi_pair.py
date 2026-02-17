@@ -22,7 +22,7 @@ from runners.core.utils import generate_date_lists, load_model
 logger = logging.getLogger(__name__)
 
 
-@hydra.main(version_base=None, config_path="../conf", config_name="test_multi")
+@hydra.main(version_base=None, config_path="../config", config_name="test_multi")
 def test_multi(cfg: DictConfig):
     root = setup_run_environment(__file__)
 
@@ -151,7 +151,7 @@ def test_multi(cfg: DictConfig):
                 fee_rate=cfg.market.fee_rate,
                 initial_cash=cfg.market.initial_cash / cfg.pair_selection.top_n_factor,
                 risk_free_rate_annual=cfg.market.risk_free_rate_annual,
-                min_trades_per_pair=cfg.performance.optimization.min_trades_per_pair,
+                min_trades_per_pair=cfg.performance.min_trades_per_pair,
                 beta_hedge=cfg.performance.beta_hedge,
                 beta_method=cfg.performance.beta_method,
                 window_method=cfg.performance.window_method,

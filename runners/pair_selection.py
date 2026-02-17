@@ -7,7 +7,7 @@ from runners.core.pipelines import execute_pair_selection, setup_run_environment
 logger = logging.getLogger(__name__)
 
 
-@hydra.main(version_base=None, config_path="../conf", config_name="base")
+@hydra.main(version_base=None, config_path="../config", config_name="base")
 def pair_selection(cfg: DictConfig):
     output_dir = setup_run_environment(__file__)
 

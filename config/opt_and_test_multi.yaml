@@ -27,6 +27,8 @@ performance:
   window_min: 48
   window_max: 336
 
+  min_trades_per_pair: 10
+
   optimization:
     objective_func: "sortino" # "sortino"
     metric_type: "net" # "gross" or "net"
@@ -49,9 +51,6 @@ performance:
 
     stop_loss_min: 1.05
     stop_loss_max: 3.00
-
-    # Objective parameters
-    min_trades_per_pair: 10
 
   test:
     win_start: "2023-12-01"

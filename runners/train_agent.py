@@ -54,7 +54,7 @@ class LogEquityCallback(BaseCallback):
         return True
 
 
-@hydra.main(version_base=None, config_path="../conf", config_name="train_agent")
+@hydra.main(version_base=None, config_path="../config", config_name="train_agent")
 def train_agent(cfg: DictConfig):
     rl_root = setup_rl_run_environment(__file__)
 
