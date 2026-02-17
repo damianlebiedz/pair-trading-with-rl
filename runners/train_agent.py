@@ -15,6 +15,12 @@ from wandb.integration.sb3 import WandbCallback
 
 from modules.data_services.data_utils import load_strategy_result
 from modules.learning.environments import PairsTradingEnv
+from modules.learning.rewards import (
+    PnLReward,
+    RiskAdjustedReward,
+    VolatilityPenaltyReward,
+    DifferentialSharpeReward,
+)
 from runners.core.pipelines import setup_rl_run_environment
 
 logger = logging.getLogger(__name__)
@@ -48,7 +54,7 @@ class LogEquityCallback(BaseCallback):
         return True
 
 
-@hydra.main(version_base=None, config_path="../conf", config_name="base")
+@hydra.main(version_base=None, config_path="../config", config_name="train_agent")
 def train_agent(cfg: DictConfig):
     rl_root = setup_rl_run_environment(__file__)
 
@@ -101,14 +107,30 @@ def train_agent(cfg: DictConfig):
     logger.info(f"Loaded data for {result.ticker_x}/{result.ticker_y}")
 
     def make_env():
-        env = PairsTradingEnv(result=result, reward_scheme=cfg.rl_reward)
+        rl_reward = cfg.rl_reward
+        reward_map = {
+            "pnl": PnLReward,
+            "risk_adj": RiskAdjustedReward,
+            "vol_penalty": VolatilityPenaltyReward,
+            "diff_sharpe": DifferentialSharpeReward,
+        }
+
+        try:
+            reward_schema = reward_map[rl_reward]()
+        except KeyError:
+            raise ValueError(
+                f"'rl_reward' should be one of {list(reward_map.keys())}: {rl_reward}"
+            )
+
+        env = PairsTradingEnv(result=result, reward_scheme=reward_schema)
         env.reset(seed=seed)
+
         return env
 
     vec_env = DummyVecEnv([make_env])
     vec_env.seed(seed)
 
-    algo_config = cfg.algo
+    algo_config = cfg.rl_algo.algo_name
     algo_class = ALGO_MAP.get(algo_config.name)
     model_params = OmegaConf.to_container(algo_config.params, resolve=True)
 

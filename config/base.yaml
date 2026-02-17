@@ -1,7 +1,4 @@
 defaults:
-  - _self_
-  - config
-  - rl_algo: a2c_baseline
   - override hydra/job_logging: none
 
 hydra:
@@ -12,7 +9,6 @@ hydra:
 wandb:
   project: "research-paper"
   entity: null
-  group: "a2c"
   mode: "online"
 
 paths:

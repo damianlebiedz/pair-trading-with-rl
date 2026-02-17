@@ -26,7 +26,7 @@ class PairsTradingEnv(gym.Env):
         self.df = result.data.reset_index(drop=True)
 
         valid_indices = self.df.dropna(
-            subset=["z_score", "hurst", "market_vol", "std", "beta"]
+            subset=["z_score", "hurst", "market_vol", "market_std", "market_beta"]
         ).index
         self.warmup_offset = valid_indices[0] if not valid_indices.empty else 0
 
@@ -37,9 +37,9 @@ class PairsTradingEnv(gym.Env):
             "z_score",
             "spread",
             "mean",
-            "std",
-            "beta",
-            "window",
+            "market_std",
+            "market_beta",
+            "market_win",
             self.result.ticker_x,
             self.result.ticker_y,
         ]
@@ -88,8 +88,9 @@ class PairsTradingEnv(gym.Env):
 
         price_x = self.df.at[self.current_step, self.result.ticker_x]
         price_y = self.df.at[self.current_step, self.result.ticker_y]
-        beta = self.df.at[self.current_step, "beta"]
-        std = self.df.at[self.current_step, "std"]
+        market_beta = self.df.at[self.current_step, "market_beta"]
+        market_std = self.df.at[self.current_step, "market_std"]
+        market_win = self.df.at[self.current_step, "market_win"]
 
         step_pnl, step_fees = TradeExecutor.execute(
             fee_rate=self.result.fee_rate,
@@ -98,10 +99,11 @@ class PairsTradingEnv(gym.Env):
             action=target_position,
             price_x=price_x,
             price_y=price_y,
-            beta=beta,
+            beta=market_beta,
+            win=market_win,
             equity=self.equity,
             exec_logger=self.exec_logger,
-            std=std,
+            std=market_std,
             sl_lock=None,
         )
 
@@ -146,8 +148,8 @@ class PairsTradingEnv(gym.Env):
 
         self.state = AgentState(
             z_score=row.get("z_score", None),
-            std=row.get("std", None),
-            beta=row.get("beta", None),
+            std=row.get("market_std", None),
+            beta=row.get("market_beta", None),
             hurst=row.get("hurst", None),
             window=int(window),
             signal=int(self.position_state.position),

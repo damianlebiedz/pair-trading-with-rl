@@ -56,6 +56,7 @@ class TradeExecutor:
         price_x: float,
         price_y: float,
         beta: float,
+        win: int | None,
         equity: float,
         exec_logger: ExecLogger,
         std: float | None,
@@ -96,6 +97,7 @@ class TradeExecutor:
                 stop_loss_thr=stop_loss_thr,
                 action=action,
                 beta=beta,
+                win=win,
                 position_state=position_state,
                 price_x=price_x,
                 price_y=price_y,
@@ -114,6 +116,7 @@ class TradeExecutor:
         stop_loss_thr: float | None,
         action: float,
         beta: float,
+        win: int,
         position_state: PositionState,
         price_x: float,
         price_y: float,
@@ -146,6 +149,7 @@ class TradeExecutor:
             entry_equity=pos_cash,
             sl_thr=stop_loss_thr,
             entry_beta=beta,
+            entry_win=win,
             entry_std=std,
         )
 

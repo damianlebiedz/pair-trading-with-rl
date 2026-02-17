@@ -1,30 +1,33 @@
-defaults:
-  - override /rl_algo: "a2c_baseline" # "a2c_baseline" or "recurrent_ppo"
+fixed_window: null
+entry_threshold: null
+exit_threshold: null
+stop_loss: null
 
 pair_selection:
   top_n_factor: 10
   coint_type: "johansen" # "eg" or "johansen"
-  beta_validation: False
-  window_validation: False
 
   start: "2023-11-01"
   end: "2024-01-01"
 
 performance:
-  beta_method: "kalman" # "ols", "johansen" or "kalman"
-  delayed_entry: True # True or False
-  time_decay_start: 0.5
-  time_decay_end: 1.0
-
-  beta_hedge: "static" # "static" or "rolling"
-
   iterations: 12 # integer >= 1
 
+  beta_method: "kalman" # "ols", "johansen" or "kalman"
+  beta_hedge: "static" # "static" or "rolling"
+  window_method: "rolling" # "fixed", "static", or "rolling"
+
+  delayed_entry: True # True or False
+  sl_lock: True
+  time_decay_start: 0.5
+  time_decay_end: 1.0
   rl_reward: "pnl" # "pnl" or "risk_adj"
 
   vol_window: 24
   window_min: 48
   window_max: 336
+
+  min_trades_per_pair: 10
 
   optimization:
     objective_func: "sortino" # "sortino"
@@ -39,8 +42,6 @@ performance:
     replicates: 1
     penalty_bad: -100
 
-    fixed_window: False
-
     # Parameters space
     entry_threshold_min: 1.50
     entry_threshold_max: 3.50
@@ -51,10 +52,11 @@ performance:
     stop_loss_min: 1.05
     stop_loss_max: 3.00
 
-    # Objective parameters
-    min_trades_per_pair: 5
-
   test:
     win_start: "2023-12-01"
     start: "2024-01-01"
     end: "2024-02-01"
+
+defaults:
+  - _self_
+  - base

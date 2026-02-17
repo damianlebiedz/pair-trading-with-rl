@@ -1,10 +1,11 @@
 import numpy as np
+from stable_baselines3.common.base_class import BaseAlgorithm
 
 from modules.learning.models import AgentState
 
 
 class RLAgentAdapter:
-    def __init__(self, model, training_mode=False):
+    def __init__(self, model: BaseAlgorithm, training_mode: bool = False):
         self.model = model
         self.training_mode = training_mode
         self._lstm_states = None

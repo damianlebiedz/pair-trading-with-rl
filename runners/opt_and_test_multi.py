@@ -3,6 +3,7 @@ import os
 import hydra
 import pandas as pd
 from omegaconf import OmegaConf, DictConfig
+from skopt.space import Real, Integer
 
 from modules.performance.models import StrategyResult
 from modules.data_services.data_loaders import load_data
@@ -13,29 +14,36 @@ from runners.core.pipelines import (
     execute_testing,
     setup_run_environment,
     merge_multi_pair_results,
+    execute_multi_pair_optimization,
     merge_multi_period_results,
 )
 from runners.core.utils import generate_date_lists
 
 logger = logging.getLogger(__name__)
 
-# =======================================================
-best_params = {
-    "fixed_window": None,
-    "entry_threshold": 2.0,
-    "exit_threshold": 0.0,
-    "stop_loss": 2,
-}
-# =======================================================
 
-
-@hydra.main(version_base=None, config_path="../conf", config_name="base")
-def test_multi_pair(cfg: DictConfig):
+@hydra.main(
+    version_base=None, config_path="../config", config_name="opt_and_test_multi"
+)
+def opt_and_test_multi(cfg: DictConfig):
     root = setup_run_environment(__file__)
+
+    static_params = {}
+    if cfg.fixed_window is not None:
+        static_params["fixed_window"] = cfg.fixed_window
+    if cfg.entry_threshold is not None:
+        static_params["entry_threshold"] = cfg.entry_threshold
+    if cfg.exit_threshold is not None:
+        static_params["exit_threshold"] = cfg.exit_threshold
+    if cfg.stop_loss is not None:
+        static_params["stop_loss"] = cfg.stop_loss
 
     config = {
         "pair_selection_start": cfg.pair_selection.start,
         "pair_selection_end": cfg.pair_selection.end,
+        "opt_win_start": cfg.performance.optimization.win_start,
+        "opt_start": cfg.performance.optimization.start,
+        "opt_end": cfg.performance.optimization.end,
         "test_win_start": cfg.performance.test.win_start,
         "test_start": cfg.performance.test.start,
         "test_end": cfg.performance.test.end,
@@ -53,6 +61,35 @@ def test_multi_pair(cfg: DictConfig):
             output_dir = root
 
         logger.info(f"--- Running Iteration {i+1} ---")
+
+        param_space = [
+            Real(
+                cfg.performance.optimization.entry_threshold_min,
+                cfg.performance.optimization.entry_threshold_max,
+                name="entry_threshold",
+            ),
+            Real(
+                cfg.performance.optimization.exit_threshold_min,
+                cfg.performance.optimization.exit_threshold_max,
+                name="exit_threshold",
+            ),
+            Real(
+                cfg.performance.optimization.stop_loss_min,
+                cfg.performance.optimization.stop_loss_max,
+                name="stop_loss",
+            ),
+        ]
+
+        if cfg.performance.window_method == "fixed":
+            param_space.append(
+                Integer(
+                    cfg.performance.window_min,
+                    cfg.performance.window_max,
+                    name="fixed_window",
+                ),
+            )
+        else:
+            static_params["fixed_window"] = None
 
         ps_df = execute_pair_selection(
             tickers=cfg.tickers,
@@ -131,16 +168,18 @@ def test_multi_pair(cfg: DictConfig):
             bt = Strategy(
                 ticker_x=ticker_x,
                 ticker_y=ticker_y,
-                start=lists["test_win_start_list"][i],
+                start=lists["opt_win_start_list"][i],
                 end=lists["test_end_list"][i],
                 interval=cfg.market.interval,
                 fee_rate=cfg.market.fee_rate,
                 initial_cash=cfg.market.initial_cash / cfg.pair_selection.top_n_factor,
                 risk_free_rate_annual=cfg.market.risk_free_rate_annual,
-                min_trades_per_pair=cfg.performance.optimization.min_trades_per_pair,
+                min_trades_per_pair=cfg.performance.min_trades_per_pair,
                 beta_hedge=cfg.performance.beta_hedge,
                 beta_method=cfg.performance.beta_method,
+                window_method=cfg.performance.window_method,
                 delayed_entry=cfg.performance.delayed_entry,
+                sl_lock=cfg.performance.sl_lock,
                 time_decay_sl=(
                     cfg.performance.time_decay_start,
                     cfg.performance.time_decay_end,
@@ -148,20 +187,54 @@ def test_multi_pair(cfg: DictConfig):
                 valid_window=(cfg.performance.window_min, cfg.performance.window_max),
                 vol_window=cfg.performance.vol_window,
             )
-
             strategies.append(bt)
             strategies_map[pair_name] = bt
 
-        test_results = []
+        best_params = execute_multi_pair_optimization(
+            cfg=cfg,
+            strategies=strategies,
+            static_params=static_params,
+            param_space=param_space,
+            metric_type=cfg.performance.optimization.metric_type,
+            objective_func=cfg.performance.optimization.objective_func,
+            opt_start=lists["opt_start_list"][i],
+            opt_end=lists["opt_end_list"][i],
+            opt_win_start=lists["opt_win_start_list"][i],
+            penalty_bad=cfg.performance.optimization.penalty_bad,
+            n_iter=cfg.performance.optimization.n_iter,
+            replicates=cfg.performance.optimization.replicates,
+            interval=cfg.market.interval,
+            risk_free_rate_annual=cfg.market.risk_free_rate_annual,
+            min_trades_per_pair=cfg.performance.min_trades_per_pair,
+            initial_cash=cfg.market.initial_cash,
+        )
 
-        logger.info(f"--- Testing {len(selected_pairs_names)} Pairs ---")
+        test_results = []
+        opt_results = []
+
+        logger.info("--- Running Tests with Optimized Parameters ---")
 
         for pair_name in selected_pairs_names:
             ticker_x, ticker_y = pair_name.split("-")
             bt = strategies_map[pair_name]
 
-            logger.debug(f"--- Testing pair: {pair_name} ---")
+            logger.info(f"Testing pair: {pair_name}")
 
+            logger.debug("--- Starting Test of Optimization ---")
+            result_opt = execute_testing(
+                cfg=cfg,
+                bt=bt,
+                best_params=best_params,
+                ticker_x=ticker_x,
+                ticker_y=ticker_y,
+                output_dir=output_dir,
+                win_test_start=lists["opt_win_start_list"][i],
+                test_start=lists["opt_start_list"][i],
+                test_end=lists["opt_end_list"][i],
+                subdir="opt",
+            )
+
+            logger.debug("--- Starting Test ---")
             result_test = execute_testing(
                 cfg=cfg,
                 bt=bt,
@@ -175,31 +248,53 @@ def test_multi_pair(cfg: DictConfig):
                 subdir="test",
             )
 
+            opt_results.append(result_opt)
             test_results.append(result_test)
 
-        logger.info("--- Merging Multi-Pair Results ---")
+        if len(opt_results) > 1 and len(test_results) > 1:
+            merge_multi_pair_results(
+                cfg=cfg,
+                output_dir=output_dir,
+                results=opt_results,
+                initial_cash=cfg.market.initial_cash,
+                risk_free_rate_annual=cfg.market.risk_free_rate_annual,
+                test_start=lists["test_start_list"][i],
+                test_end=lists["test_end_list"][i],
+                prefix="opt_",
+            )
+            merge_multi_pair_results(
+                cfg=cfg,
+                output_dir=output_dir,
+                results=test_results,
+                initial_cash=cfg.market.initial_cash,
+                risk_free_rate_annual=cfg.market.risk_free_rate_annual,
+                test_start=lists["test_start_list"][i],
+                test_end=lists["test_end_list"][i],
+                prefix="test_",
+            )
 
-        merge_multi_pair_results(
+    if number_of_iterations > 1:
+        merge_multi_period_results(
             cfg=cfg,
-            output_dir=output_dir,
-            results=test_results,
+            output_dir=root,
+            ticker_x="multi",
+            ticker_y="pair",
             initial_cash=cfg.market.initial_cash,
             risk_free_rate_annual=cfg.market.risk_free_rate_annual,
-            test_start=lists["test_start_list"][i],
-            test_end=lists["test_end_list"][i],
+            prefix="opt_",
+        )
+        merge_multi_period_results(
+            cfg=cfg,
+            output_dir=root,
+            ticker_x="multi",
+            ticker_y="pair",
+            initial_cash=cfg.market.initial_cash,
+            risk_free_rate_annual=cfg.market.risk_free_rate_annual,
+            prefix="test_",
         )
 
-    merge_multi_period_results(
-        cfg=cfg,
-        output_dir=root,
-        ticker_x="multi",
-        ticker_y="pair",
-        initial_cash=cfg.market.initial_cash,
-        risk_free_rate_annual=cfg.market.risk_free_rate_annual,
-    )
-
-    logger.info(f"Results merged and saved in {root}.")
+    logger.info(f"Results saved in {root}.")
 
 
 if __name__ == "__main__":
-    test_multi_pair()
+    opt_and_test_multi()

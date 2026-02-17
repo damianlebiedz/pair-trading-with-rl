@@ -1,0 +1,35 @@
+ticker_x: "AVAXUSDT"
+ticker_y: "OPUSDT"
+
+fixed_window: null  # integer if window_method = 'fixed', else null
+entry_threshold: 2.5
+exit_threshold: 0.2
+stop_loss: 2
+
+performance:
+  beta_method: "kalman" # "ols", "johansen" or "kalman"
+  beta_hedge: "static" # "static" or "rolling"
+  window_method: "rolling" # "fixed", "static", or "rolling"
+
+  delayed_entry: True # True or False
+  sl_lock: True
+  time_decay_start: 0.5
+  time_decay_end: 1.0
+
+  rl: False
+
+  vol_window: 24
+  window_min: 48
+  window_max: 336
+
+  min_trades_per_pair: 10
+
+  test:
+    win_start: "2023-12-01"
+    start: "2024-01-01"
+    end: "2024-02-01"
+
+defaults:
+  - _self_
+  - base
+  - rl_algo: "a2c_baseline" # "a2c_baseline" or "recurrent_ppo"
