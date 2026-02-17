@@ -3,7 +3,7 @@ import os
 import hydra
 import pandas as pd
 from omegaconf import OmegaConf, DictConfig
-from skopt.space import Real
+from skopt.space import Real, Integer
 
 from modules.performance.models import StrategyResult
 from modules.data_services.data_loaders import load_data
@@ -82,7 +82,7 @@ def opt_and_test_multi(cfg: DictConfig):
 
         if cfg.performance.window_method == "fixed":
             param_space.append(
-                Real(
+                Integer(
                     cfg.performance.window_min,
                     cfg.performance.window_max,
                     name="fixed_window",
@@ -174,7 +174,7 @@ def opt_and_test_multi(cfg: DictConfig):
                 fee_rate=cfg.market.fee_rate,
                 initial_cash=cfg.market.initial_cash / cfg.pair_selection.top_n_factor,
                 risk_free_rate_annual=cfg.market.risk_free_rate_annual,
-                min_trades_per_pair=cfg.performance.optimization.min_trades_per_pair,
+                min_trades_per_pair=cfg.performance.min_trades_per_pair,
                 beta_hedge=cfg.performance.beta_hedge,
                 beta_method=cfg.performance.beta_method,
                 window_method=cfg.performance.window_method,
@@ -205,7 +205,7 @@ def opt_and_test_multi(cfg: DictConfig):
             replicates=cfg.performance.optimization.replicates,
             interval=cfg.market.interval,
             risk_free_rate_annual=cfg.market.risk_free_rate_annual,
-            min_trades_per_pair=cfg.performance.optimization.min_trades_per_pair,
+            min_trades_per_pair=cfg.performance.min_trades_per_pair,
             initial_cash=cfg.market.initial_cash,
         )
 

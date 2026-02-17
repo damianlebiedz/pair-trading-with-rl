@@ -56,7 +56,7 @@ def test(cfg: DictConfig):
         fee_rate=cfg.market.fee_rate,
         initial_cash=cfg.market.initial_cash,
         risk_free_rate_annual=cfg.market.risk_free_rate_annual,
-        min_trades_per_pair=cfg.performance.optimization.min_trades_per_pair,
+        min_trades_per_pair=cfg.performance.min_trades_per_pair,
         beta_hedge=cfg.performance.beta_hedge,
         beta_method=cfg.performance.beta_method,
         window_method=cfg.performance.window_method,

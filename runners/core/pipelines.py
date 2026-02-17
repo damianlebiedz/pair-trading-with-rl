@@ -220,7 +220,7 @@ def execute_multi_pair_optimization(
 
     if objective_func == "sortino":
         objective_func = SortinoWithPenalty(
-            min_trades_per_pair=cfg.performance.optimization.min_trades_per_pair,
+            min_trades_per_pair=min_trades_per_pair,
             penalty_bad=penalty_bad,
         )
 
