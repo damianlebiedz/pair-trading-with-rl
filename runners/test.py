@@ -11,7 +11,7 @@ from runners.core.pipelines import (
     setup_run_environment,
     setup_rl_run_environment,
 )
-from runners.core.utils import load_model
+from runners.core.utils import load_model, save_hydra_config_snapshot
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 @hydra.main(version_base=None, config_path="../config", config_name="test")
 def test(cfg: DictConfig):
     output_dir = setup_run_environment(__file__)
+    save_hydra_config_snapshot(cfg=cfg, root_dir=output_dir)
 
     ticker_x = cfg.ticker_x
     ticker_y = cfg.ticker_y
@@ -84,6 +85,8 @@ def test(cfg: DictConfig):
         test_end=cfg.performance.test.end,
         subdir="test",
     )
+
+    logger.info(f"Results saved in {output_dir}.")
 
 
 if __name__ == "__main__":

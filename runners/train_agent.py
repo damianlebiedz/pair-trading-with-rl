@@ -22,6 +22,7 @@ from modules.learning.rewards import (
     DifferentialSharpeReward,
 )
 from runners.core.pipelines import setup_rl_run_environment
+from runners.core.utils import save_hydra_config_snapshot
 
 logger = logging.getLogger(__name__)
 load_dotenv()
@@ -57,6 +58,7 @@ class LogEquityCallback(BaseCallback):
 @hydra.main(version_base=None, config_path="../config", config_name="train_agent")
 def train_agent(cfg: DictConfig):
     rl_root = setup_rl_run_environment(__file__)
+    save_hydra_config_snapshot(cfg=cfg, root_dir=rl_root)
 
     seed = cfg.rl.seed
     set_random_seed(seed)

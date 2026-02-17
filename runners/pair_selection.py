@@ -3,6 +3,7 @@ import hydra
 from omegaconf import OmegaConf, DictConfig
 
 from runners.core.pipelines import execute_pair_selection, setup_run_environment
+from runners.core.utils import save_hydra_config_snapshot
 
 logger = logging.getLogger(__name__)
 
@@ -10,6 +11,7 @@ logger = logging.getLogger(__name__)
 @hydra.main(version_base=None, config_path="../config", config_name="base")
 def pair_selection(cfg: DictConfig):
     output_dir = setup_run_environment(__file__)
+    save_hydra_config_snapshot(cfg=cfg, root_dir=output_dir)
 
     logger.info(f"Saving results to: {output_dir}")
     logger.info("CONFIG:\n%s", OmegaConf.to_yaml(cfg))
