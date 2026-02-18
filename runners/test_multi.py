@@ -17,7 +17,11 @@ from runners.core.pipelines import (
     merge_multi_period_results,
     setup_rl_run_environment,
 )
-from runners.core.utils import generate_date_lists, load_model
+from runners.core.utils import (
+    generate_date_lists,
+    load_model,
+    save_hydra_config_snapshot,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +29,7 @@ logger = logging.getLogger(__name__)
 @hydra.main(version_base=None, config_path="../config", config_name="test_multi")
 def test_multi(cfg: DictConfig):
     root = setup_run_environment(__file__)
+    save_hydra_config_snapshot(cfg=cfg, root_dir=root)
 
     best_params = {
         "fixed_window": cfg.fixed_window,

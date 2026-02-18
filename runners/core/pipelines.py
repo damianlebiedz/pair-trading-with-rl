@@ -162,7 +162,7 @@ def execute_pair_selection(
     top_n_factor: float,
     output_dir: str,
     coint_type: Literal["eg", "johansen"],
-    beta_method: Literal["ols", "johansen", "kalman"],
+    beta_method: Literal["ols", "kalman"],
     valid_window: tuple[int, int],
 ) -> pd.DataFrame:
     logger.info("Starting Pair Selection Pipeline.")

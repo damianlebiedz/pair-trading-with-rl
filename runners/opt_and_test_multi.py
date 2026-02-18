@@ -17,7 +17,7 @@ from runners.core.pipelines import (
     execute_multi_pair_optimization,
     merge_multi_period_results,
 )
-from runners.core.utils import generate_date_lists
+from runners.core.utils import generate_date_lists, save_hydra_config_snapshot
 
 logger = logging.getLogger(__name__)
 
@@ -27,16 +27,9 @@ logger = logging.getLogger(__name__)
 )
 def opt_and_test_multi(cfg: DictConfig):
     root = setup_run_environment(__file__)
+    save_hydra_config_snapshot(cfg=cfg, root_dir=root)
 
     static_params = {}
-    if cfg.fixed_window is not None:
-        static_params["fixed_window"] = cfg.fixed_window
-    if cfg.entry_threshold is not None:
-        static_params["entry_threshold"] = cfg.entry_threshold
-    if cfg.exit_threshold is not None:
-        static_params["exit_threshold"] = cfg.exit_threshold
-    if cfg.stop_loss is not None:
-        static_params["stop_loss"] = cfg.stop_loss
 
     config = {
         "pair_selection_start": cfg.pair_selection.start,

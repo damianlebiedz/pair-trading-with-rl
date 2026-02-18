@@ -930,6 +930,22 @@ omegaconf = ">=2.2,<2.4"
 packaging = "*"
 
 [[package]]
+name = "hydra-joblib-launcher"
+version = "1.2.0"
+description = "Joblib Launcher for Hydra apps"
+optional = false
+python-versions = "*"
+groups = ["main"]
+files = [
+    {file = "hydra-joblib-launcher-1.2.0.tar.gz", hash = "sha256:b4dc8b990221a0df048c094954356c6532585557e708e8198c46a877b379a6d5"},
+    {file = "hydra_joblib_launcher-1.2.0-py3-none-any.whl", hash = "sha256:57bfd042b015056157297de93e8ec1c6bc75fd39bd3b300e1599db0c5d992eee"},
+]
+
+[package.dependencies]
+hydra-core = ">=1.1.0.dev7"
+joblib = ">=0.14.0"
+
+[[package]]
 name = "idna"
 version = "3.11"
 description = "Internationalized Domain Names in Applications (IDNA)"
@@ -3826,4 +3842,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = "==3.12.*"
-content-hash = "9bb9bbe622b558b68696fe1d06802484f3bb50994fa306f7f7b788f4ab908b1f"
+content-hash = "a00e572441076282adce6a876eaab08fa43902e1cd540bd95336d7dc6848ba77"

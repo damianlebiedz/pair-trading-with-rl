@@ -5,8 +5,27 @@ from dateutil.relativedelta import relativedelta
 from sb3_contrib import RecurrentPPO
 from stable_baselines3 import A2C
 from stable_baselines3.common.base_class import BaseAlgorithm
+from omegaconf import DictConfig, OmegaConf
+from hydra.core.hydra_config import HydraConfig
 
 logger = logging.getLogger(__name__)
+
+
+def save_hydra_config_snapshot(cfg: DictConfig, root_dir: str) -> None:
+    hydra_dir = os.path.join(root_dir, ".hydra")
+    os.makedirs(hydra_dir, exist_ok=True)
+    OmegaConf.save(config=cfg, f=os.path.join(hydra_dir, "config.yaml"))
+    try:
+        hydra_cfg = HydraConfig.get()
+        OmegaConf.save(config=hydra_cfg, f=os.path.join(hydra_dir, "hydra.yaml"))
+        OmegaConf.save(
+            config=hydra_cfg.overrides.task, f=os.path.join(hydra_dir, "overrides.yaml")
+        )
+
+        logger.info(f"Saved .hydra configs to: {hydra_dir}")
+
+    except ValueError:
+        logger.warning("HydraConfig not initialized")
 
 
 def generate_date_lists(initial_config, n):

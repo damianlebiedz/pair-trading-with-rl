@@ -1,0 +1,22 @@
+services:
+  base: &base_config
+    build: .
+    env_file:
+      - .env
+    volumes:
+      - ./config:/app/config
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./training_data:/app/training_data
+      - ./tensorboard_logs:/app/tensorboard_logs
+    environment:
+      - HYDRA_FULL_ERROR=1
+      - MPLBACKEND=Agg
+
+  train_agent:
+    <<: *base_config
+    command: python runners/train_agent.py
+
+  opt_and_test_multi:
+    <<: *base_config
+    command: python runners/opt_and_test_multi.py
