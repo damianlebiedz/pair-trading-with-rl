@@ -17,7 +17,11 @@ from runners.core.pipelines import (
     merge_multi_period_results,
     setup_rl_run_environment,
 )
-from runners.core.utils import generate_date_lists, load_model, save_hydra_config_snapshot
+from runners.core.utils import (
+    generate_date_lists,
+    load_model,
+    save_hydra_config_snapshot,
+)
 
 logger = logging.getLogger(__name__)
 

@@ -94,7 +94,8 @@ class MultiPairOptimizer:
                     test_start=self.opt_start,
                     test_end=self.opt_end,
                     win_test_start=self.opt_win_start,
-                ) for strat in self.strategies
+                )
+                for strat in self.strategies
             )
 
             merged_df, merged_exec_res = aggregate_strategy_results(

@@ -13,8 +13,8 @@ pair_selection:
 performance:
   iterations: 12 # integer >= 1
 
-  beta_method: "kalman" # "ols", "johansen" or "kalman"
-  beta_hedge: "static" # "static" or "rolling"
+  beta_method: "kalman" # "ols" or "kalman"
+  beta_hedge: "static" # "static", "rolling", or "no_hedge"
   window_method: "rolling" # "fixed", "static", or "rolling"
 
   delayed_entry: True # True or False

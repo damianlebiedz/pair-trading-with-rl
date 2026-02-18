@@ -22,7 +22,7 @@ class PairSelector:
     def __init__(
         self,
         coint_type: Literal["eg", "johansen"],
-        beta_method: Literal["ols", "johansen", "kalman"],
+        beta_method: Literal["ols", "kalman"],
         valid_window: tuple[int, int],
         source: str = "log",
     ):
@@ -39,7 +39,6 @@ class PairSelector:
                 - 'johansen': Johansen test.
             beta_method: The method used to calculate the Hedge Ratio (Beta) during validation.
                 - 'ols': Ordinary Least Squares (static).
-                - 'johansen': Vector Error Correction Model (static).
                 - 'kalman': Kalman Filter (dynamic state space).
             valid_window: Min and max values of Z-Score window.
             source: Data transformation applied before analysis (default: 'log').
@@ -55,8 +54,8 @@ class PairSelector:
         if coint_type not in ["eg", "johansen"]:
             raise ValueError("'coint_type' must be 'eg' or 'johansen'")
 
-        if beta_method not in ["ols", "johansen", "kalman"]:
-            raise ValueError("'beta_method' must be 'ols', 'johansen', or 'kalman'")
+        if beta_method not in ["ols", "kalman"]:
+            raise ValueError("'beta_method' must be 'ols', or 'kalman'")
 
         if valid_window[0] > valid_window[1]:
             raise ValueError(f"'valid_window' should be (min, max): {valid_window}")

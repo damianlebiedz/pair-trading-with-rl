@@ -4,17 +4,17 @@ exit_threshold: 0.2
 stop_loss: 2
 
 pair_selection:
-  top_n_factor: 10
-  coint_type: "johansen" # "eg" or "johansen"
+  top_n_factor: 20
+  coint_type: "eg" # "eg" or "johansen"
 
   start: "2023-11-01"
   end: "2024-01-01"
 
 performance:
-  iterations: 12 # integer >= 1
+  iterations: 1 # integer >= 1
 
-  beta_method: "kalman" # "ols", "johansen" or "kalman"
-  beta_hedge: "rolling" # "static" or "rolling"
+  beta_method: "ols" # "ols" or "kalman"
+  beta_hedge: "no_hedge" # "static", "rolling", or "no_hedge"
   window_method: "rolling" # "fixed", "static", or "rolling"
 
   delayed_entry: True # True or False

@@ -2,7 +2,6 @@ from typing import Literal
 import numpy as np
 import pandas as pd
 import statsmodels.api as sm
-from statsmodels.tsa.vector_ar.vecm import coint_johansen
 
 
 class KalmanState:
@@ -123,7 +122,7 @@ def calculate_beta(
     x_col: str,
     y_col: str,
     df: pd.DataFrame,
-    beta_method: Literal["ols", "johansen", "kalman"],
+    beta_method: Literal["ols", "kalman"],
 ) -> float:
     """
     Calculates the hedge ratio (beta) using the specified statistical method.
@@ -133,16 +132,14 @@ def calculate_beta(
     Algorithm by method:
     1. **OLS**: Performs a static linear regression (Ordinary Least Squares) where 'x_col' is the target
        and 'y_col' is the feature.
-    2. **Johansen**: Computes cointegration vectors. Uses the first eigenvector (corresponding to the
-       largest eigenvalue) and normalizes it with respect to x to derive beta.
-    3. **Kalman**: Applies an online Kalman Filter to estimate the evolving beta step-by-step,
+    2. **Kalman**: Applies an online Kalman Filter to estimate the evolving beta step-by-step,
        treating 'y_col' as the observable state predictor for 'x_col'.
 
     Args:
         x_col: Column name for the dependent asset (X).
         y_col: Column name for the independent asset (Y, hedge).
         df: DataFrame containing the price series.
-        beta_method: Method to use ('ols', 'johansen', or 'kalman').
+        beta_method: Method to use ('ols', or 'kalman').
 
     Returns:
         float: Calculated beta coefficient.
@@ -150,28 +147,14 @@ def calculate_beta(
     Raises:
         ValueError: If an invalid beta_method is provided.
     """
-    if beta_method not in ["ols", "johansen", "kalman"]:
-        raise ValueError("coint_method should be 'ols', 'johansen', or 'kalman'")
+    if beta_method not in ["ols", "kalman"]:
+        raise ValueError("coint_method should be 'ols' or 'kalman'")
 
     if beta_method == "ols":
         X = sm.add_constant(df[y_col])
         y = df[x_col]
         model = sm.OLS(y, X, missing="drop").fit()
         beta = model.params[y_col]
-
-        return beta
-
-    elif beta_method == "johansen":
-        data = df[[x_col, y_col]].dropna()
-
-        johansen_res = coint_johansen(
-            data.values,
-            det_order=0,
-            k_ar_diff=1,
-        )
-
-        vec = johansen_res.evec[:, 0]
-        beta = -vec[1] / vec[0]
 
         return beta
 

@@ -18,7 +18,9 @@ def save_hydra_config_snapshot(cfg: DictConfig, root_dir: str) -> None:
     try:
         hydra_cfg = HydraConfig.get()
         OmegaConf.save(config=hydra_cfg, f=os.path.join(hydra_dir, "hydra.yaml"))
-        OmegaConf.save(config=hydra_cfg.overrides.task, f=os.path.join(hydra_dir, "overrides.yaml"))
+        OmegaConf.save(
+            config=hydra_cfg.overrides.task, f=os.path.join(hydra_dir, "overrides.yaml")
+        )
 
         logger.info(f"Saved .hydra configs to: {hydra_dir}")
 
