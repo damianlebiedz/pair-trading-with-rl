@@ -13,4 +13,6 @@ data_rl/*/*
 results/*
 !results/.ignore
 
+multirun/*
+
 .env
