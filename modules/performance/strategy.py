@@ -117,8 +117,8 @@ class Strategy:
         self,
         df: pd.DataFrame,
         initial_cash: float,
-        entry_threshold: float,
-        exit_threshold: float,
+        entry_threshold: float | None,
+        exit_threshold: float | None,
         test_start: str,
         test_end: str,
         fixed_window: int | None,
@@ -144,8 +144,8 @@ class Strategy:
         Args:
             df (pd.DataFrame): DataFrame containing price data (columns must match ticker names).
             initial_cash (float): Starting capital for the simulation.
-            entry_threshold (float): Z-score threshold for entering positions (long/short spread).
-            exit_threshold (float): Z-score threshold for exiting positions (reversion to mean).
+            entry_threshold (float | None): Z-score threshold for entering positions (long/short spread).
+            exit_threshold (float | None): Z-score threshold for exiting positions (reversion to mean).
             test_start (str): Start date string (YYYY-MM-DD) for the backtest loop.
             test_end (str): End date string (YYYY-MM-DD) for the backtest loop.
             fixed_window (int | None): Parameter determining the lookback window size for 'fixed' window method.
@@ -238,7 +238,7 @@ class Strategy:
 
         prev_z_score = None
 
-        if stop_loss is not None:
+        if stop_loss is not None and entry_threshold is not None:
             stop_loss_thr = entry_threshold * stop_loss
         else:
             stop_loss_thr = None
@@ -299,7 +299,7 @@ class Strategy:
                 else:
                     win = market_win
 
-                if self.time_decay_sl and win is not None:
+                if self.time_decay_sl and win is not None and exit_threshold is not None:
                     time_decay_start = self.time_decay_sl[0]
                     time_decay_end = self.time_decay_sl[1]
 
@@ -374,7 +374,7 @@ class Strategy:
                     drawdown_pct = 0.0
 
                 if position_state.sl_lock:
-                    if z_score is not None and prev_z_score is not None:
+                    if z_score is not None and prev_z_score is not None and exit_threshold is not None:
                         break_above = prev_z_score > exit_threshold >= z_score
                         break_below = prev_z_score < -exit_threshold <= z_score
                         if break_above or break_below:
@@ -393,8 +393,7 @@ class Strategy:
                         std=market_std,
                         beta=market_beta,
                         hurst=hurst,
-                        window=win,
-                        signal=signal,
+                        window=market_win,
                         position=position_state.position,
                         norm_time_in_pos=position_state.time_in_pos / win if win else 0,
                         drawdown_pct=drawdown_pct,
@@ -533,8 +532,8 @@ class Strategy:
     def run_strategy(
         self,
         fixed_window: int | None,
-        entry_threshold: float,
-        exit_threshold: float,
+        entry_threshold: float | None,
+        exit_threshold: float | None,
         stop_loss: float | None,
         test_start: str,
         test_end: str,
@@ -545,9 +544,9 @@ class Strategy:
 
         Args:
             fixed_window (int | None): Fixed lookback window size.
-            entry_threshold (float): Z-score threshold to open a position.
-            exit_threshold (float): Z-score threshold to close a position.
-            stop_loss (float): Stop loss multiplier (e.g., 1.05 for 5% from entry_threshold), None if trade without SL.
+            entry_threshold (float | None): Z-score threshold to open a position.
+            exit_threshold (float | None): Z-score threshold to close a position.
+            stop_loss (float | None): Stop loss multiplier (e.g., 1.05 for 5% from entry_threshold), None if trade without SL.
             test_start (str): Start date for the backtest loop.
             test_end (str): End date for the backtest loop.
             win_test_start (str): Start date for Z-score OU (Half-Life)-based window calculation.

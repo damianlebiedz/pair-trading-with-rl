@@ -2,6 +2,7 @@ import logging
 from typing import Any, Literal
 import pandas as pd
 import numpy as np
+from joblib import Parallel, delayed
 
 from modules.core.search_methods import random_search
 from modules.data_services.merge_utils import aggregate_strategy_results
@@ -84,28 +85,17 @@ class MultiPairOptimizer:
             exit_threshold = params.get("exit_threshold")
             stop_loss = params.get("stop_loss")
 
-            results = []
-            individual_stats_dfs = []
-
-            for strat in self.strategies:
-                try:
-                    res = strat.run_strategy(
-                        fixed_window=fixed_window,
-                        entry_threshold=entry_threshold,
-                        exit_threshold=exit_threshold,
-                        stop_loss=stop_loss,
-                        test_start=self.opt_start,
-                        test_end=self.opt_end,
-                        win_test_start=self.opt_win_start,
-                    )
-                    results.append(res)
-                    individual_stats_dfs.append(res.stats)
-
-                except Exception as e:
-                    logger.error(
-                        f"[MultiPairOpt Error] during {strat.ticker_x}-{strat.ticker_y}: {e}"
-                    )
-                    raise e
+            results = Parallel(n_jobs=-1)(
+                delayed(strat.run_strategy)(
+                    fixed_window=fixed_window,
+                    entry_threshold=entry_threshold,
+                    exit_threshold=exit_threshold,
+                    stop_loss=stop_loss,
+                    test_start=self.opt_start,
+                    test_end=self.opt_end,
+                    win_test_start=self.opt_win_start,
+                ) for strat in self.strategies
+            )
 
             merged_df, merged_exec_res = aggregate_strategy_results(
                 results=results,

@@ -17,7 +17,6 @@ class AgentState:
         beta (float): Hedge ratio between the two assets, used to size positions.
         hurst (float): Hurst Exponent value.
         window (int | None): Lookback window length used for z-score calculation.
-        signal (int): Trading signal at current timestep: -1 (short), 0 (hold), 1 (long).
         position (float): Current position in the strategy (-1, 0, 1 scaled by capital).
         norm_time_in_pos (float): Normalized time in current position (0.0–1.0), where 1.0 means equal to window length.
         drawdown_pct (float): Current drawdown as a fraction of peak equity.
@@ -34,7 +33,6 @@ class AgentState:
     beta: float
     hurst: float
     window: int | None
-    signal: int
     position: float
     norm_time_in_pos: float
     drawdown_pct: float
@@ -48,7 +46,6 @@ class AgentState:
                 float(self.beta),
                 float(self.hurst),
                 _f(self.window) / 200.0 if normalize else _f(self.window),
-                float(self.signal),
                 float(self.position),
                 float(self.norm_time_in_pos),
                 float(self.drawdown_pct),

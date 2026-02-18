@@ -65,7 +65,7 @@ class KalmanState:
 def generate_signal(
     z_score: float | None,
     prev_z_score: float | None,
-    entry_threshold: float,
+    entry_threshold: float | None,
     stop_loss_thr: float | None,
     delayed_entry: bool,
 ) -> int:
@@ -97,7 +97,7 @@ def generate_signal(
     Returns:
         int: Signal direction (1 for Long, -1 for Short, 0 for Neutral).
     """
-    if prev_z_score is None or z_score is None:
+    if prev_z_score is None or z_score is None or entry_threshold is None:
         return 0
 
     if delayed_entry:

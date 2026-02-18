@@ -12,7 +12,7 @@ class TradeExecutor:
         position_state: PositionState,
         signal: float,
         z_score: float | None,
-        exit_threshold: float,
+        exit_threshold: float | None,
     ) -> tuple[float, bool]:
         """
         Determines the target position based on strategy rules (Z-score, TP, SL).
@@ -23,6 +23,9 @@ class TradeExecutor:
 
         if z_score is None:
             return 0.0, False
+
+        if exit_threshold is None:
+            return signal, False
 
         if prev_position != 0:
             is_long = prev_position > 0
