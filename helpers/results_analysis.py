@@ -4,7 +4,7 @@ import pandas as pd
 from pathlib import Path
 
 # ==========================================
-MIN_TOTAL_TRADES = 1200 # 5 trades per month for a single pair
+MIN_TOTAL_TRADES = 1200  # 5 trades per month for a single pair
 PENALTY_SCORE = -100.0
 # ==========================================
 
@@ -14,12 +14,7 @@ def parse_results():
     project_root = script_dir.parent
     results_dir = project_root / "results"
 
-    categories = {
-        "1_baseline": [],
-        "2_static": [],
-        "3_rolling": [],
-        "0_other": []
-    }
+    categories = {"1_baseline": [], "2_static": [], "3_rolling": [], "0_other": []}
 
     if not results_dir.exists():
         print(f"Directory {results_dir} not found")
@@ -29,7 +24,7 @@ def parse_results():
         (results_dir / cat).mkdir(exist_ok=True)
 
     def extract_param(param_name, text):
-        match = re.search(rf"{param_name}:\s*(\S+)" , text)
+        match = re.search(rf"{param_name}:\s*(\S+)", text)
         if match:
             return match.group(1).replace("'", "").replace('"', "")
         return "N/A"
@@ -106,23 +101,27 @@ def parse_results():
 
                 win_count = get_net_metric("win_count")
                 lose_count = get_net_metric("lose_count")
-                total_trades = (win_count if pd.notna(win_count) else 0) + (lose_count if pd.notna(lose_count) else 0)
+                total_trades = (win_count if pd.notna(win_count) else 0) + (
+                    lose_count if pd.notna(lose_count) else 0
+                )
 
-                categories[category_name].append({
-                    "Run_ID": run_dir.name,
-                    "Beta Method": beta_method,
-                    "Beta Hedge": beta_hedge,
-                    "Window Method": window_method,
-                    "Fixed Window": fixed_window,
-                    "Entry": entry,
-                    "Exit": exit_t,
-                    "SL": stop_loss,
-                    "CAGR": cagr,
-                    "Volatility Annual": volatility_annual,
-                    "Total Trades": int(total_trades),
-                    "Sortino Annual": sortino_annual,
-                    "Max Drawdown": max_dd,
-                })
+                categories[category_name].append(
+                    {
+                        "Run_ID": run_dir.name,
+                        "Beta Method": beta_method,
+                        "Beta Hedge": beta_hedge,
+                        "Window Method": window_method,
+                        "Fixed Window": fixed_window,
+                        "Entry": entry,
+                        "Exit": exit_t,
+                        "SL": stop_loss,
+                        "CAGR": cagr,
+                        "Volatility Annual": volatility_annual,
+                        "Total Trades": int(total_trades),
+                        "Sortino Annual": sortino_annual,
+                        "Max Drawdown": max_dd,
+                    }
+                )
             except Exception as e:
                 print(f"Error for {run_dir.name} in {category_name}: {e}")
 
@@ -132,20 +131,30 @@ def parse_results():
             continue
 
         df_summary = pd.DataFrame(results_list)
-        df_summary["Sortino Annual"] = pd.to_numeric(df_summary["Sortino Annual"], errors="coerce")
-        df_summary["Total Trades"] = pd.to_numeric(df_summary["Total Trades"], errors="coerce")
-
-        df_summary["Objective"] = df_summary.apply(
-            lambda row: row["Sortino Annual"] if row["Total Trades"] >= MIN_TOTAL_TRADES else PENALTY_SCORE,
-            axis=1
+        df_summary["Sortino Annual"] = pd.to_numeric(
+            df_summary["Sortino Annual"], errors="coerce"
+        )
+        df_summary["Total Trades"] = pd.to_numeric(
+            df_summary["Total Trades"], errors="coerce"
         )
 
-        df_summary = df_summary.sort_values(by="Objective", ascending=False).reset_index(drop=True)
+        df_summary["Objective"] = df_summary.apply(
+            lambda row: (
+                row["Sortino Annual"]
+                if row["Total Trades"] >= MIN_TOTAL_TRADES
+                else PENALTY_SCORE
+            ),
+            axis=1,
+        )
+
+        df_summary = df_summary.sort_values(
+            by="Objective", ascending=False
+        ).reset_index(drop=True)
         summary_dfs[cat_name] = df_summary
 
-    pd.set_option('display.max_rows', None)
-    pd.set_option('display.max_columns', None)
-    pd.set_option('display.width', 200)
+    pd.set_option("display.max_rows", None)
+    pd.set_option("display.max_columns", None)
+    pd.set_option("display.width", 200)
 
     return summary_dfs, results_dir
 
