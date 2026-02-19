@@ -1,17 +1,17 @@
-services:
-  base: &base_config
-    build: .
-    env_file:
-      - .env
-    volumes:
-      - ./config:/app/config
-      - ./data:/app/data
-      - ./models:/app/models
-      - ./training_data:/app/training_data
-      - ./tensorboard_logs:/app/tensorboard_logs
-    environment:
-      - HYDRA_FULL_ERROR=1
+x-base: &base_config
+  build: .
+  env_file:
+    - .env
+  volumes:
+    - ./config:/app/config
+    - ./data:/app/data
+    - ./models:/app/models
+    - ./training_data:/app/training_data
+    - ./tensorboard_logs:/app/tensorboard_logs
+  environment:
+    - HYDRA_FULL_ERROR=1
 
+services:
   train_agent:
     <<: *base_config
     command: python runners/train_agent.py
