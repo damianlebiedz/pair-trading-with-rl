@@ -6,7 +6,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal
 import pandas as pd
-from omegaconf import DictConfig
 
 from modules.performance.models import StrategyResult
 from modules.data_services.data_utils import (
@@ -94,7 +93,6 @@ def setup_rl_run_environment(calling_file: str) -> str:
 
 
 def execute_testing(
-    cfg: DictConfig,
     bt: Strategy,
     best_params: dict[str, Any],
     ticker_x: str,
@@ -103,6 +101,8 @@ def execute_testing(
     win_test_start: str,
     test_start: str,
     test_end: str,
+    interval: str,
+    plot: bool,
     subdir: str | None = None,
 ) -> StrategyResult:
 
@@ -142,16 +142,17 @@ def execute_testing(
         directory=output_dir,
     )
 
-    # plot_zscore_pos(result, directory=output_dir, save=True)
-    # plot_spread_pos(result, directory=output_dir, save=True)
-    # btc_data = load_btc_benchmark(
-    #     test_start=test_start,
-    #     test_end=test_end,
-    #     interval=cfg.market.interval,
-    # )
-    # plot_returns(result, btc_data, directory=output_dir, save=True)
+    if plot:
+        plot_zscore_pos(result, directory=output_dir, save=True)
+        plot_spread_pos(result, directory=output_dir, save=True)
+        btc_data = load_btc_benchmark(
+            test_start=test_start,
+            test_end=test_end,
+            interval=interval,
+        )
+        plot_returns(result, btc_data, directory=output_dir, save=True)
 
-    logger.debug("Testing completed, returning StrategyResult.")
+        logger.debug("Testing completed, returning StrategyResult.")
 
     return result
 
@@ -256,13 +257,14 @@ def execute_multi_pair_optimization(
 
 
 def merge_multi_pair_results(
-    cfg: DictConfig,
     output_dir: str,
     results: list[StrategyResult],
     initial_cash: float,
     risk_free_rate_annual: float,
     test_start: str,
     test_end: str,
+    interval: str,
+    plot: bool,
     prefix: str | None = "",
 ) -> StrategyResult:
     """Merges multiple StrategyResult objects into one aggregate result and saves it."""
@@ -309,18 +311,19 @@ def merge_multi_pair_results(
         directory=output_dir,
     )
 
-    # btc_data = load_btc_benchmark(
-    #     test_start=final_result.start,
-    #     test_end=final_result.end,
-    #     interval=cfg.market.interval,
-    # )
-    # plot_returns(
-    #     result=final_result,
-    #     btc_data=btc_data,
-    #     directory=output_dir,
-    #     save=True,
-    #     prefix=prefix,
-    # )
+    if plot:
+        btc_data = load_btc_benchmark(
+            test_start=final_result.start,
+            test_end=final_result.end,
+            interval=interval,
+        )
+        plot_returns(
+            result=final_result,
+            btc_data=btc_data,
+            directory=output_dir,
+            save=True,
+            prefix=prefix,
+        )
 
     logger.debug("Merge Multi-Pair Results completed, returning StrategyResult.")
 
@@ -328,12 +331,13 @@ def merge_multi_pair_results(
 
 
 def merge_multi_period_results(
-    cfg: DictConfig,
     output_dir: str,
     ticker_x: str,
     ticker_y: str,
     initial_cash: float,
     risk_free_rate_annual: float,
+    interval: str,
+    plot: bool,
     prefix: str = "",
 ) -> StrategyResult | None:
     """
@@ -415,18 +419,19 @@ def merge_multi_period_results(
         directory=output_dir,
     )
 
-    # btc_data = load_btc_benchmark(
-    #     test_start=final_result.start,
-    #     test_end=final_result.end,
-    #     interval=cfg.market.interval,
-    # )
-    # plot_returns(
-    #     result=final_result,
-    #     btc_data=btc_data,
-    #     directory=output_dir,
-    #     save=True,
-    #     prefix=prefix,
-    # )
+    if plot:
+        btc_data = load_btc_benchmark(
+            test_start=final_result.start,
+            test_end=final_result.end,
+            interval=interval,
+        )
+        plot_returns(
+            result=final_result,
+            btc_data=btc_data,
+            directory=output_dir,
+            save=True,
+            prefix=prefix,
+        )
 
     logger.debug(f"Merge Multi-Period Results for {ticker_x}-{ticker_y} completed.")
 

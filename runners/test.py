@@ -73,7 +73,6 @@ def test(cfg: DictConfig):
 
     logger.info("--- Starting Test ---")
     execute_testing(
-        cfg=cfg,
         bt=bt,
         best_params=best_params,
         ticker_x=ticker_x,
@@ -83,6 +82,8 @@ def test(cfg: DictConfig):
         test_start=cfg.performance.test.start,
         test_end=cfg.performance.test.end,
         subdir="test",
+        interval=cfg.market.interval,
+        plot=cfg.settings.plot,
     )
 
     logger.info(f"Results saved in {output_dir}.")

@@ -188,7 +188,6 @@ def test_multi(cfg: DictConfig):
             logger.debug(f"--- Testing pair: {pair_name} ---")
 
             result_test = execute_testing(
-                cfg=cfg,
                 bt=bt,
                 best_params=best_params,
                 ticker_x=ticker_x,
@@ -198,29 +197,33 @@ def test_multi(cfg: DictConfig):
                 test_start=lists["test_start_list"][i],
                 test_end=lists["test_end_list"][i],
                 subdir="test",
+                interval=cfg.market.interval,
+                plot=cfg.settings.plot,
             )
 
             test_results.append(result_test)
 
         if len(test_results) > 1:
             merge_multi_pair_results(
-                cfg=cfg,
                 output_dir=output_dir,
                 results=test_results,
                 initial_cash=cfg.market.initial_cash,
                 risk_free_rate_annual=cfg.market.risk_free_rate_annual,
                 test_start=lists["test_start_list"][i],
                 test_end=lists["test_end_list"][i],
+                interval=cfg.market.interval,
+                plot=cfg.settings.plot,
             )
 
     if number_of_iterations > 1:
         merge_multi_period_results(
-            cfg=cfg,
             output_dir=root,
             ticker_x="multi",
             ticker_y="pair",
             initial_cash=cfg.market.initial_cash,
             risk_free_rate_annual=cfg.market.risk_free_rate_annual,
+            interval=cfg.market.interval,
+            plot=cfg.settings.plot,
         )
 
     logger.info(f"Results saved in {root}.")
