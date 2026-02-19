@@ -139,14 +139,14 @@ def execute_testing(
         directory=output_dir,
     )
 
-    plot_zscore_pos(result, directory=output_dir, save=True)
-    plot_spread_pos(result, directory=output_dir, save=True)
-    btc_data = load_btc_benchmark(
-        test_start=test_start,
-        test_end=test_end,
-        interval=cfg.market.interval,
-    )
-    plot_returns(result, btc_data, directory=output_dir, save=True)
+    # plot_zscore_pos(result, directory=output_dir, save=True)
+    # plot_spread_pos(result, directory=output_dir, save=True)
+    # btc_data = load_btc_benchmark(
+    #     test_start=test_start,
+    #     test_end=test_end,
+    #     interval=cfg.market.interval,
+    # )
+    # plot_returns(result, btc_data, directory=output_dir, save=True)
 
     logger.debug("Testing completed, returning StrategyResult.")
 
@@ -306,18 +306,18 @@ def merge_multi_pair_results(
         directory=output_dir,
     )
 
-    btc_data = load_btc_benchmark(
-        test_start=final_result.start,
-        test_end=final_result.end,
-        interval=cfg.market.interval,
-    )
-    plot_returns(
-        result=final_result,
-        btc_data=btc_data,
-        directory=output_dir,
-        save=True,
-        prefix=prefix,
-    )
+    # btc_data = load_btc_benchmark(
+    #     test_start=final_result.start,
+    #     test_end=final_result.end,
+    #     interval=cfg.market.interval,
+    # )
+    # plot_returns(
+    #     result=final_result,
+    #     btc_data=btc_data,
+    #     directory=output_dir,
+    #     save=True,
+    #     prefix=prefix,
+    # )
 
     logger.debug("Merge Multi-Pair Results completed, returning StrategyResult.")
 
@@ -412,18 +412,18 @@ def merge_multi_period_results(
         directory=output_dir,
     )
 
-    btc_data = load_btc_benchmark(
-        test_start=final_result.start,
-        test_end=final_result.end,
-        interval=cfg.market.interval,
-    )
-    plot_returns(
-        result=final_result,
-        btc_data=btc_data,
-        directory=output_dir,
-        save=True,
-        prefix=prefix,
-    )
+    # btc_data = load_btc_benchmark(
+    #     test_start=final_result.start,
+    #     test_end=final_result.end,
+    #     interval=cfg.market.interval,
+    # )
+    # plot_returns(
+    #     result=final_result,
+    #     btc_data=btc_data,
+    #     directory=output_dir,
+    #     save=True,
+    #     prefix=prefix,
+    # )
 
     logger.debug(f"Merge Multi-Period Results for {ticker_x}-{ticker_y} completed.")
 

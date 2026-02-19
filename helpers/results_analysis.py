@@ -4,7 +4,7 @@ import pandas as pd
 from pathlib import Path
 
 # ==========================================
-MIN_TOTAL_TRADES = 200
+MIN_TOTAL_TRADES = 1200 # 5 trades per month for a single pair
 PENALTY_SCORE = -100.0
 # ==========================================
 
