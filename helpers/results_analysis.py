@@ -88,19 +88,24 @@ def parse_results():
             try:
                 stats_df = pd.read_parquet(stats_file)
 
-                def get_net_metric(metric_name):
+                def get_metric(metric_name, col_type):
                     row = stats_df[stats_df["metric"] == metric_name]
                     if not row.empty:
-                        return row["net"].iloc[0]
+                        return row[col_type].iloc[0]
                     return None
 
-                cagr = get_net_metric("cagr")
-                volatility_annual = get_net_metric("volatility_annual")
-                sortino_annual = get_net_metric("sortino_ratio_annual")
-                max_dd = get_net_metric("max_drawdown")
+                cagr_net = get_metric("cagr", "net")
+                volatility_annual_net = get_metric("volatility_annual", "net")
+                sortino_annual_net = get_metric("sortino_ratio_annual", "net")
+                max_dd_net = get_metric("max_drawdown", "net")
 
-                win_count = get_net_metric("win_count")
-                lose_count = get_net_metric("lose_count")
+                cagr_gross = get_metric("cagr", "gross")
+                volatility_annual_gross = get_metric("volatility_annual", "gross")
+                sortino_annual_gross = get_metric("sortino_ratio_annual", "gross")
+                max_dd_gross = get_metric("max_drawdown", "gross")
+
+                win_count = get_metric("win_count", "net")
+                lose_count = get_metric("lose_count", "net")
                 total_trades = (win_count if pd.notna(win_count) else 0) + (
                     lose_count if pd.notna(lose_count) else 0
                 )
@@ -115,11 +120,15 @@ def parse_results():
                         "Entry": entry,
                         "Exit": exit_t,
                         "SL": stop_loss,
-                        "CAGR": cagr,
-                        "Volatility Annual": volatility_annual,
                         "Total Trades": int(total_trades),
-                        "Sortino Annual": sortino_annual,
-                        "Max Drawdown": max_dd,
+                        "Sortino Annual Net": sortino_annual_net,
+                        "Sortino Annual Gross": sortino_annual_gross,
+                        "CAGR Net": cagr_net,
+                        "CAGR Gross": cagr_gross,
+                        "Vol Annual Net": volatility_annual_net,
+                        "Vol Annual Gross": volatility_annual_gross,
+                        "Max DD Net": max_dd_net,
+                        "Max DD Gross": max_dd_gross,
                     }
                 )
             except Exception as e:
@@ -140,7 +149,7 @@ def parse_results():
 
         df_summary["Objective"] = df_summary.apply(
             lambda row: (
-                row["Sortino Annual"]
+                row["Sortino Annual Net"]
                 if row["Total Trades"] >= MIN_TOTAL_TRADES
                 else PENALTY_SCORE
             ),
