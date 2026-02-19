@@ -22,8 +22,6 @@ performance:
   window_min: 48
   window_max: 336
 
-  min_trades_per_pair: 10
-
   test:
     win_start: "2023-12-01"
     start: "2024-01-01"

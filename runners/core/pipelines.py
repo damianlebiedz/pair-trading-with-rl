@@ -196,7 +196,6 @@ def execute_pair_selection(
 
 
 def execute_multi_pair_optimization(
-    cfg: DictConfig,
     strategies: list[Strategy],
     static_params: dict[str, Any],
     param_space: list[Any],
