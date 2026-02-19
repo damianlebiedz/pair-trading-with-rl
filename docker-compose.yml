@@ -11,11 +11,22 @@ services:
       - ./tensorboard_logs:/app/tensorboard_logs
     environment:
       - HYDRA_FULL_ERROR=1
-      - MPLBACKEND=Agg
 
   train_agent:
     <<: *base_config
     command: python runners/train_agent.py
+
+  pair_selection:
+    <<: *base_config
+    command: python runners/pair_selection.py
+
+  test:
+    <<: *base_config
+    command: python runners/test.py
+
+  test_multi:
+    <<: *base_config
+    command: python runners/test_multi.py
 
   opt_and_test_multi:
     <<: *base_config
