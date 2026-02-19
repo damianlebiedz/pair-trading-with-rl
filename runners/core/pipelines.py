@@ -1,6 +1,7 @@
 import logging
 import os
 import sys
+import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal
@@ -32,7 +33,8 @@ def setup_run_environment(calling_file: str) -> str:
     script_dir = os.path.dirname(os.path.abspath(calling_file))
     project_root = os.path.abspath(os.path.join(script_dir, ".."))
 
-    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    unique_id = uuid.uuid4().hex[:6]
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S") + f"_{unique_id}"
     output_dir = os.path.join(project_root, "results", timestamp)
 
     os.makedirs(output_dir, exist_ok=True)
@@ -63,7 +65,8 @@ def setup_rl_run_environment(calling_file: str) -> str:
     script_dir = os.path.dirname(os.path.abspath(calling_file))
     project_root = os.path.abspath(os.path.join(script_dir, ".."))
 
-    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    unique_id = uuid.uuid4().hex[:6]
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S") + f"_{unique_id}"
     output_dir = os.path.join(project_root, "data_rl")
 
     os.makedirs(output_dir, exist_ok=True)
