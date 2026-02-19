@@ -1,5 +1,6 @@
 x-base: &base_config
   build: .
+  image: research-paper-base
   env_file:
     - .env
   volumes:
