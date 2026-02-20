@@ -9,7 +9,6 @@ x-base: &base_config
     - ./data_rl/training_data:/app/training_data
     - ./data_rl/tensorboard_logs:/app/tensorboard_logs
     - ./results:/app/results
-    - ./multirun:/app/multirun
   environment:
     - HYDRA_FULL_ERROR=1
     - PYTHONPATH=/app
