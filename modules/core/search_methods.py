@@ -41,7 +41,7 @@ def random_search(
                 pdict[dim.name] = uniform(dim.low, dim.high)
         pdicts.append(pdict)
 
-    results = Parallel(n_jobs=-1, backend="loky")(
+    results = Parallel(n_jobs=1, backend="loky")(
         delayed(evaluate_point)(p, i) for i, p in enumerate(pdicts)
     )
 

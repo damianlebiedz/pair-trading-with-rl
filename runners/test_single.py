@@ -16,8 +16,8 @@ from runners.core.utils import load_model, save_hydra_config_snapshot
 logger = logging.getLogger(__name__)
 
 
-@hydra.main(version_base=None, config_path="../config", config_name="test")
-def test(cfg: DictConfig):
+@hydra.main(version_base=None, config_path="../config", config_name="test_single")
+def test_single(cfg: DictConfig):
     output_dir = setup_run_environment(__file__)
     save_hydra_config_snapshot(cfg=cfg, root_dir=output_dir)
 
@@ -57,7 +57,6 @@ def test(cfg: DictConfig):
         fee_rate=cfg.market.fee_rate,
         initial_cash=cfg.market.initial_cash,
         risk_free_rate_annual=cfg.market.risk_free_rate_annual,
-        min_trades_per_pair=cfg.performance.min_trades_per_pair,
         beta_hedge=cfg.performance.beta_hedge,
         beta_method=cfg.performance.beta_method,
         window_method=cfg.performance.window_method,
@@ -74,7 +73,6 @@ def test(cfg: DictConfig):
 
     logger.info("--- Starting Test ---")
     execute_testing(
-        cfg=cfg,
         bt=bt,
         best_params=best_params,
         ticker_x=ticker_x,
@@ -84,10 +82,12 @@ def test(cfg: DictConfig):
         test_start=cfg.performance.test.start,
         test_end=cfg.performance.test.end,
         subdir="test",
+        interval=cfg.market.interval,
+        plot=cfg.settings.plot,
     )
 
     logger.info(f"Results saved in {output_dir}.")
 
 
 if __name__ == "__main__":
-    test()
+    test_single()

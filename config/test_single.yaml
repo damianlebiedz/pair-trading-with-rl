@@ -1,3 +1,5 @@
+name: test_single
+
 ticker_x: "AVAXUSDT"
 ticker_y: "OPUSDT"
 
@@ -21,8 +23,6 @@ performance:
   vol_window: 24
   window_min: 48
   window_max: 336
-
-  min_trades_per_pair: 10
 
   test:
     win_start: "2023-12-01"

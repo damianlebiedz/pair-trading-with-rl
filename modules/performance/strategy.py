@@ -36,7 +36,6 @@ class Strategy:
         fee_rate (float): Transaction fee rate (e.g., 0.001 for 0.1%).
         initial_cash (float): Starting capital (the same for every trade).
         risk_free_rate_annual (float): Annual risk-free rate.
-        min_trades_per_pair (int): Minimum number of trades per pair for the objective.
         beta_hedge (str): Hedge ratio mode: "static", "rolling", or "no_hedge".
         beta_method (str): Beta calculation method: "ols" or "kalman".
         delayed_entry (bool): Delayed execution or standard one.
@@ -59,7 +58,6 @@ class Strategy:
         fee_rate: float,
         initial_cash: float,
         risk_free_rate_annual: float,
-        min_trades_per_pair: int,
         beta_hedge: Literal["static", "rolling", "no_hedge"],
         beta_method: Literal["ols", "kalman"],
         window_method: Literal["fixed", "static", "rolling"],
@@ -79,7 +77,6 @@ class Strategy:
         self.fee_rate = fee_rate
         self.initial_cash = initial_cash
         self.risk_free_rate_annual = risk_free_rate_annual
-        self.min_trades_per_pair = min_trades_per_pair
         self.beta_hedge = beta_hedge
         self.beta_method = beta_method
         self.window_method = window_method

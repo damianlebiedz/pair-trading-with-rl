@@ -3,7 +3,9 @@
 This project implements an advanced pairs trading framework comparing two distinct approaches: **Statistical Arbitrage** and **Reinforcement Learning**.
 
 - [Key Features](#key-features)
-- [Installation](#installation)
+- [Installation & Running](#installation--running)
+  - [Poetry](#poetry)
+  - [Docker](#docker)
 - [Data Acquisition](#data-acquisition)
 - [Usage & Workflows](#usage--workflows)
 - [Configuration](#Configuration)
@@ -25,9 +27,15 @@ This project implements an advanced pairs trading framework comparing two distin
 
 ---
 
-## Installation
+## Installation & Running
+
+### Poetry
 
 This project uses **Poetry** for dependency management and **Python 3.12**.
+
+Make sure that you have installed:
+- Python 3.12
+- Poetry 2.2.1
 
 ```bash
 # Clone the repository
@@ -36,6 +44,57 @@ cd research-paper
 
 # Install dependencies
 poetry install
+```
+
+### Docker
+
+This project uses Docker to ensure a consistent environment.
+
+Follow a two-step workflow: first, build the **Base Image** containing all dependencies, and then use **Docker Compose** to run specific experiment scripts.
+
+Make sure that you have installed:
+- Docker
+
+#### 1. Build the Base Image
+
+```bash
+# Clone the repository
+git clone https://github.com/damianlebiedz/research-paper.git
+cd research-paper
+
+# Build the Base Image
+docker build -t research-paper-base .
+```
+
+#### 2. Run Experiments with Docker Compose
+Once the image is built, you can run any of the predefined services.
+To run a service and see the logs in your terminal:
+
+```bash
+docker compose up <service_name>
+```
+Available Services:
+- `train_agent`: Trains the RL model with data from `./data_rl/training_data`.
+- `pair_selection`: Executes the pair selection logic.
+- `test_single`: Runs a single backtest on specific parameters.
+- `test_multi`: Runs batch testing across multiple models/pairs on specific parameters.
+- `opt_and_test_multi`: Performs hyperparameter optimization followed by testing.
+
+#### 3. Development Workflow
+- Configuration Changes: The `./config` directory is mapped as a volume. This means you can edit your `.yaml` files, and the changes will be applied instantly when you start a container. No rebuild is required for config changes.
+
+- Persistent Data: Training logs, data, and saved models are stored in ./tensorboard_logs, ./data, and ./models respectively. These folders are synchronized between your machine and the container.
+
+- Overriding Parameters: You can override any Hydra configuration parameter on-the-fly without editing files:
+
+```bash
+docker compose run --rm train_agent python runners/train_agent.py model.lr=0.001
+```
+
+#### 4. Multirun
+You can use hydra multirun with Docker Compose:
+```bash
+docker compose run --rm test_multi python runners/test_multi.py -m stop_loss=2,2.5
 ```
 
 ## Data Acquisition
