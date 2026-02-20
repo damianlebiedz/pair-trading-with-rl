@@ -1,6 +1,5 @@
 import logging
 import os
-
 import hydra
 from omegaconf import OmegaConf, DictConfig
 
@@ -41,9 +40,14 @@ def test_single(cfg: DictConfig):
     agent = None
     if cfg.performance.rl:
         model_path = os.path.join(rl_output_dir, "models")
+        vec_normalize_path = f"{model_path}_normalize.pkl"
         try:
-            model = load_model(path=model_path)
-            agent = RLAgentAdapter(model=model, training_mode=False)
+            model, vec_normalize = load_model(
+                model_path=model_path, vec_normalize_path=vec_normalize_path
+            )
+            agent = RLAgentAdapter(
+                model=model, vec_normalize=vec_normalize, training_mode=False
+            )
             logger.info("RL Agent loaded successfully.")
         except Exception as e:
             logger.error(f"Failed to load RL model: {e}")
