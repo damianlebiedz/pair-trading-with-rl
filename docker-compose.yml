@@ -15,6 +15,7 @@ x-base: &base_config
 services:
   train_agent:
     <<: *base_config
+    build: .
     command: python runners/train_agent.py
 
   pair_selection:
