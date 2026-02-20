@@ -7,6 +7,9 @@ from stable_baselines3 import A2C
 from stable_baselines3.common.base_class import BaseAlgorithm
 from omegaconf import DictConfig, OmegaConf
 from hydra.core.hydra_config import HydraConfig
+from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
+
+from modules.learning.environments import MockEnv
 
 logger = logging.getLogger(__name__)
 
@@ -45,12 +48,26 @@ def generate_date_lists(initial_config, n):
     return generated_lists
 
 
-def load_model(path: str, device: str = "cpu") -> BaseAlgorithm:
-    filename = os.path.basename(path).lower()
+def load_model(
+    model_path: str, vec_normalize_path: str, device: str = "cpu"
+) -> tuple[BaseAlgorithm, VecNormalize | None]:
+    filename = os.path.basename(model_path).lower()
+    vec_normalize = None
+
+    if os.path.exists(vec_normalize_path):
+        mock_venv = DummyVecEnv([lambda: MockEnv()])
+        vec_normalize = VecNormalize.load(vec_normalize_path, mock_venv)
+        vec_normalize.training = False
+        vec_normalize.norm_reward = False
+        logger.info(f"Loaded VecNormalize file from {vec_normalize_path}")
+    else:
+        logger.warning("VecNormalize file not found")
 
     if "recurrent_ppo" in filename:
-        return RecurrentPPO.load(path, device=device)
-    elif "a2c" in filename:
-        return A2C.load(path, device=device)
+        model = RecurrentPPO.load(model_path, device=device)
+    elif "a2c_baseline" in filename:
+        model = A2C.load(model_path, device=device)
     else:
-        raise ValueError(f"Unsupported model: {path}")
+        raise ValueError(f"Unsupported model: {model_path}")
+
+    return model, vec_normalize
