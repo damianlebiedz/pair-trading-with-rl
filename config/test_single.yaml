@@ -1,3 +1,5 @@
+name: test_single
+
 ticker_x: "AVAXUSDT"
 ticker_y: "OPUSDT"
 

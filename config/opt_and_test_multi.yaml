@@ -1,3 +1,5 @@
+name: opt_and_test_multi
+
 fixed_window: null
 entry_threshold: null
 exit_threshold: null

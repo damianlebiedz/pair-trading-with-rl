@@ -22,9 +22,6 @@ def parse_results():
         print(f"Directory {results_dir} not found")
         return None, None
 
-    for cat in categories.keys():
-        (results_dir / cat).mkdir(exist_ok=True)
-
     def extract_param(param_name, text):
         match = re.search(rf"{param_name}:\s*(\S+)", text)
         if match:
@@ -62,11 +59,17 @@ def parse_results():
         else:
             category_name = "0_other"
 
+        target_dir = results_dir / category_name
+        target_dir.mkdir(exist_ok=True)
+
         new_run_dir = results_dir / category_name / run_dir.name
         shutil.move(str(run_dir), str(new_run_dir))
 
     for category_name in categories.keys():
         cat_dir = results_dir / category_name
+
+        if not cat_dir.exists():
+            continue
 
         for run_dir in cat_dir.iterdir():
             if not run_dir.is_dir():

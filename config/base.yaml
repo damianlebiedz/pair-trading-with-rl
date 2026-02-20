@@ -5,8 +5,8 @@ hydra:
   run:
     dir: .
   sweep:
-    dir: .
-    subdir: .
+    dir: results/multirun/${now:%Y-%m-%d_%H-%M-%S}
+    subdir: job_${hydra.job.num}
   output_subdir: null
 
 wandb:

@@ -1,3 +1,5 @@
+name: test_multi
+
 fixed_window: null  # integer if window_method = 'fixed', else null
 entry_threshold: 2.0
 exit_threshold: 0.0
