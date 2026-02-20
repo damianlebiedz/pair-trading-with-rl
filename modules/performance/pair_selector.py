@@ -143,32 +143,35 @@ class PairSelector:
                 source_x_col = f"{t_x}_{self.source}"
                 source_y_col = f"{t_y}_{self.source}"
 
+                X_vals = df_val[source_x_col].values
+                Y_vals = df_val[source_y_col].values
+
                 beta = calculate_beta(
-                    x_col=source_x_col,
-                    y_col=source_y_col,
-                    df=df_val,
-                    beta_method=self.beta_method,
+                    X_slice=X_vals,
+                    Y_slice=Y_vals,
+                    beta_method=self.beta_method
                 )
 
                 if beta <= 0:
                     continue
 
                 hurst = calculate_hurst(
-                    x_col=source_x_col,
-                    y_col=source_y_col,
+                    X_slice=X_vals,
+                    Y_slice=Y_vals,
                     beta=beta,
-                    df=df_val,
                 )
 
                 if hurst > 0.5:
                     logger.debug(f"Pair {pair} rejected. Hurst {hurst:.3f} > 0.5")
                     continue
 
+                X_log_vals = df_val[f"{t_x}_log"].values
+                Y_log_vals = df_val[f"{t_y}_log"].values
+
                 win = calculate_half_life_window(
-                    x_col=f"{t_x}_log",
-                    y_col=f"{t_y}_log",
+                    X_slice=X_log_vals,
+                    Y_slice=Y_log_vals,
                     beta=beta,
-                    df=df_val,
                     valid_window=self.valid_window,
                 )
                 if win is None:

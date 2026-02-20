@@ -1,4 +1,5 @@
 from typing import Literal
+import numpy as np
 import pandas as pd
 
 from modules.core.execution import TradeExecutor
@@ -182,13 +183,20 @@ class Strategy:
         if -1 in [test_start_pos, win_start_pos, end_pos]:
             raise KeyError("Index not found in dataframe")
 
+        X_vals = df[source_x_col].values
+        Y_vals = df[source_y_col].values
+        N = len(df)
+        lookback_len = test_start_pos - win_start_pos + 1
+
         if self.beta_hedge == "no_hedge":
             market_beta = 1.0
         else:
+            slice_x_warmup = X_vals[win_start_pos: test_start_pos + 1]
+            slice_y_warmup = Y_vals[win_start_pos: test_start_pos + 1]
+
             market_beta = calculate_beta(
-                x_col=source_x_col,
-                y_col=source_y_col,
-                df=df.iloc[win_start_pos : test_start_pos + 1],
+                X_slice=slice_x_warmup,
+                Y_slice=slice_y_warmup,
                 beta_method=beta_method,
             )
 
@@ -204,13 +212,51 @@ class Strategy:
         if self.window_method == "fixed":
             market_win = fixed_window
         else:
+            slice_x_warmup = X_vals[win_start_pos : test_start_pos + 1]
+            slice_y_warmup = Y_vals[win_start_pos : test_start_pos + 1]
             market_win = calculate_half_life_window(
-                x_col=source_x_col,
-                y_col=source_y_col,
-                beta=market_beta,
-                df=df.iloc[win_start_pos : test_start_pos + 1],
-                valid_window=self.valid_window,
+                slice_x_warmup, slice_y_warmup, market_beta, self.valid_window
             )
+
+        precalc_ols_beta = np.zeros(N)
+        if self.beta_method == "ols" and self.beta_hedge == "rolling":
+            cov = pd.Series(X_vals).rolling(lookback_len).cov(pd.Series(Y_vals))
+            var = pd.Series(Y_vals).rolling(lookback_len).var()
+            precalc_ols_beta = np.nan_to_num((cov / var).values, nan=0.0)
+
+        precalc_kalman_beta = np.zeros(N)
+        if self.beta_method == "kalman" and self.beta_hedge == "rolling":
+            temp_kf = KalmanState()
+            temp_kf.state_mean = np.copy(kf_state.state_mean)
+            temp_kf.state_cov = np.copy(kf_state.state_cov)
+            precalc_kalman_beta[test_start_pos] = market_beta
+            for i in range(test_start_pos + 1, N):
+                precalc_kalman_beta[i] = temp_kf.update(Y_vals[i], X_vals[i])
+
+        precalc_win_free = np.full(N, None, dtype=object)
+        precalc_hurst_free = np.full(N, 0.5)
+
+        if self.beta_hedge == "no_hedge":
+            base_beta_arr = np.ones(N)
+        elif self.beta_hedge == "static":
+            base_beta_arr = np.full(N, market_beta)
+        else:
+            base_beta_arr = (
+                precalc_kalman_beta
+                if self.beta_method == "kalman"
+                else precalc_ols_beta
+            )
+
+        for i in range(test_start_pos, N):
+            b = base_beta_arr[i]
+            slice_x = X_vals[i - lookback_len + 1 : i + 1]
+            slice_y = Y_vals[i - lookback_len + 1 : i + 1]
+
+            if self.window_method == "rolling":
+                precalc_win_free[i] = calculate_half_life_window(
+                    slice_x, slice_y, b, self.valid_window
+                )
+            precalc_hurst_free[i] = calculate_hurst(slice_x, slice_y, b)
 
         df[f"ret_{self.ticker_x}"] = df[source_x_col].diff().fillna(0.0)
         df[f"ret_{self.ticker_y}"] = df[source_y_col].diff().fillna(0.0)
@@ -267,26 +313,21 @@ class Strategy:
             else:
                 if self.beta_hedge == "rolling" and i != test_start_pos:
                     if self.beta_method == "kalman":
-                        market_beta = kf_state.update(
-                            obs_x=df[source_y_col].iloc[i],
-                            obs_y=df[source_x_col].iloc[i],
-                        )
+                        market_beta = precalc_kalman_beta[i]
                     elif self.beta_method == "ols" and position_state.position == 0:
-                        market_beta = calculate_beta(
-                            x_col=source_x_col,
-                            y_col=source_y_col,
-                            df=df.iloc[win_start_pos + i - test_start_pos : i + 1],
-                            beta_method=beta_method,
-                        )
+                        market_beta = precalc_ols_beta[i]
 
                 if self.window_method == "rolling" and i != test_start_pos:
-                    market_win = calculate_half_life_window(
-                        x_col=source_x_col,
-                        y_col=source_y_col,
-                        beta=market_beta,
-                        df=df.iloc[win_start_pos + i - test_start_pos : i + 1],
-                        valid_window=self.valid_window,
-                    )
+                    if self.beta_method == "kalman" or (
+                        self.beta_method == "ols" and position_state.position == 0
+                    ):
+                        market_win = precalc_win_free[i]
+                    else:
+                        slice_x = X_vals[i - lookback_len + 1 : i + 1]
+                        slice_y = Y_vals[i - lookback_len + 1 : i + 1]
+                        market_win = calculate_half_life_window(
+                            slice_x, slice_y, market_beta, self.valid_window
+                        )
 
                 if (
                     position_state.position != 0
@@ -331,12 +372,12 @@ class Strategy:
                         None,
                     )
                 else:
+                    slice_x_win = X_vals[i - win + 1 : i + 1]
+                    slice_y_win = Y_vals[i - win + 1 : i + 1]
                     spread, mean, market_std = calculate_spread_statistics(
-                        x_col=source_x_col,
-                        y_col=source_y_col,
-                        beta=beta,
-                        df=df.iloc[i - win + 1 : i + 1],
+                        slice_x_win, slice_y_win, beta
                     )
+
                     if (
                         position_state.position != 0
                         and position_state.entry_std is not None
@@ -344,11 +385,8 @@ class Strategy:
                         std = position_state.entry_std
                     else:
                         std = market_std
-                    z_score = calculate_z_score(
-                        spread=spread,
-                        mean=mean,
-                        std=std,
-                    )
+
+                    z_score = calculate_z_score(spread=spread, mean=mean, std=std)
 
                 signal = generate_signal(
                     z_score=z_score,
@@ -385,12 +423,12 @@ class Strategy:
                         if break_above or break_below:
                             position_state.sl_lock = False
 
-                hurst = calculate_hurst(
-                    x_col=source_x_col,
-                    y_col=source_y_col,
-                    beta=market_beta,
-                    df=df.iloc[win_start_pos + i - test_start_pos : i + 1],
-                )
+                if self.beta_method == "kalman" or position_state.position == 0:
+                    hurst = precalc_hurst_free[i]
+                else:
+                    slice_x = X_vals[i - lookback_len + 1 : i + 1]
+                    slice_y = Y_vals[i - lookback_len + 1 : i + 1]
+                    hurst = calculate_hurst(slice_x, slice_y, market_beta)
 
                 if self.agent:
                     current_state = AgentState(
