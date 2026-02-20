@@ -9,25 +9,19 @@ from stable_baselines3 import A2C
 from sb3_contrib import RecurrentPPO
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.utils import set_random_seed
-from stable_baselines3.common.vec_env import DummyVecEnv
+from stable_baselines3.common.vec_env import VecNormalize
 import os
 from wandb.integration.sb3 import WandbCallback
 
 from modules.data_services.data_utils import load_strategy_result
-from modules.learning.environments import PairsTradingEnv
-from modules.learning.rewards import (
-    PnLReward,
-    RiskAdjustedReward,
-    VolatilityPenaltyReward,
-    DifferentialSharpeReward,
-)
+from modules.learning.environments import build_base_env
 from runners.core.pipelines import setup_rl_run_environment
 from runners.core.utils import save_hydra_config_snapshot
 
 logger = logging.getLogger(__name__)
 load_dotenv()
 
-ALGO_MAP = {"a2c": A2C, "recurrent_ppo": RecurrentPPO}
+ALGO_MAP = {"a2c_baseline": A2C, "recurrent_ppo": RecurrentPPO}
 
 
 class LogEquityCallback(BaseCallback):
@@ -108,33 +102,16 @@ def train_agent(cfg: DictConfig):
 
     logger.info(f"Loaded data for {result.ticker_x}/{result.ticker_y}")
 
-    def make_env():
-        rl_reward = cfg.rl_reward
-        reward_map = {
-            "pnl": PnLReward,
-            "risk_adj": RiskAdjustedReward,
-            "vol_penalty": VolatilityPenaltyReward,
-            "diff_sharpe": DifferentialSharpeReward,
-        }
+    vec_env = build_base_env(result, cfg.rl_reward, seed=seed)
+    vec_env = VecNormalize(vec_env, norm_obs=True, norm_reward=True, clip_obs=10.0)
 
-        try:
-            reward_schema = reward_map[rl_reward]()
-        except KeyError:
-            raise ValueError(
-                f"'rl_reward' should be one of {list(reward_map.keys())}: {rl_reward}"
-            )
+    algo_name = cfg.rl_algo.algo_name
+    algo_class = ALGO_MAP.get(algo_name)
 
-        env = PairsTradingEnv(result=result, reward_scheme=reward_schema)
-        env.reset(seed=seed)
+    if algo_class is None:
+        raise ValueError(f"Nieznany algorytm RL: {algo_name}")
 
-        return env
-
-    vec_env = DummyVecEnv([make_env])
-    vec_env.seed(seed)
-
-    algo_config = cfg.rl_algo.algo_name
-    algo_class = ALGO_MAP.get(algo_config.name)
-    model_params = OmegaConf.to_container(algo_config.params, resolve=True)
+    model_params = OmegaConf.to_container(cfg.rl_algo.params, resolve=True)
 
     model = algo_class(
         cfg.policy_type,
@@ -149,7 +126,7 @@ def train_agent(cfg: DictConfig):
         **model_params,
     )
 
-    logger.info(f"Starting {algo_config.name} training (Run ID: {run.id})...")
+    logger.info(f"Starting {algo_name} training (Run ID: {run.id})...")
 
     callbacks = [
         WandbCallback(
@@ -164,20 +141,25 @@ def train_agent(cfg: DictConfig):
         model.learn(total_timesteps=cfg.rl.total_timesteps, callback=callbacks)
         logger.info("Training finished.")
 
-        final_model_name = f"{algo_config.name}_{run.id}_seed{seed}"
+        final_model_name = f"{algo_name}_{run.id}_seed{seed}"
         save_path = f"{model_dir}/{final_model_name}"
         model.save(save_path)
+        vec_env.save(f"{save_path}_normalize.pkl")
 
         if wandb.run is not None:
             model_artifact = wandb.Artifact(
-                name=f"{algo_config.name}_model_{run.id}",
+                name=f"{algo_name}_model_{run.id}",
                 type="model",
-                description=f"Trained {algo_config.name} model",
+                description=f"Trained {algo_name} model",
                 metadata={"seed": seed, "steps": cfg.total_timesteps},
             )
             model_artifact.add_file(f"{save_path}.zip")
+            model_artifact.add_file(f"{save_path}_normalize.pkl")
             wandb.log_artifact(model_artifact)
             logger.info("Logged model artifact to W&B.")
+
+            vec_env.training = False
+            vec_env.norm_reward = False
 
             obs = vec_env.reset()
             lstm_states = None
@@ -203,13 +185,13 @@ def train_agent(cfg: DictConfig):
 
     except KeyboardInterrupt:
         logger.info("Training interrupted manually. Saving current model...")
-        final_model_name = f"{algo_config.name}_{run.id}_seed{seed}_interrupted"
+        final_model_name = f"{algo_name}_{run.id}_seed{seed}_interrupted"
         save_path = f"{model_dir}/{final_model_name}"
         model.save(save_path)
 
         if wandb.run is not None:
             model_artifact = wandb.Artifact(
-                name=f"{algo_config.name}_model_{run.id}_interrupted", type="model"
+                name=f"{algo_name}_model_{run.id}_interrupted", type="model"
             )
             model_artifact.add_file(f"{save_path}.zip")
             wandb.log_artifact(model_artifact)
