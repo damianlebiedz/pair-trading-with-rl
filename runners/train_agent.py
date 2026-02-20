@@ -14,7 +14,7 @@ import os
 from wandb.integration.sb3 import WandbCallback
 
 from modules.data_services.data_utils import load_strategy_result
-from modules.learning.environments import build_base_env
+from modules.learning.environments import build_multi_env
 from runners.core.pipelines import setup_rl_run_environment
 from runners.core.utils import save_hydra_config_snapshot
 
@@ -29,19 +29,19 @@ class LogEquityCallback(BaseCallback):
         super(LogEquityCallback, self).__init__(verbose)
 
     def _on_step(self) -> bool:
-        infos = self.locals.get("infos", [{}])
+        infos = self.locals.get("infos", [])
 
         if infos:
-            info = infos[0]
+            avg_equity = np.mean([info.get("equity", 0.0) for info in infos])
+            active_positions = sum(
+                [1 for info in infos if abs(info.get("position", 0)) > 0.1]
+            )
 
-            equity = info.get("equity")
-            position = info.get("position")
-
-            if equity is not None and wandb.run is not None:
+            if wandb.run is not None:
                 wandb.log(
                     {
-                        "env/equity": equity,
-                        "env/position": position,
+                        "env/avg_equity": avg_equity,
+                        "env/active_positions": active_positions,
                         "global_step": self.num_timesteps,
                     }
                 )
@@ -78,55 +78,62 @@ def train_agent(cfg: DictConfig):
     )
 
     logger.info(f"Loading training data from '{data_path}'...")
-    try:
-        latest_file_path = max(
-            Path(data_path).glob("*.parquet"), key=lambda p: p.stat().st_mtime
-        )
-        result = load_strategy_result(latest_file_path.name, directory="training_data")
 
-        if wandb.run is not None:
-            data_artifact = wandb.Artifact(
-                name="training_dataset",
-                type="dataset",
-                description=f"Data for {result.ticker_x}/{result.ticker_y} ({result.interval})",
-                metadata={"filename": latest_file_path.name},
-            )
-            data_artifact.add_file(str(latest_file_path))
-            wandb.log_artifact(data_artifact)
-            logger.info(f"Logged dataset artifact: {latest_file_path.name}")
+    all_files = list(Path(data_path).rglob("*.parquet"))
+    valid_files = [
+        f for f in all_files if "stats" not in f.name and "summary" not in f.name
+    ]
 
-    except (ValueError, FileNotFoundError) as e:
-        logger.error(f"Error loading data: {e}")
+    if not valid_files:
+        logger.error("Parquets not found")
         wandb.finish()
         return
 
-    logger.info(f"Loaded data for {result.ticker_x}/{result.ticker_y}")
+    logger.info(f"Found {len(valid_files)} parquets")
 
-    vec_env = build_base_env(result, cfg.rl_reward, seed=seed)
+    results = []
+    for file_path in valid_files:
+        try:
+            res = load_strategy_result(file_path.name, directory=str(file_path.parent))
+            results.append(res)
+        except Exception as e:
+            logger.warning(f"Error loading {file_path.name}: {e}")
+
+    if not results:
+        logger.error("Data not found")
+        wandb.finish()
+        return
+
+    logger.info(f"Successfully loaded {len(results)} environments")
+
+    if wandb.run is not None:
+        data_artifact = wandb.Artifact(name="training_dataset_multi", type="dataset")
+        data_artifact.add_dir(data_path)
+        wandb.log_artifact(data_artifact)
+
+    vec_env = build_multi_env(results, cfg.rl_reward, seed=seed)
     vec_env = VecNormalize(vec_env, norm_obs=True, norm_reward=True, clip_obs=10.0)
 
     algo_name = cfg.rl_algo.algo_name
     algo_class = ALGO_MAP.get(algo_name)
 
     if algo_class is None:
-        raise ValueError(f"Nieznany algorytm RL: {algo_name}")
+        raise ValueError(f"RL algorithm not found: {algo_name}")
 
     model_params = OmegaConf.to_container(cfg.rl_algo.params, resolve=True)
 
     model = algo_class(
-        cfg.policy_type,
-        vec_env,
+        policy=cfg.policy_type,
+        env=vec_env,
         verbose=cfg.rl.verbose,
         tensorboard_log=log_dir,
-        learning_rate=cfg.learning_rate,
-        n_steps=cfg.n_steps,
-        gamma=cfg.gamma,
-        ent_coef=cfg.ent_coef,
         seed=seed,
         **model_params,
     )
 
-    logger.info(f"Starting {algo_name} training (Run ID: {run.id})...")
+    logger.info(
+        f"Starting {algo_name} training on {len(results)} pairs (Run ID: {run.id})..."
+    )
 
     callbacks = [
         WandbCallback(
@@ -151,51 +158,29 @@ def train_agent(cfg: DictConfig):
                 name=f"{algo_name}_model_{run.id}",
                 type="model",
                 description=f"Trained {algo_name} model",
-                metadata={"seed": seed, "steps": cfg.total_timesteps},
             )
             model_artifact.add_file(f"{save_path}.zip")
             model_artifact.add_file(f"{save_path}_normalize.pkl")
             wandb.log_artifact(model_artifact)
             logger.info("Logged model artifact to W&B.")
 
-            vec_env.training = False
-            vec_env.norm_reward = False
-
-            obs = vec_env.reset()
-            lstm_states = None
-            episode_starts = np.ones((vec_env.num_envs,), dtype=bool)
-            total_reward = 0
-
-            while True:
-                action, lstm_states = model.predict(
-                    obs,
-                    state=lstm_states,
-                    episode_start=episode_starts,
-                    deterministic=True,
-                )
-                obs, rewards, dones, info = vec_env.step(action)
-                episode_starts = dones
-
-                total_reward += rewards[0]
-                if dones[0]:
-                    break
-
-            logger.info(f"Validation PnL: {total_reward:.2f}")
-            wandb.log({"validation/final_pnl": total_reward})
-
     except KeyboardInterrupt:
         logger.info("Training interrupted manually. Saving current model...")
         final_model_name = f"{algo_name}_{run.id}_seed{seed}_interrupted"
         save_path = f"{model_dir}/{final_model_name}"
         model.save(save_path)
+        vec_env.save(f"{save_path}_normalize.pkl")
 
         if wandb.run is not None:
             model_artifact = wandb.Artifact(
-                name=f"{algo_name}_model_{run.id}_interrupted", type="model"
+                name=f"{algo_name}_model_{run.id}_interrupted",
+                type="model",
+                description=f"Interrupted {algo_name}",
             )
             model_artifact.add_file(f"{save_path}.zip")
+            model_artifact.add_file(f"{save_path}_normalize.pkl")
             wandb.log_artifact(model_artifact)
-
+            logger.info("Saved interrupted model.")
     finally:
         wandb.finish()
 

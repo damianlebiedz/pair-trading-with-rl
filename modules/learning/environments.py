@@ -20,30 +20,26 @@ from modules.learning.rewards import (
 )
 
 
-def build_base_env(
-    result: StrategyResult, rl_reward: str, seed: int = None
+def build_multi_env(
+    results: list[StrategyResult], rl_reward: str, seed: int = None
 ) -> DummyVecEnv:
-    def make_env():
-        reward_map = {
-            "pnl": PnLReward,
-            "risk_adj": RiskAdjustedReward,
-            "vol_penalty": VolatilityPenaltyReward,
-            "diff_sharpe": DifferentialSharpeReward,
-        }
+    env_fns = []
 
-        try:
+    for res in results:
+
+        def make_env(result=res):
+            reward_map = {
+                "pnl": PnLReward,
+                "risk_adj": RiskAdjustedReward,
+                "vol_penalty": VolatilityPenaltyReward,
+                "diff_sharpe": DifferentialSharpeReward,
+            }
             reward_schema = reward_map[rl_reward]()
-        except KeyError:
-            raise ValueError(
-                f"'rl_reward' should be one of {list(reward_map.keys())}: {rl_reward}"
-            )
+            return PairsTradingEnv(result=result, reward_scheme=reward_schema)
 
-        env = PairsTradingEnv(result=result, reward_scheme=reward_schema)
-        if seed is not None:
-            env.reset(seed=seed)
-        return env
+        env_fns.append(make_env)
 
-    vec_env = DummyVecEnv([make_env])
+    vec_env = DummyVecEnv(env_fns)
     if seed is not None:
         vec_env.seed(seed)
 
@@ -74,7 +70,14 @@ class PairsTradingEnv(gym.Env):
         self.df = result.data.reset_index(drop=True)
 
         valid_indices = self.df.dropna(
-            subset=["spread", "mean", "hurst", "market_vol", "market_std", "market_beta"]
+            subset=[
+                "spread",
+                "mean",
+                "hurst",
+                "market_vol",
+                "market_std",
+                "market_beta",
+            ]
         ).index
         self.warmup_offset = valid_indices[0] if not valid_indices.empty else 0
 
@@ -132,7 +135,10 @@ class PairsTradingEnv(gym.Env):
         price_x = row[self.result.ticker_x]
         price_y = row[self.result.ticker_y]
 
-        if self.position_state.position != 0 and self.position_state.entry_beta is not None:
+        if (
+            self.position_state.position != 0
+            and self.position_state.entry_beta is not None
+        ):
             exec_beta = self.position_state.entry_beta
             exec_std = self.position_state.entry_std
             exec_win = self.position_state.entry_win
@@ -177,7 +183,7 @@ class PairsTradingEnv(gym.Env):
             "position": self.position_state.position,
             "action": target_position,
             "step_fees": step_fees,
-            "is_bankrupt": is_bankrupt
+            "is_bankrupt": is_bankrupt,
         }
 
         reward = self.reward_scheme.calculate(
@@ -206,7 +212,12 @@ class PairsTradingEnv(gym.Env):
         market_std = row.get("market_std")
 
         market_z_score = None
-        if spread is not None and mean is not None and market_std is not None and market_std > 0:
+        if (
+            spread is not None
+            and mean is not None
+            and market_std is not None
+            and market_std > 0
+        ):
             market_z_score = (spread - mean) / market_std
 
         time_in_pos = self.position_state.time_in_pos
