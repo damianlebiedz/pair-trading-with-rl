@@ -1,30 +1,31 @@
 x-base: &base_config
-  build: .
   image: research-paper-base
   env_file:
     - .env
   volumes:
     - ./config:/app/config
     - ./data:/app/data
-    - ./models:/app/models
-    - ./training_data:/app/training_data
-    - ./tensorboard_logs:/app/tensorboard_logs
+    - ./data_rl/models:/app/models
+    - ./data_rl/training_data:/app/training_data
+    - ./data_rl/tensorboard_logs:/app/tensorboard_logs
+    - ./results:/app/results
+    - ./multirun:/app/multirun
   environment:
     - HYDRA_FULL_ERROR=1
+    - PYTHONPATH=/app
 
 services:
   train_agent:
     <<: *base_config
-    build: .
     command: python runners/train_agent.py
 
   pair_selection:
     <<: *base_config
     command: python runners/pair_selection.py
 
-  test:
+  test_single:
     <<: *base_config
-    command: python runners/test.py
+    command: python runners/test_single.py
 
   test_multi:
     <<: *base_config

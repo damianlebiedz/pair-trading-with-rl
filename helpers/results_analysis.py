@@ -3,18 +3,20 @@ import shutil
 import pandas as pd
 from pathlib import Path
 
-# ==========================================
-MIN_TOTAL_TRADES = 1200  # 5 trades per month for a single pair
-PENALTY_SCORE = -100.0
-# ==========================================
-
 
 def parse_results():
     script_dir = Path(__file__).resolve().parent
     project_root = script_dir.parent
     results_dir = project_root / "results"
 
-    categories = {"1_baseline": [], "2_static": [], "3_rolling": [], "0_other": []}
+    categories = {
+        "1_baseline": [],
+        "2_static": [],
+        "3_rolling": [],
+        "4_hybrid_no_hedge": [],
+        "5_hybrid_fixed": [],
+        "0_other": [],
+    }
 
     if not results_dir.exists():
         print(f"Directory {results_dir} not found")
@@ -53,6 +55,10 @@ def parse_results():
             category_name = "2_static"
         elif beta_hedge == "rolling" and window_method == "rolling":
             category_name = "3_rolling"
+        elif beta_hedge == "no_hedge":
+            category_name = "4_hybrid_no_hedge"
+        elif window_method == "fixed":
+            category_name = "5_hybrid_fixed"
         else:
             category_name = "0_other"
 
@@ -140,26 +146,17 @@ def parse_results():
             continue
 
         df_summary = pd.DataFrame(results_list)
-        df_summary["Sortino Annual"] = pd.to_numeric(
-            df_summary["Sortino Annual"], errors="coerce"
+        df_summary["Sortino Annual Net"] = pd.to_numeric(
+            df_summary["Sortino Annual Net"], errors="coerce"
         )
         df_summary["Total Trades"] = pd.to_numeric(
             df_summary["Total Trades"], errors="coerce"
         )
 
-        df_summary["Objective"] = df_summary.apply(
-            lambda row: (
-                row["Sortino Annual Net"]
-                if row["Total Trades"] >= MIN_TOTAL_TRADES
-                else PENALTY_SCORE
-            ),
-            axis=1,
-        )
-
         df_summary = df_summary.sort_values(
-            by="Objective", ascending=False
+            by="Sortino Annual Net", ascending=False
         ).reset_index(drop=True)
-        summary_dfs[cat_name] = df_summary
+        summary_dfs[category_name] = df_summary
 
     pd.set_option("display.max_rows", None)
     pd.set_option("display.max_columns", None)

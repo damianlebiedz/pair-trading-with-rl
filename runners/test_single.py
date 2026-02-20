@@ -16,8 +16,8 @@ from runners.core.utils import load_model, save_hydra_config_snapshot
 logger = logging.getLogger(__name__)
 
 
-@hydra.main(version_base=None, config_path="../config", config_name="test")
-def test(cfg: DictConfig):
+@hydra.main(version_base=None, config_path="../config", config_name="test_single")
+def test_single(cfg: DictConfig):
     output_dir = setup_run_environment(__file__)
     save_hydra_config_snapshot(cfg=cfg, root_dir=output_dir)
 
@@ -90,4 +90,4 @@ def test(cfg: DictConfig):
 
 
 if __name__ == "__main__":
-    test()
+    test_single()
