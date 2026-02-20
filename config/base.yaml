@@ -4,6 +4,9 @@ defaults:
 hydra:
   run:
     dir: .
+  sweep:
+    dir: .
+    subdir: .
   output_subdir: null
 
 wandb:
