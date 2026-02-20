@@ -147,9 +147,7 @@ class PairSelector:
                 Y_vals = df_val[source_y_col].values
 
                 beta = calculate_beta(
-                    X_slice=X_vals,
-                    Y_slice=Y_vals,
-                    beta_method=self.beta_method
+                    X_slice=X_vals, Y_slice=Y_vals, beta_method=self.beta_method
                 )
 
                 if beta <= 0:

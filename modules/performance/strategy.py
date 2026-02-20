@@ -191,8 +191,8 @@ class Strategy:
         if self.beta_hedge == "no_hedge":
             market_beta = 1.0
         else:
-            slice_x_warmup = X_vals[win_start_pos: test_start_pos + 1]
-            slice_y_warmup = Y_vals[win_start_pos: test_start_pos + 1]
+            slice_x_warmup = X_vals[win_start_pos : test_start_pos + 1]
+            slice_y_warmup = Y_vals[win_start_pos : test_start_pos + 1]
 
             market_beta = calculate_beta(
                 X_slice=slice_x_warmup,
