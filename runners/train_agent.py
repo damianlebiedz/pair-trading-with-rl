@@ -115,7 +115,7 @@ def train_agent(cfg: DictConfig):
         results=results,
         rl_reward=cfg.rl.reward,
         obs_space_type=cfg.rl.obs_space_type,
-        seed=seed
+        seed=seed,
     )
     vec_env = VecNormalize(vec_env, norm_obs=True, norm_reward=True, clip_obs=10.0)
 

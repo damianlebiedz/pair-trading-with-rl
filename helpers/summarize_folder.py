@@ -17,10 +17,14 @@ def extract_param(param_name, text):
 
 def create_html_plot(df: pd.DataFrame, title: str, out_file: Path):
     params_to_plot = ["Delayed Entry", "SL Lock", "Time Decay SL"]
-    valid_params = [p for p in params_to_plot if p in df.columns and df[p].nunique() > 1]
+    valid_params = [
+        p for p in params_to_plot if p in df.columns and df[p].nunique() > 1
+    ]
 
     if not valid_params:
-        print(f"\n--> No variable parameters to plot for: {title} (all have a single value).")
+        print(
+            f"\n--> No variable parameters to plot for: {title} (all have a single value)."
+        )
         return
 
     n_params = len(valid_params)
@@ -28,9 +32,10 @@ def create_html_plot(df: pd.DataFrame, title: str, out_file: Path):
     rows = math.ceil(n_params / cols)
 
     fig = make_subplots(
-        rows=rows, cols=cols,
+        rows=rows,
+        cols=cols,
         subplot_titles=[f"Distribution by {p}" for p in valid_params],
-        vertical_spacing=0.1
+        vertical_spacing=0.1,
     )
 
     for i, param in enumerate(valid_params):
@@ -40,7 +45,7 @@ def create_html_plot(df: pd.DataFrame, title: str, out_file: Path):
         df[f"{param}_str"] = df[param].astype(str)
         unique_vals = sorted(
             df[f"{param}_str"].unique(),
-            key=lambda x: (x.lower() in ['null', 'none'], x)
+            key=lambda x: (x.lower() in ["null", "none"], x),
         )
 
         fig.add_trace(
@@ -49,33 +54,50 @@ def create_html_plot(df: pd.DataFrame, title: str, out_file: Path):
                 y=df["Sortino Annual Net"],
                 text=df["Run_ID"],
                 hoverinfo="y+text",
-                boxpoints='all',
+                boxpoints="all",
                 jitter=0.5,
                 pointpos=0,
-                fillcolor='rgba(0,0,0,0)',
-                line=dict(color='rgba(0,0,0,0)'),
-                marker=dict(size=8, opacity=0.6, color='#1f77b4', line=dict(width=1, color='DarkSlateGrey')),
+                fillcolor="rgba(0,0,0,0)",
+                line=dict(color="rgba(0,0,0,0)"),
+                marker=dict(
+                    size=8,
+                    opacity=0.6,
+                    color="#1f77b4",
+                    line=dict(width=1, color="DarkSlateGrey"),
+                ),
                 name=param,
-                showlegend=False
+                showlegend=False,
             ),
-            row=r, col=c
+            row=r,
+            col=c,
         )
 
-        means = df.groupby(f"{param}_str")["Sortino Annual Net"].mean().reindex(unique_vals)
+        means = (
+            df.groupby(f"{param}_str")["Sortino Annual Net"].mean().reindex(unique_vals)
+        )
         fig.add_trace(
             go.Scatter(
                 x=unique_vals,
                 y=means.values,
-                mode='markers',
-                marker=dict(symbol='line-ew', size=40, color='red', line_width=4),
-                hoverinfo='skip',
-                showlegend=False
+                mode="markers",
+                marker=dict(symbol="line-ew", size=40, color="red", line_width=4),
+                hoverinfo="skip",
+                showlegend=False,
             ),
-            row=r, col=c
+            row=r,
+            col=c,
         )
 
-        fig.add_hline(y=0, line_dash="dash", line_color="black", opacity=0.5, row=r, col=c)
-        fig.update_xaxes(categoryorder='array', categoryarray=unique_vals, title_text=param, row=r, col=c)
+        fig.add_hline(
+            y=0, line_dash="dash", line_color="black", opacity=0.5, row=r, col=c
+        )
+        fig.update_xaxes(
+            categoryorder="array",
+            categoryarray=unique_vals,
+            title_text=param,
+            row=r,
+            col=c,
+        )
         fig.update_yaxes(title_text="Sortino Annual Net", row=r, col=c)
 
     fig.update_layout(
@@ -83,13 +105,13 @@ def create_html_plot(df: pd.DataFrame, title: str, out_file: Path):
         width=1300,
         title_text=f"Sortino Distribution Analysis: <b>{title}</b>",
         title_font_size=20,
-        plot_bgcolor='white',
-        paper_bgcolor='white',
-        hovermode='closest'
+        plot_bgcolor="white",
+        paper_bgcolor="white",
+        hovermode="closest",
     )
 
-    fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor='#E5E5E5')
-    fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor='#E5E5E5')
+    fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor="#E5E5E5")
+    fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor="#E5E5E5")
 
     fig.write_html(str(out_file))
     print(f"--> Saved interactive HTML dashboard: {out_file}")
@@ -176,10 +198,16 @@ def summarize_folder(folder_name):
         return
 
     df_summary = pd.DataFrame(results_list)
-    df_summary["Sortino Annual Net"] = pd.to_numeric(df_summary["Sortino Annual Net"], errors="coerce")
-    df_summary["Total Trades"] = pd.to_numeric(df_summary["Total Trades"], errors="coerce")
+    df_summary["Sortino Annual Net"] = pd.to_numeric(
+        df_summary["Sortino Annual Net"], errors="coerce"
+    )
+    df_summary["Total Trades"] = pd.to_numeric(
+        df_summary["Total Trades"], errors="coerce"
+    )
 
-    df_summary = df_summary.sort_values(by="Sortino Annual Net", ascending=False).reset_index(drop=True)
+    df_summary = df_summary.sort_values(
+        by="Sortino Annual Net", ascending=False
+    ).reset_index(drop=True)
 
     out_parquet = target_dir / f"summary_{folder_name}.parquet"
     df_summary.to_parquet(out_parquet, engine="pyarrow", index=False)
