@@ -43,8 +43,8 @@ class RiskAdjustedReward(RewardScheme):
         info: dict,
     ) -> float:
         drawdown_pct = info.get("drawdown_pct", 0.0)
-        return step_pnl - (drawdown_pct * self.risk_penalty)
-
+        net_pnl = step_pnl - step_fees
+        return net_pnl - (drawdown_pct * self.risk_penalty)
 
 class DifferentialSharpeReward(RewardScheme):
     """Differential Sharpe Ratio (DSR) by Moody, Saffell (2001)."""
