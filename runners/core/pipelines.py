@@ -33,9 +33,10 @@ def setup_run_environment(calling_file: str) -> str:
     script_dir = os.path.dirname(os.path.abspath(calling_file))
     project_root = os.path.abspath(os.path.join(script_dir, ".."))
 
+    file_stem = Path(calling_file).stem
     unique_id = uuid.uuid4().hex[:6]
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S") + f"_{unique_id}"
-    output_dir = os.path.join(project_root, "results", timestamp)
+    output_dir = os.path.join(project_root, "results", f"{file_stem}_{timestamp}")
 
     os.makedirs(output_dir, exist_ok=True)
 
@@ -65,9 +66,10 @@ def setup_rl_run_environment(calling_file: str) -> str:
     script_dir = os.path.dirname(os.path.abspath(calling_file))
     project_root = os.path.abspath(os.path.join(script_dir, ".."))
 
+    file_stem = Path(calling_file).stem
     unique_id = uuid.uuid4().hex[:6]
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S") + f"_{unique_id}"
-    output_dir = os.path.join(project_root, "data_rl")
+    output_dir = os.path.join(project_root, "data_rl", f"{file_stem}_{timestamp}")
 
     os.makedirs(output_dir, exist_ok=True)
 
@@ -78,7 +80,7 @@ def setup_rl_run_environment(calling_file: str) -> str:
         "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     )
 
-    file_handler = logging.FileHandler(os.path.join(output_dir, f"{timestamp}.log"))
+    file_handler = logging.FileHandler(os.path.join(output_dir, "execution.log"))
     file_handler.setFormatter(formatter)
     root_logger.addHandler(file_handler)
 

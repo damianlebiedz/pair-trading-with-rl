@@ -58,7 +58,7 @@ def train_agent(cfg: DictConfig):
     set_random_seed(seed)
     logger.info(f"Random seed set to: {seed}")
 
-    data_path = os.path.join(rl_root, "training_data")
+    data_path = os.path.join(Path(rl_root).parent, "training_data")
     model_dir = os.path.join(rl_root, "models")
     log_dir = os.path.join(rl_root, "tensorboard_logs")
 
@@ -73,6 +73,7 @@ def train_agent(cfg: DictConfig):
         sync_tensorboard=True,
         monitor_gym=True,
         save_code=True,
+        dir=rl_root,
     )
 
     logger.info(f"Loading training data from '{data_path}'...")

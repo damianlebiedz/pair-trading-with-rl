@@ -6,7 +6,7 @@ from plotly.subplots import make_subplots
 from pathlib import Path
 
 # ==========================================
-PATH = "opt_experiments"
+PATH = "WINNER_5_opt"
 # ==========================================
 
 
@@ -33,18 +33,14 @@ def parse_bounds(content: str) -> dict:
 
 def parse_iterations(content: str) -> list:
     iterations = []
+    pattern = r"INFO\s+-\s+\((\{.*?\})\s*,\s*[\d\.-]+\)"
 
     for line in content.split("\n"):
-        if "INFO - ({" in line and "fixed_window" in line:
-            match = re.search(r"INFO - \((\{.*?}),", line)
+        if "fixed_window" in line:
+            match = re.search(pattern, line)
             if match:
-                dict_str = match.group(1)
-                try:
-                    params = ast.literal_eval(dict_str)
-                    iterations.append(params)
-                except Exception as e:
-                    print(f" Warning: Could not parse dict: {dict_str} | Error: {e}")
-
+                params = ast.literal_eval(match.group(1))
+                iterations.append(params)
     return iterations
 
 
@@ -88,8 +84,8 @@ def create_optimization_dashboard(
         if param_col not in df.columns:
             continue
 
-        b_min = bounds.get(config["min"], 0)
-        b_max = bounds.get(config["max"], 0)
+        b_min = bounds.get(config["min"])
+        b_max = bounds.get(config["max"])
 
         fig.add_trace(
             go.Scatter(
@@ -108,58 +104,63 @@ def create_optimization_dashboard(
             col=c,
         )
 
-        fig.add_hline(
-            y=b_max,
-            line_dash="dash",
-            line_color="red",
-            opacity=0.7,
-            annotation_text="Max Limit",
-            annotation_position="top right",
-            row=r,
-            col=c,
-        )
-        fig.add_hline(
-            y=b_min,
-            line_dash="dash",
-            line_color="green",
-            opacity=0.7,
-            annotation_text="Min Limit",
-            annotation_position="bottom right",
-            row=r,
-            col=c,
-        )
+        if config["max"] in bounds:
+            fig.add_hline(
+                y=b_max,
+                line_dash="dash",
+                line_color="red",
+                opacity=0.7,
+                annotation_text="Max",
+                annotation_position="top right",
+                row=r,
+                col=c,
+            )
 
-        padding = (b_max - b_min) * 0.1 if b_max > b_min else 1.0
-        fig.update_yaxes(
-            range=[b_min - padding, b_max + padding],
-            title_text="Parameter Value",
-            row=r,
-            col=c,
-        )
-        fig.update_xaxes(
-            title_text="Iteration Number",
-            tickmode="linear",
-            tick0=1,
-            dtick=1,
-            row=r,
-            col=c,
-        )
+        if config["min"] in bounds:
+            fig.add_hline(
+                y=b_min,
+                line_dash="dash",
+                line_color="red",
+                opacity=0.7,
+                annotation_text="Min",
+                annotation_position="bottom right",
+                row=r,
+                col=c,
+            )
 
     fig.update_layout(
         height=800,
         width=1200,
         title_text=f"Optimization Parameter Spread: <b>{title}</b>",
-        title_font_size=20,
-        plot_bgcolor="white",
-        paper_bgcolor="white",
+        template="plotly_white",
         hovermode="x unified",
     )
 
-    fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor="#E5E5E5")
-    fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor="#E5E5E5")
-
     fig.write_html(str(out_file))
-    print(f"--> Saved Optimization Dashboard: {out_file}")
+    print(f"--> Dashboard saved: {out_file}")
+
+
+def process_directory(run_dir: Path):
+    log_file = run_dir / "execution.log"
+    if not log_file.exists():
+        return
+
+    print(f"Processing: {run_dir.name}...")
+    with open(log_file, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    bounds = parse_bounds(content)
+    iterations = parse_iterations(content)
+
+    if not iterations:
+        print(f"  Warning: No iterations found in {run_dir.name}.")
+        return
+
+    df = pd.DataFrame(iterations)
+    df.insert(0, "Iteration", range(1, len(df) + 1))
+
+    out_html = run_dir / f"plot_optimization_{run_dir.name}.html"
+    create_optimization_dashboard(df, bounds, title=run_dir.name, out_file=out_html)
 
 
 def summarize_optimization_folder(folder_name: str):
@@ -167,38 +168,12 @@ def summarize_optimization_folder(folder_name: str):
     project_root = script_dir.parent
     target_dir = project_root / "results" / folder_name
 
-    if not target_dir.exists() or not target_dir.is_dir():
-        print(f" Error: Directory '{target_dir}' does not exist.")
+    if not target_dir.exists():
+        print(f" Error: {target_dir} not found.")
         return
 
-    print(f"Scanning optimization directory: {target_dir}...")
-
-    for run_dir in target_dir.iterdir():
-        if not run_dir.is_dir():
-            continue
-
-        log_file = run_dir / "execution.log"
-
-        if not log_file.exists():
-            continue
-
-        with open(log_file, "r", encoding="utf-8") as f:
-            content = f.read()
-
-        bounds = parse_bounds(content)
-        iterations = parse_iterations(content)
-
-        if not iterations:
-            print(f" Warning: No optimized parameters found in {run_dir.name}.")
-            continue
-
-        df = pd.DataFrame(iterations)
-        df.insert(0, "Iteration", range(1, len(df) + 1))
-
-        print(f" Processed {run_dir.name} | Found {len(iterations)} iterations.")
-
-        out_html = run_dir / f"plot_optimization_{run_dir.name}.html"
-        create_optimization_dashboard(df, bounds, title=run_dir.name, out_file=out_html)
+    if (target_dir / "execution.log").exists():
+        process_directory(target_dir)
 
 
 if __name__ == "__main__":
