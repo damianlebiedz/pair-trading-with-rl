@@ -14,9 +14,6 @@ wandb:
   entity: null
   mode: "online"
 
-paths:
-  models_dir: models
-
 tickers: [ "BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT", "ADAUSDT", "AVAXUSDT", "DOGEUSDT", "TRXUSDT",
            "DOTUSDT", "LINKUSDT", "SHIBUSDT", "LTCUSDT", "BCHUSDT", "UNIUSDT", "XLMUSDT", "ATOMUSDT", "ICPUSDT",
            "FILUSDT", "LDOUSDT", "APTUSDT", "QNTUSDT", "ARBUSDT", "VETUSDT", "MKRUSDT", "OPUSDT", "NEARUSDT",
@@ -27,6 +24,3 @@ market:
   fee_rate: 0.001
   risk_free_rate_annual: 0.00
   interval: "1h"
-
-settings:
-  plot: False

@@ -7,6 +7,17 @@ from datetime import datetime
 from modules.utils.plots import _get_custom_tickvals
 from modules.data_services.data_utils import load_btc_benchmark
 
+# ==========================================
+STRATEGIES = {
+        "2026-01-25_16-23-31": "Static (2/0)",
+        "2026-01-25_16-26-41": "Rolling (2/0)",
+        # "...": "Static (Opt, Both)",
+        # "...": "Rolling (Opt, Both)",
+        # "...": "Static (Opt, 2nd)",
+        # "...": "Rolling (Opt, 2nd)",
+    }
+# ==========================================
+
 
 current_file = Path(__file__).resolve()
 project_root = current_file.parent.parent
@@ -393,12 +404,4 @@ def generate_comparison_report(strategies_input: dict | list) -> None:
 
 
 if __name__ == "__main__":
-    my_strategies = {
-        "2026-01-25_16-23-31": "Static (2/0)",
-        "2026-01-25_16-26-41": "Rolling (2/0)",
-        # "...": "Static (Opt, Both)",
-        # "...": "Rolling (Opt, Both)",
-        # "...": "Static (Opt, 2nd)",
-        # "...": "Rolling (Opt, 2nd)",
-    }
-    generate_comparison_report(my_strategies)
+    generate_comparison_report(STRATEGIES)

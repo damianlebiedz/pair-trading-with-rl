@@ -5,6 +5,8 @@ entry_threshold: null
 exit_threshold: null
 stop_loss: null
 
+generate_plots: False
+
 pair_selection:
   top_n_factor: 20
   coint_type: "eg" # "eg" or "johansen"

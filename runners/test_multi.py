@@ -39,7 +39,7 @@ def test_multi(cfg: DictConfig):
     }
 
     rl_output_dir = None
-    if cfg.performance.rl:
+    if cfg.rl.use:
         rl_output_dir = setup_rl_run_environment(__file__)
 
     config = {
@@ -135,15 +135,34 @@ def test_multi(cfg: DictConfig):
         strategies_map = {}
 
         agent = None
-        if cfg.performance.rl:
-            model_path = os.path.join(rl_output_dir, "models")
-            vec_normalize_path = f"{model_path}_normalize.pkl"
+        if cfg.rl.use:
+            valid_spaces = ["full", "standard", "minimal"]  # TODO: schemas
+            obs_space_type = next((space for space in valid_spaces if f"_{space}_" in cfg.rl.model_name), None)
+
+            if not obs_space_type:
+                raise ValueError(
+                    f"Error: wrong obs_space_type in model_name: '{cfg.rl.model_name}'. "
+                    f"Must be one of: {valid_spaces}"
+                )
+
+            base_model_path = os.path.join(rl_output_dir, "models", cfg.rl.model_name)
+            model_zip_path = f"{base_model_path}.zip"
+            vec_normalize_path = f"{base_model_path}_normalize.pkl"
+
+            if not os.path.exists(model_zip_path):
+                raise FileNotFoundError(f"Model file not found: {model_zip_path}")
+            if not os.path.exists(vec_normalize_path):
+                raise FileNotFoundError(f"Vec-Normalize file not found: {vec_normalize_path}")
+
             try:
                 model, vec_normalize = load_model(
-                    model_path=model_path, vec_normalize_path=vec_normalize_path
+                    model_path=base_model_path, vec_normalize_path=vec_normalize_path
                 )
                 agent = RLAgentAdapter(
-                    model=model, vec_normalize=vec_normalize, training_mode=False
+                    model=model,
+                    vec_normalize=vec_normalize,
+                    training_mode=False,
+                    obs_space_type=obs_space_type
                 )
                 logger.info("RL Agent loaded successfully.")
             except Exception as e:
@@ -200,7 +219,7 @@ def test_multi(cfg: DictConfig):
                 test_end=lists["test_end_list"][i],
                 subdir="test",
                 interval=cfg.market.interval,
-                plot=cfg.settings.plot,
+                plot=cfg.generate_plots,
             )
 
             test_results.append(result_test)
@@ -214,7 +233,7 @@ def test_multi(cfg: DictConfig):
                 test_start=lists["test_start_list"][i],
                 test_end=lists["test_end_list"][i],
                 interval=cfg.market.interval,
-                plot=cfg.settings.plot,
+                plot=cfg.generate_plots,
             )
 
     if number_of_iterations > 1:
@@ -225,7 +244,7 @@ def test_multi(cfg: DictConfig):
             initial_cash=cfg.market.initial_cash,
             risk_free_rate_annual=cfg.market.risk_free_rate_annual,
             interval=cfg.market.interval,
-            plot=cfg.settings.plot,
+            plot=cfg.generate_plots,
         )
 
     logger.info(f"Results saved in {root}.")

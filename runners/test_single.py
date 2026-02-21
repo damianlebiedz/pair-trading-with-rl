@@ -31,22 +31,41 @@ def test_single(cfg: DictConfig):
     }
 
     rl_output_dir = None
-    if cfg.performance.rl:
+    if cfg.rl.use:
         rl_output_dir = setup_rl_run_environment(__file__)
 
     logger.info(f"Saving results to: {output_dir}")
     logger.info("CONFIG:\n%s", OmegaConf.to_yaml(cfg))
 
     agent = None
-    if cfg.performance.rl:
-        model_path = os.path.join(rl_output_dir, "models")
-        vec_normalize_path = f"{model_path}_normalize.pkl"
+    if cfg.rl.use:
+        valid_spaces = ["full", "standard", "minimal"]  # TODO: schemas
+        obs_space_type = next((space for space in valid_spaces if f"_{space}_" in cfg.rl.model_name), None)
+
+        if not obs_space_type:
+            raise ValueError(
+                f"Error: wrong obs_space_type in model_name: '{cfg.rl.model_name}'. "
+                f"Must be one of: {valid_spaces}"
+            )
+
+        base_model_path = os.path.join(rl_output_dir, "models", cfg.rl.model_name)
+        model_zip_path = f"{base_model_path}.zip"
+        vec_normalize_path = f"{base_model_path}_normalize.pkl"
+
+        if not os.path.exists(model_zip_path):
+            raise FileNotFoundError(f"Model file not found: {model_zip_path}")
+        if not os.path.exists(vec_normalize_path):
+            raise FileNotFoundError(f"Vec-Normalize file not found: {vec_normalize_path}")
+
         try:
             model, vec_normalize = load_model(
-                model_path=model_path, vec_normalize_path=vec_normalize_path
+                model_path=base_model_path, vec_normalize_path=vec_normalize_path
             )
             agent = RLAgentAdapter(
-                model=model, vec_normalize=vec_normalize, training_mode=False
+                model=model,
+                vec_normalize=vec_normalize,
+                training_mode=False,
+                obs_space_type=obs_space_type
             )
             logger.info("RL Agent loaded successfully.")
         except Exception as e:
@@ -84,7 +103,7 @@ def test_single(cfg: DictConfig):
         test_end=cfg.performance.test.end,
         subdir="test",
         interval=cfg.market.interval,
-        plot=cfg.settings.plot,
+        plot=cfg.generate_plots,
     )
 
     logger.info(f"Results saved in {output_dir}.")

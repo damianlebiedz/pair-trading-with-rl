@@ -219,7 +219,7 @@ def opt_and_test_multi(cfg: DictConfig):
                 test_end=lists["opt_end_list"][i],
                 subdir="opt",
                 interval=cfg.market.interval,
-                plot=cfg.settings.plot,
+                plot=cfg.generate_plots,
             )
 
             logger.debug("--- Starting Test ---")
@@ -234,7 +234,7 @@ def opt_and_test_multi(cfg: DictConfig):
                 test_end=lists["test_end_list"][i],
                 subdir="test",
                 interval=cfg.market.interval,
-                plot=cfg.settings.plot,
+                plot=cfg.generate_plots,
             )
 
             opt_results.append(result_opt)
@@ -250,7 +250,7 @@ def opt_and_test_multi(cfg: DictConfig):
                 test_end=lists["test_end_list"][i],
                 prefix="opt_",
                 interval=cfg.market.interval,
-                plot=cfg.settings.plot,
+                plot=cfg.generate_plots,
             )
             merge_multi_pair_results(
                 output_dir=output_dir,
@@ -261,7 +261,7 @@ def opt_and_test_multi(cfg: DictConfig):
                 test_end=lists["test_end_list"][i],
                 prefix="test_",
                 interval=cfg.market.interval,
-                plot=cfg.settings.plot,
+                plot=cfg.generate_plots,
             )
 
     if number_of_iterations > 1:
@@ -273,7 +273,7 @@ def opt_and_test_multi(cfg: DictConfig):
             risk_free_rate_annual=cfg.market.risk_free_rate_annual,
             prefix="opt_",
             interval=cfg.market.interval,
-            plot=cfg.settings.plot,
+            plot=cfg.generate_plots,
         )
         merge_multi_period_results(
             output_dir=root,
@@ -283,7 +283,7 @@ def opt_and_test_multi(cfg: DictConfig):
             risk_free_rate_annual=cfg.market.risk_free_rate_annual,
             prefix="test_",
             interval=cfg.market.interval,
-            plot=cfg.settings.plot,
+            plot=cfg.generate_plots,
         )
 
     logger.info(f"Results saved in {root}.")

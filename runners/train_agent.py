@@ -157,16 +157,16 @@ def train_agent(cfg: DictConfig):
         model.learn(total_timesteps=calculated_timesteps, callback=callbacks)
         logger.info("Training finished.")
 
-        final_model_name = f"{algo_name}_{run.id}_seed{seed}"
+        final_model_name = f"{algo_name}_{cfg.rl.obs_space_type}_{run.id}_seed{seed}"
         save_path = f"{model_dir}/{final_model_name}"
         model.save(save_path)
         vec_env.save(f"{save_path}_normalize.pkl")
 
         if wandb.run is not None:
             model_artifact = wandb.Artifact(
-                name=f"{algo_name}_model_{run.id}",
+                name=f"{algo_name}_{cfg.rl.obs_space_type}_model_{run.id}",
                 type="model",
-                description=f"Trained {algo_name} model",
+                description=f"Trained {algo_name} model (Space: {cfg.rl.obs_space_type})",
             )
             model_artifact.add_file(f"{save_path}.zip")
             model_artifact.add_file(f"{save_path}_normalize.pkl")
@@ -175,16 +175,16 @@ def train_agent(cfg: DictConfig):
 
     except KeyboardInterrupt:
         logger.info("Training interrupted manually. Saving current model...")
-        final_model_name = f"{algo_name}_{run.id}_seed{seed}_interrupted"
+        final_model_name = f"{algo_name}_{cfg.rl.obs_space_type}_{run.id}_seed{seed}_interrupted"
         save_path = f"{model_dir}/{final_model_name}"
         model.save(save_path)
         vec_env.save(f"{save_path}_normalize.pkl")
 
         if wandb.run is not None:
             model_artifact = wandb.Artifact(
-                name=f"{algo_name}_model_{run.id}_interrupted",
+                name=f"{algo_name}_{cfg.rl.obs_space_type}_model_{run.id}_interrupted",
                 type="model",
-                description=f"Interrupted {algo_name}",
+                description=f"Interrupted {algo_name} (Space: {cfg.rl.obs_space_type})",
             )
             model_artifact.add_file(f"{save_path}.zip")
             model_artifact.add_file(f"{save_path}_normalize.pkl")
