@@ -1,11 +1,11 @@
 name: test_multi
 
-fixed_window: null  # integer if window_method = 'fixed', else null
-entry_threshold: 2.0
+fixed_window: 168  # integer if window_method = 'fixed', else null
+entry_threshold: 3.0
 exit_threshold: 0.0
 stop_loss: 2.0
 
-generate_plots: False
+generate_plots: True
 
 rl:
   use: False
@@ -22,12 +22,12 @@ performance:
   iterations: 12 # integer >= 1
 
   beta_method: "ols" # "ols" or "kalman"
-  beta_hedge: "static" # "static", "rolling", or "no_hedge"
-  window_method: "static" # "fixed", "static", or "rolling"
+  beta_hedge: "rolling" # "static", "rolling", or "no_hedge"
+  window_method: "fixed" # "fixed", "static", or "rolling"
 
   delayed_entry: True # True or False
   sl_lock: True
-  time_decay_sl: True # True or False
+  time_decay_sl: False # True or False
 
   vol_window: 24
   window_min: 48

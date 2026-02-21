@@ -81,7 +81,8 @@ def train_agent(cfg: DictConfig):
 
     all_files = list(Path(data_path).rglob("*.parquet"))
     valid_files = [
-        f for f in all_files
+        f
+        for f in all_files
         if f.name.startswith("returns_") and "multi_pair" not in f.name
     ]
 

@@ -9,12 +9,8 @@ from modules.data_services.data_utils import load_btc_benchmark
 
 # ==========================================
 STRATEGIES = {
-    "2026-01-25_16-23-31": "Static (2/0)",
-    "2026-01-25_16-26-41": "Rolling (2/0)",
-    # "...": "Static (Opt, Both)",
-    # "...": "Rolling (Opt, Both)",
-    # "...": "Static (Opt, 2nd)",
-    # "...": "Rolling (Opt, 2nd)",
+    "WINNER_1_baseline": "Fixed | No Hedge",
+    "WINNER_5_hybrid_fixed": "Fixed | Rolling Beta-Hedge",
 }
 # ==========================================
 
@@ -24,15 +20,12 @@ project_root = current_file.parent.parent
 sys.path.append(str(project_root))
 
 SELECTED_METRICS = [
-    "total_return",
     "cagr",
     "volatility_annual",
     "max_drawdown",
     "win_count",
     "lose_count",
     "win_rate",
-    "max_win",
-    "max_lose",
     "avg_win_return",
     "avg_lose_return",
     "avg_trade_return",
@@ -42,13 +35,10 @@ SELECTED_METRICS = [
 ]
 
 FORMAT_MAP = {
-    "total_return": "{:.2%}",
     "cagr": "{:.2%}",
     "volatility_annual": "{:.2%}",
     "max_drawdown": "{:.2%}",
     "win_rate": "{:.2%}",
-    "max_win": "{:.2%}",
-    "max_lose": "{:.2%}",
     "avg_win_return": "{:.2%}",
     "avg_lose_return": "{:.2%}",
     "avg_trade_return": "{:.2%}",
@@ -60,15 +50,12 @@ FORMAT_MAP = {
 }
 
 RENAME_MAP = {
-    "total_return": "Total Return",
     "cagr": "CAGR",
     "volatility_annual": "Annual Volatility",
     "max_drawdown": "Max Drawdown",
     "win_count": "Win Count",
     "lose_count": "Lose Count",
     "win_rate": "Win Rate",
-    "max_win": "Max Win",
-    "max_lose": "Max Lose",
     "avg_win_return": "Avg Win",
     "avg_lose_return": "Avg Loss",
     "avg_trade_return": "Avg Trade Return",
@@ -96,32 +83,6 @@ def load_strategy_data(
     return df_returns, df_stats
 
 
-def load_pair_selections(base_dir: Path, strategy_name: str) -> pd.Series:
-    strat_dir = base_dir / strategy_name
-    counts = {}
-
-    iteration = 1
-    while (strat_dir / str(iteration)).exists():
-        iter_path = strat_dir / str(iteration)
-        files = list(iter_path.glob("pair_selection_*.parquet"))
-
-        if files:
-            df = pd.read_parquet(files[0])
-            counts[iteration] = len(df)
-        else:
-            counts[iteration] = 0
-
-        iteration += 1
-
-    if not counts:
-        files = list(strat_dir.glob("pair_selection_*.parquet"))
-        if files:
-            df = pd.read_parquet(files[0])
-            counts[1] = len(df)
-
-    return pd.Series(counts, dtype="int")
-
-
 def generate_comparison_report(strategies_input: dict | list) -> None:
     results_dir = project_root / "results"
     report_output_dir = results_dir / "report"
@@ -132,7 +93,7 @@ def generate_comparison_report(strategies_input: dict | list) -> None:
     report_filename = f"report_{timestamp}.html"
 
     strategies_returns = {}
-    stats_df = {}
+    stats_df_dict = {}
 
     all_dates = []
 
@@ -160,13 +121,15 @@ def generate_comparison_report(strategies_input: dict | list) -> None:
                 df_stat["metric"] = df_stat["metric"].astype(str)
                 df_stat = df_stat.set_index("metric")
 
+                # Rozbicie na MultiIndex: Strategia -> Gross/Net
+                if "gross" in df_stat.columns:
+                    stats_df_dict[(label, "Gross")] = df_stat["gross"].reindex(
+                        SELECTED_METRICS
+                    )
                 if "net" in df_stat.columns:
-                    s = df_stat["net"]
-                else:
-                    s = df_stat.iloc[:, 0]
-
-                s = s.reindex(SELECTED_METRICS)
-                stats_df[label] = s
+                    stats_df_dict[(label, "Net")] = df_stat["net"].reindex(
+                        SELECTED_METRICS
+                    )
 
             except Exception as e:
                 print(f"[ERROR] Processing stats for {label}: {e}")
@@ -180,7 +143,15 @@ def generate_comparison_report(strategies_input: dict | list) -> None:
         )
 
         fig = go.Figure()
-        colors = ["#1f77b4", "#2ca02c", "#d62728", "#9467bd", "#ff7f0e"]
+        colors = [
+            "#1f77b4",
+            "#2ca02c",
+            "#d62728",
+            "#9467bd",
+            "#ff7f0e",
+            "#e377c2",
+            "#8c564b",
+        ]
         first_df = list(strategies_returns.values())[0]
         custom_ticks = (
             _get_custom_tickvals(first_df.index) if hasattr(first_df, "index") else []
@@ -188,59 +159,62 @@ def generate_comparison_report(strategies_input: dict | list) -> None:
 
         color_idx = 0
         for name, df in strategies_returns.items():
-            y_col = (
-                "net_return_pct" if "net_return_pct" in df.columns else df.columns[0]
-            )
-            y_col_gross = (
-                "total_return_pct" if "total_return_pct" in df.columns else None
-            )
 
-            fig.add_trace(
-                go.Scatter(
-                    x=df.index,
-                    y=df[y_col],
-                    mode="lines",
-                    name=f"{name} (Net)",
-                    line=dict(color=colors[color_idx % len(colors)], width=2),
-                    hovertemplate=f"<b>Date</b>: %{{x|%Y-%m-%d %H:%M}}<br><b>{name}</b>: %{{y:.2%}}<extra></extra>",
-                )
-            )
-
-            if y_col_gross:
+            if "total_net_return" in df.columns:
                 fig.add_trace(
                     go.Scatter(
                         x=df.index,
-                        y=df[y_col_gross],
+                        y=df["total_net_return"],
+                        mode="lines",
+                        name=f"{name} (Net)",
+                        line=dict(color=colors[color_idx % len(colors)], width=2),
+                        hovertemplate=f"<b>{name} (Net)</b>: %{{y:.2%}}<extra></extra>",
+                    )
+                )
+
+            if "total_return" in df.columns:
+                fig.add_trace(
+                    go.Scatter(
+                        x=df.index,
+                        y=df["total_return"],
                         mode="lines",
                         name=f"{name} (Gross)",
                         line=dict(
                             color=colors[color_idx % len(colors)], width=2, dash="dot"
                         ),
-                        hovertemplate=f"<b>Date</b>: %{{x|%Y-%m-%d %H:%M}}<br><b>{name}</b>: %{{y:.2%}}<extra></extra>",
+                        hovertemplate=f"<b>{name} (Gross)</b>: %{{y:.2%}}<extra></extra>",
                         visible="legendonly",
                     )
                 )
+
             color_idx += 1
 
         if btc_data is not None and not btc_data.empty:
+            if btc_data.index.tz is not None and first_df.index.tz is None:
+                btc_data.index = btc_data.index.tz_localize(None)
+            elif btc_data.index.tz is None and first_df.index.tz is not None:
+                btc_data.index = btc_data.index.tz_localize(first_df.index.tz)
+
             btc_sub = btc_data.loc[global_start:global_end].copy()
 
             if not btc_sub.empty:
                 col = "close" if "close" in btc_sub.columns else btc_sub.columns[0]
-                btc_ret = (btc_sub[col] / btc_sub[col].iloc[0]) - 1
+                start_px = btc_sub[col].iloc[0]
+                if start_px != 0:
+                    btc_ret = (btc_sub[col] / start_px) - 1
 
-                fig.add_trace(
-                    go.Scatter(
-                        x=btc_sub.index,
-                        y=btc_ret,
-                        mode="lines",
-                        name="BTC Benchmark",
-                        line=dict(color="grey", width=1.5, dash="dot"),
-                        opacity=0.6,
-                        hovertemplate="<b>Date</b>: %{{x|%Y-%m-%d %H:%M}}<br><b>BTC</b>: %{{y:.2%}}<extra></extra>",
-                        visible="legendonly",
+                    fig.add_trace(
+                        go.Scatter(
+                            x=btc_sub.index,
+                            y=btc_ret,
+                            mode="lines",
+                            name="BTC Benchmark",
+                            line=dict(color="grey", width=1.5, dash="dash"),
+                            opacity=0.6,
+                            hovertemplate="<b>BTC</b>: %{{y:.2%}}<extra></extra>",
+                            visible="legendonly",
+                        )
                     )
-                )
 
         fig.update_layout(
             title=dict(
@@ -249,124 +223,141 @@ def generate_comparison_report(strategies_input: dict | list) -> None:
                 font=dict(color="black", size=20),
             ),
             template="plotly_white",
-            hovermode="closest",
+            hovermode="x unified",
             legend=dict(orientation="h", y=1.05, x=0.5, xanchor="center"),
             margin=dict(t=80),
             height=800,
         )
 
-        fig.update_yaxes(title="Total Return (%)", tickformat=".1%", fixedrange=True)
+        fig.update_yaxes(
+            title="Cumulative Return (%)", tickformat=".1%", fixedrange=True
+        )
+        fig.update_yaxes(
+            title="Cumulative Return (%)", tickformat=".1%", fixedrange=True
+        )
         fig.update_xaxes(
             title=dict(text="Date", font=dict(color="black")),
             tickfont=dict(color="black"),
             tickvals=custom_ticks,
             tickformat="%Y-%m-%d",
+            hoverformat="%Y-%m-%d %H:%M",
             fixedrange=True,
         )
 
         fig.write_html(report_output_dir / chart_filename)
 
-    if stats_df:
-        final_stats_df = pd.DataFrame(stats_df)
+    if stats_df_dict:
+        final_stats_df = pd.DataFrame(stats_df_dict)
         final_stats_df.index = final_stats_df.index.astype(str)
         final_stats_df = final_stats_df.reindex(SELECTED_METRICS)
-        final_stats_df = final_stats_df.drop(index="metric", errors="ignore")
 
         formatted_df = final_stats_df.copy().astype(object)
 
         for metric in formatted_df.index:
-            if metric in FORMAT_MAP:
-                fmt = FORMAT_MAP[metric]
-                formatted_df.loc[metric] = final_stats_df.loc[metric].apply(
-                    lambda x: fmt.format(x) if pd.notnull(x) else "-"
-                )
-            else:
-                formatted_df.loc[metric] = final_stats_df.loc[metric].apply(
-                    lambda x: "{:.2f}".format(x) if isinstance(x, (int, float)) else x
-                )
+            for col in formatted_df.columns:
+                val = final_stats_df.loc[metric, col]
+                if metric in FORMAT_MAP:
+                    fmt = FORMAT_MAP[metric]
+                    formatted_df.loc[metric, col] = (
+                        fmt.format(val) if pd.notnull(val) else "-"
+                    )
+                else:
+                    formatted_df.loc[metric, col] = (
+                        "{:.2f}".format(val)
+                        if isinstance(val, (int, float)) and pd.notnull(val)
+                        else (val if pd.notnull(val) else "-")
+                    )
 
         formatted_df = formatted_df.rename(index=RENAME_MAP)
+        formatted_df.index.name = "Metrics"
 
         formatted_df = formatted_df.reset_index()
-        formatted_df = formatted_df.rename(columns={"index": ""})
 
         main_table_html = formatted_df.to_html(
-            classes="academic-table", border=0, index=False
+            classes="academic-table", border=0, index=False, justify="center"
         )
     else:
         main_table_html = "<p>No stats data available.</p>"
 
-    df_all_counts = pd.DataFrame()
-    for folder, label in strategies_map.items():
-        s_counts = load_pair_selections(results_dir, folder)
-        if not s_counts.empty:
-            df_all_counts[label] = s_counts
-
-    if not df_all_counts.empty:
-        df_all_counts = df_all_counts.sort_index()
-        df_all_counts = df_all_counts.fillna(0).astype(int)
-        df_all_counts.index.name = None
-
-        tbl_html = df_all_counts.to_html(classes="academic-table pair-table", border=0)
-        pair_selection_section = f"<h3>Pair Counts Summary</h3>{tbl_html}"
-    else:
-        pair_selection_section = "<p>No pair selection data.</p>"
-
     css_style = """
-    <style>
-        body {
-            margin: 0;
-            padding: 20px;
-            background-color: white;
-            font-family: "Times New Roman", Times, serif;
-            color: black;
-        }
+        <style>
+            body {
+                margin: 0;
+                padding: 20px;
+                background-color: white;
+                font-family: "Times New Roman", Times, serif;
+                color: black;
+            }
 
-        .section-wrapper {
-            width: 100%;
-            margin-bottom: 40px;
-            overflow: hidden;
-            text-align: center;
-        }
+            .section-wrapper {
+                width: 100%;
+                margin-bottom: 40px;
+                overflow: hidden;
+                text-align: center;
+            }
 
-        iframe {
-            width: 100%;
-            height: 800px;
-            border: none;
-            display: block;
-            overflow: hidden;
-        }
+            iframe {
+                width: 100%;
+                height: 800px;
+                border: none;
+                display: block;
+                overflow: hidden;
+            }
 
-        .academic-table {
-            width: 85%;
-            margin: 20px auto;
-            border-collapse: collapse; 
-            font-size: 14pt;
-            table-layout: fixed;
-        }
+            /* --- STYL AKADEMICKI (LaTeX Booktabs) --- */
+            .academic-table {
+                width: 85%;
+                margin: 30px auto;
+                border-collapse: collapse; 
+                font-size: 12pt;
+                table-layout: fixed; /* Wymusza równe szerokości kolumn */
+            }
 
-        .academic-table th,
-        .academic-table td {
-            border: 1px solid black;
-            padding: 10px 12px;
-            text-align: center;
-        }
+            .academic-table th,
+            .academic-table td {
+                border: none; /* Całkowity brak pionowych kresek */
+                padding: 10px 12px;
+                text-align: center;
+                vertical-align: middle;
+            }
 
-        .academic-table tbody th {
-            text-align: center;
-            font-weight: bold;
-            border: 1px solid black;
-        }
+            /* Główna gruba linia na samej górze tabeli */
+            .academic-table thead tr:first-child th {
+                border-top: 2px solid black;
+                border-bottom: 1px solid black; /* Oddziela nazwy strategii od Gross/Net */
+                font-size: 13pt;
+                padding-bottom: 10px;
+            }
 
-        .pair-table {
-            width: 50%;
-        }
-        .pair-table th {
-            background-color: #f9f9f9;
-        }
+            /* Linia pod Gross/Net zamykająca nagłówek */
+            .academic-table thead tr:nth-child(2) th {
+                border-bottom: 1px solid black;
+                font-style: italic;
+                color: #333;
+                padding-top: 8px;
+                padding-bottom: 8px;
+            }
 
-        h3 { text-align: center; margin-bottom: 15px; }
-    </style>
+            /* Główna gruba linia na samym dole tabeli */
+            .academic-table tbody tr:last-child td {
+                border-bottom: 2px solid black;
+            }
+
+            /* Wyrównanie pierwszej kolumny (Metryki) do lewej i ustawienie jej szerokości */
+            .academic-table tbody td:first-child,
+            .academic-table thead th:first-child {
+                text-align: left;
+                width: 25%;
+                font-weight: bold;
+            }
+
+            /* Delikatny efekt najechania myszką ułatwiający czytanie wierszy */
+            .academic-table tbody tr:hover {
+                background-color: #f9f9f9;
+            }
+
+            h3 { text-align: center; margin-bottom: 15px; font-size: 16pt; }
+        </style>
     """
 
     full_html = f"""
@@ -386,10 +377,6 @@ def generate_comparison_report(strategies_input: dict | list) -> None:
         <div class="section-wrapper">
             <h3>Performance Summary</h3>
             {main_table_html}
-        </div>
-
-        <div class="section-wrapper">
-            {pair_selection_section}
         </div>
 
     </body>
