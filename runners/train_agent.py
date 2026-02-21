@@ -68,8 +68,6 @@ def train_agent(cfg: DictConfig):
 
     run = wandb.init(
         project=cfg.wandb.project,
-        entity=cfg.wandb.entity,
-        group=cfg.wandb.group,
         mode=cfg.wandb.mode,
         config=OmegaConf.to_container(cfg, resolve=True),
         sync_tensorboard=True,
@@ -96,7 +94,7 @@ def train_agent(cfg: DictConfig):
     results = []
     for file_path in valid_files:
         try:
-            res = load_strategy_result(file_path.name, directory=str(file_path.parent))
+            res = load_strategy_result(file_path.stem, directory=str(file_path.parent))
             results.append(res)
         except Exception as e:
             logger.warning(f"Error loading {file_path.name}: {e}")
@@ -130,7 +128,7 @@ def train_agent(cfg: DictConfig):
     model_params = OmegaConf.to_container(cfg.rl_algo.params, resolve=True)
 
     model = algo_class(
-        policy=cfg.policy_type,
+        policy=cfg.rl_algo.policy_type,
         env=vec_env,
         verbose=cfg.rl.verbose,
         tensorboard_log=log_dir,

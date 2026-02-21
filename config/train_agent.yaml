@@ -7,7 +7,7 @@ defaults:
 
 rl:
   reward: "vol_penalty" # "pnl", "risk_adj", "vol_penalty", or "diff_sharpe"
-  passes_per_pair: 10
+  passes_per_pair: 100
   seed: 42
   verbose: 1
   obs_space_type: "full" # "full", "standard", or "minimal"
