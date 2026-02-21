@@ -11,25 +11,21 @@ def random_search(
     static_params: dict,
     metric_type: Literal["gross", "net"],
     n_iter: int,
-    replicates: int,
     penalty_bad: float,
 ) -> tuple[dict, float]:
     def evaluate_point(p, idx) -> tuple[float, dict]:
-        scores = []
-        for _ in range(replicates):
-            try:
-                val = strategy_func(**{**static_params, **p}, metric_type=metric_type)
-                if val is None or np.isnan(val) or val == 0 or np.isinf(val):
-                    scores.append(penalty_bad)
-                else:
-                    scores.append(float(val))
-            except Exception as e:
-                print(f"[Opt Error] Iter {idx}: {e}")
-                scores.append(penalty_bad)
+        try:
+            val = strategy_func(**{**static_params, **p}, metric_type=metric_type)
+            if val is None or np.isnan(val) or val == 0 or np.isinf(val):
+                score = penalty_bad
+            else:
+                score = float(val)
+        except Exception as e:
+            print(f"[Opt Error] Iter {idx}: {e}")
+            score = penalty_bad
 
-        avg_score = float(np.mean(scores))
         print(f"Iteration {idx + 1}/{n_iter}")
-        return avg_score, p
+        return score, p
 
     pdicts = []
     for _ in range(n_iter):
@@ -41,7 +37,7 @@ def random_search(
                 pdict[dim.name] = uniform(dim.low, dim.high)
         pdicts.append(pdict)
 
-    results = Parallel(n_jobs=1, backend="loky")(
+    results = Parallel(n_jobs=-1, backend="loky")(
         delayed(evaluate_point)(p, i) for i, p in enumerate(pdicts)
     )
 

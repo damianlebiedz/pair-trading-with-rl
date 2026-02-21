@@ -40,7 +40,6 @@ performance:
 
     # Search parameters
     n_iter: 200
-    replicates: 1
     penalty_bad: -100
 
     # Parameters space

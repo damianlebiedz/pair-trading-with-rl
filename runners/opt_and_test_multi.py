@@ -190,7 +190,6 @@ def opt_and_test_multi(cfg: DictConfig):
             opt_win_start=lists["opt_win_start_list"][i],
             penalty_bad=cfg.performance.optimization.penalty_bad,
             n_iter=cfg.performance.optimization.n_iter,
-            replicates=cfg.performance.optimization.replicates,
             interval=cfg.market.interval,
             risk_free_rate_annual=cfg.market.risk_free_rate_annual,
             min_trades_per_pair=cfg.performance.min_trades_per_pair,
