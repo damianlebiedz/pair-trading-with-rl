@@ -9,13 +9,13 @@ from modules.data_services.data_utils import load_btc_benchmark
 
 # ==========================================
 STRATEGIES = {
-        "2026-01-25_16-23-31": "Static (2/0)",
-        "2026-01-25_16-26-41": "Rolling (2/0)",
-        # "...": "Static (Opt, Both)",
-        # "...": "Rolling (Opt, Both)",
-        # "...": "Static (Opt, 2nd)",
-        # "...": "Rolling (Opt, 2nd)",
-    }
+    "2026-01-25_16-23-31": "Static (2/0)",
+    "2026-01-25_16-26-41": "Rolling (2/0)",
+    # "...": "Static (Opt, Both)",
+    # "...": "Rolling (Opt, Both)",
+    # "...": "Static (Opt, 2nd)",
+    # "...": "Rolling (Opt, 2nd)",
+}
 # ==========================================
 
 

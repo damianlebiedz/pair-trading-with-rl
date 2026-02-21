@@ -40,7 +40,9 @@ def test_single(cfg: DictConfig):
     agent = None
     if cfg.rl.use:
         valid_spaces = ["full", "standard", "minimal"]  # TODO: schemas
-        obs_space_type = next((space for space in valid_spaces if f"_{space}_" in cfg.rl.model_name), None)
+        obs_space_type = next(
+            (space for space in valid_spaces if f"_{space}_" in cfg.rl.model_name), None
+        )
 
         if not obs_space_type:
             raise ValueError(
@@ -55,7 +57,9 @@ def test_single(cfg: DictConfig):
         if not os.path.exists(model_zip_path):
             raise FileNotFoundError(f"Model file not found: {model_zip_path}")
         if not os.path.exists(vec_normalize_path):
-            raise FileNotFoundError(f"Vec-Normalize file not found: {vec_normalize_path}")
+            raise FileNotFoundError(
+                f"Vec-Normalize file not found: {vec_normalize_path}"
+            )
 
         try:
             model, vec_normalize = load_model(
@@ -65,7 +69,7 @@ def test_single(cfg: DictConfig):
                 model=model,
                 vec_normalize=vec_normalize,
                 training_mode=False,
-                obs_space_type=obs_space_type
+                obs_space_type=obs_space_type,
             )
             logger.info("RL Agent loaded successfully.")
         except Exception as e:
