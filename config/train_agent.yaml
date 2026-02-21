@@ -6,6 +6,7 @@ defaults:
   - rl_algo: a2c_baseline # 'a2c_baseline' or 'recurrent_ppo'
 
 rl:
+  training_subfolder: "WINNER_5_hybrid_fixed"
   reward: "risk_adj" # "pnl", "risk_adj", or "diff_sharpe"
   passes_per_pair: 200
   seed: 42

@@ -2,7 +2,7 @@ import logging
 import os
 import hydra
 import pandas as pd
-from omegaconf import OmegaConf, DictConfig
+from omegaconf import DictConfig
 from skopt.space import Real, Integer
 
 from modules.performance.models import StrategyResult
@@ -46,7 +46,6 @@ def opt_and_test_multi(cfg: DictConfig):
     lists = generate_date_lists(config, number_of_iterations)
 
     logger.info(f"Saving results to: {root}")
-    logger.info("CONFIG:\n%s", OmegaConf.to_yaml(cfg))
 
     tickers = cfg.tickers if cfg.generate_plots else None
 

@@ -140,6 +140,8 @@ class PairsTradingEnv(gym.Env):
         return self._get_observation(), {}
 
     def step(self, action):
+        self.position_state.prev_position = self.position_state.position
+
         mapping = {0: -1.0, 1: 0.0, 2: 1.0}
         target_position = mapping[int(action)]
 
@@ -171,10 +173,10 @@ class PairsTradingEnv(gym.Env):
             equity=self.equity,
             exec_logger=self.exec_logger,
             std=exec_std,
-            sl_lock=None,
+            sl_lock=False,
         )
 
-        self.equity += step_pnl
+        self.equity += step_pnl - step_fees
         self.peak_equity = max(self.peak_equity, self.equity)
 
         self.current_step += 1

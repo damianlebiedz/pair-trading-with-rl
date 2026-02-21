@@ -15,7 +15,7 @@ from wandb.integration.sb3 import WandbCallback
 
 from modules.data_services.data_utils import load_strategy_result
 from modules.learning.environments import build_multi_env
-from runners.core.pipelines import setup_rl_run_environment
+from runners.core.pipelines import setup_rl_run_environment, setup_run_environment
 from runners.core.utils import save_hydra_config_snapshot
 
 logger = logging.getLogger(__name__)
@@ -51,16 +51,19 @@ class LogEquityCallback(BaseCallback):
 
 @hydra.main(version_base=None, config_path="../config", config_name="train_agent")
 def train_agent(cfg: DictConfig):
+    root = setup_run_environment(__file__)
     rl_root = setup_rl_run_environment(__file__)
-    save_hydra_config_snapshot(cfg=cfg, root_dir=rl_root)
+    save_hydra_config_snapshot(cfg=cfg, root_dir=root)
 
     seed = cfg.rl.seed
     set_random_seed(seed)
     logger.info(f"Random seed set to: {seed}")
 
-    data_path = os.path.join(Path(rl_root).parent, "training_data")
-    model_dir = os.path.join(rl_root, "models")
-    log_dir = os.path.join(rl_root, "tensorboard_logs")
+    data_path = os.path.join(
+        Path(rl_root), "training_data", cfg.rl.training_subfolder
+    )
+    model_dir = os.path.join(root, "models")
+    log_dir = os.path.join(root, "tensorboard_logs")
 
     os.makedirs(data_path, exist_ok=True)
     os.makedirs(model_dir, exist_ok=True)
@@ -73,7 +76,7 @@ def train_agent(cfg: DictConfig):
         sync_tensorboard=True,
         monitor_gym=True,
         save_code=True,
-        dir=rl_root,
+        dir=root,
     )
 
     logger.info(f"Loading training data from '{data_path}'...")
@@ -108,7 +111,7 @@ def train_agent(cfg: DictConfig):
     logger.info(f"Successfully loaded {len(results)} environments")
 
     if wandb.run is not None:
-        data_artifact = wandb.Artifact(name="training_dataset_multi", type="dataset")
+        data_artifact = wandb.Artifact(name="training_dataset", type="dataset")
         data_artifact.add_dir(data_path)
         wandb.log_artifact(data_artifact)
 

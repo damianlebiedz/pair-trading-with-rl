@@ -1,7 +1,7 @@
 import logging
 import os
 import hydra
-from omegaconf import OmegaConf, DictConfig
+from omegaconf import DictConfig
 
 from modules.learning.agents import RLAgentAdapter
 from modules.performance.strategy import Strategy
@@ -35,7 +35,6 @@ def test_single(cfg: DictConfig):
         rl_output_dir = setup_rl_run_environment(__file__)
 
     logger.info(f"Saving results to: {output_dir}")
-    logger.info("CONFIG:\n%s", OmegaConf.to_yaml(cfg))
 
     tickers = cfg.tickers if cfg.generate_plots else None
 
