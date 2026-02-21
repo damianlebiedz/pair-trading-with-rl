@@ -1,3 +1,4 @@
+from typing import Literal
 import gymnasium as gym
 import numpy as np
 import pandas as pd
@@ -21,7 +22,10 @@ from modules.learning.rewards import (
 
 
 def build_multi_env(
-    results: list[StrategyResult], rl_reward: str, seed: int = None
+    results: list[StrategyResult],
+    rl_reward: str,
+    obs_space_type: Literal["full", "standard", "minimal"],
+    seed: int = None,
 ) -> DummyVecEnv:
     env_fns = []
 
@@ -35,7 +39,11 @@ def build_multi_env(
                 "diff_sharpe": DifferentialSharpeReward,
             }
             reward_schema = reward_map[rl_reward]()
-            return PairsTradingEnv(result=result, reward_scheme=reward_schema)
+            return PairsTradingEnv(
+                result=result,
+                reward_scheme=reward_schema,
+                obs_space_type=obs_space_type,
+            )
 
         env_fns.append(make_env)
 
@@ -63,7 +71,12 @@ class MockEnv(gym.Env):
 class PairsTradingEnv(gym.Env):
     metadata = {"render_modes": ["human"]}
 
-    def __init__(self, result: StrategyResult, reward_scheme: RewardScheme):
+    def __init__(
+        self,
+        result: StrategyResult,
+        reward_scheme: RewardScheme,
+        obs_space_type: Literal["full", "standard", "minimal"],
+    ):
         super(PairsTradingEnv, self).__init__()
 
         self.result = result
@@ -112,6 +125,7 @@ class PairsTradingEnv(gym.Env):
         self.current_step = 0
 
         self.reward_scheme = reward_scheme
+        self.obs_space_type = obs_space_type
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
@@ -200,7 +214,7 @@ class PairsTradingEnv(gym.Env):
         if self.state is None:
             return np.zeros(self.observation_space.shape, dtype=np.float32)
 
-        obs = self.state.get_state_arr()
+        obs = self.state.get_state_arr(self.obs_space_type)
         return np.nan_to_num(obs).astype(np.float32)
 
     def _update_state_object(self):

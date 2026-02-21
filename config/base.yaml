@@ -6,7 +6,7 @@ hydra:
     dir: .
   sweep:
     dir: results/multirun/${now:%Y-%m-%d_%H-%M-%S}
-    subdir: job_${hydra.job.num}
+    subdir: .
   output_subdir: null
 
 wandb:
@@ -27,11 +27,6 @@ market:
   fee_rate: 0.001
   risk_free_rate_annual: 0.00
   interval: "1h"
-
-rl:
-  seed: 42
-  total_timesteps: 1000000
-  verbose: 1
 
 settings:
   plot: False

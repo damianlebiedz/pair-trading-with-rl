@@ -111,7 +111,12 @@ def train_agent(cfg: DictConfig):
         data_artifact.add_dir(data_path)
         wandb.log_artifact(data_artifact)
 
-    vec_env = build_multi_env(results, cfg.rl_reward, seed=seed)
+    vec_env = build_multi_env(
+        results=results,
+        rl_reward=cfg.rl.reward,
+        obs_space_type=cfg.rl.obs_space_type,
+        seed=seed
+    )
     vec_env = VecNormalize(vec_env, norm_obs=True, norm_reward=True, clip_obs=10.0)
 
     algo_name = cfg.rl_algo.algo_name
@@ -145,7 +150,11 @@ def train_agent(cfg: DictConfig):
     ]
 
     try:
-        model.learn(total_timesteps=cfg.rl.total_timesteps, callback=callbacks)
+        total_rows = sum(len(res.data) for res in results)
+        passes = cfg.rl.passes_per_pair
+        calculated_timesteps = total_rows * passes
+
+        model.learn(total_timesteps=calculated_timesteps, callback=callbacks)
         logger.info("Training finished.")
 
         final_model_name = f"{algo_name}_{run.id}_seed{seed}"

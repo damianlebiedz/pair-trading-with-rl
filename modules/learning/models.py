@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Literal
 import numpy as np
 
 
@@ -38,19 +39,66 @@ class AgentState:
     drawdown_pct: float
     current_market_vol: float
 
-    def get_state_arr(self) -> np.ndarray:
-        arr = np.array(
-            [
-                _f(self.z_score),
-                _f(self.std),
-                float(self.beta),
-                float(self.hurst),
-                _f(self.window),
-                float(self.position),
-                float(self.norm_time_in_pos),
-                float(self.drawdown_pct),
-                float(self.current_market_vol),
-            ],
-            dtype=np.float32,
-        )
-        return arr
+    def get_state_arr(
+        self,
+        obs_space_type: Literal["full", "standard", "minimal"],
+    ) -> np.ndarray:
+        """
+        Converts the state into a fixed-size NumPy array with feature masking.
+
+        Args:
+            obs_space_type: Determines which features are visible to the agent.
+                - 'minimal': Z-score, Position, Drawdown.
+                - 'standard': Minimal + Volatility (STD), Beta.
+                - 'full': All available market and agent metrics.
+
+        Returns:
+            np.ndarray: A 9-dimensional float32 array. Hidden features are zeroed out.
+        """
+        if obs_space_type == "minimal":
+            return np.array(
+                [
+                    _f(self.z_score),
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    float(self.position),
+                    0.0,
+                    float(self.drawdown_pct),
+                    0.0,
+                ],
+                dtype=np.float32,
+            )
+
+        elif obs_space_type == "standard":
+            return np.array(
+                [
+                    _f(self.z_score),
+                    _f(self.std),
+                    float(self.beta),
+                    0.0,
+                    0.0,
+                    float(self.position),
+                    0.0,
+                    float(self.drawdown_pct),
+                    0.0,
+                ],
+                dtype=np.float32,
+            )
+
+        else:
+            return np.array(
+                [
+                    _f(self.z_score),
+                    _f(self.std),
+                    float(self.beta),
+                    float(self.hurst),
+                    _f(self.window),
+                    float(self.position),
+                    float(self.norm_time_in_pos),
+                    float(self.drawdown_pct),
+                    float(self.current_market_vol),
+                ],
+                dtype=np.float32,
+            )
