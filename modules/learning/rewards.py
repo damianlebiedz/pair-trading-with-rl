@@ -46,6 +46,7 @@ class RiskAdjustedReward(RewardScheme):
         net_pnl = step_pnl - step_fees
         return net_pnl - (drawdown_pct * self.risk_penalty)
 
+
 class DifferentialSharpeReward(RewardScheme):
     """Differential Sharpe Ratio (DSR) by Moody, Saffell (2001)."""
 
@@ -77,7 +78,8 @@ class DifferentialSharpeReward(RewardScheme):
         if equity <= 1e-6:
             return -1.0  # bankrupt penalty
 
-        r_t = step_pnl / equity
+        net_pnl = step_pnl - step_fees
+        r_t = net_pnl / equity
 
         if not self.initialized:
             self.A_t = r_t
@@ -109,5 +111,5 @@ class DifferentialSharpeReward(RewardScheme):
 
         dsr = (term1 - term2) / denominator
 
-        # Optionally: return np.tanh(dsr)
-        return dsr
+        dsr_clipped = float(np.tanh(dsr))
+        return dsr_clipped if not np.isnan(dsr_clipped) else 0.0
