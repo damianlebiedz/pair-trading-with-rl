@@ -16,7 +16,6 @@ from stable_baselines3.common.vec_env import DummyVecEnv
 from modules.learning.rewards import (
     PnLReward,
     RiskAdjustedReward,
-    VolatilityPenaltyReward,
     DifferentialSharpeReward,
 )
 
@@ -35,7 +34,6 @@ def build_multi_env(
             reward_map = {
                 "pnl": PnLReward,
                 "risk_adj": RiskAdjustedReward,
-                "vol_penalty": VolatilityPenaltyReward,
                 "diff_sharpe": DifferentialSharpeReward,
             }
             reward_schema = reward_map[rl_reward]()

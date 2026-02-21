@@ -70,6 +70,52 @@ def load_btc_benchmark(test_start: str, test_end: str, interval: str) -> pd.Data
     return btc_data
 
 
+def load_ewp_benchmark(
+    tickers: list[str], test_start: str, test_end: str, interval: str
+) -> pd.DataFrame:
+    """
+    Generates an Equally Weighted (EW) portfolio benchmark with continuous rebalancing.
+
+    The strategy assumes an equal capital allocation (1/N) across all provided tickers.
+    By utilizing percentage returns, the benchmark remains invariant to the nominal
+    prices of the underlying assets, ensuring that high-priced assets (e.g., BTC)
+    do not disproportionately influence the index compared to lower-priced assets.
+
+    Key Methodological Assumptions:
+    1. Continuous Rebalancing: The portfolio is rebalanced to equal weights at every
+       specified interval (e.g., 1h). This effectively simulates selling outperformers
+       and buying underperformers to maintain the 1/N distribution at each step.
+    2. Zero Transaction Costs: This benchmark represents a theoretical "frictionless"
+       market return. It does not account for trading commissions, bid-ask spreads,
+       or execution slippage.
+    3. Arithmetic Mean Returns: The portfolio return for each period is calculated
+       as the simple arithmetic average of the individual asset returns.
+
+    Calculations:
+    - Computes period-over-period percentage changes for all assets.
+    - Derives the aggregate portfolio return per interval.
+    - Generates a cumulative return series (Equity Curve) starting from zero.
+
+    This serves as a passive multi-asset baseline to evaluate the Alpha generated
+    by the active strategy over a simple buy-and-hold-weighted index.
+    """
+    all_data = load_data(
+        tickers=tickers,
+        start=test_start,
+        end=test_end,
+        interval=interval,
+    )
+    returns_df = all_data.pct_change()
+    portfolio_benchmark = pd.DataFrame(index=all_data.index)
+    portfolio_benchmark["portfolio_pct"] = returns_df.mean(axis=1)
+    portfolio_benchmark.loc[portfolio_benchmark.index[0], "portfolio_pct"] = 0.0
+    portfolio_benchmark["ewp_return"] = (
+        1 + portfolio_benchmark["portfolio_pct"]
+    ).cumprod() - 1
+
+    return portfolio_benchmark
+
+
 def save_dataframe(
     df: pd.DataFrame, file_name: str, directory: str | Path = None
 ) -> None:

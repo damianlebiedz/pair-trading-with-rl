@@ -48,6 +48,8 @@ def opt_and_test_multi(cfg: DictConfig):
     logger.info(f"Saving results to: {root}")
     logger.info("CONFIG:\n%s", OmegaConf.to_yaml(cfg))
 
+    tickers = cfg.tickers if cfg.generate_plots else None
+
     for i in range(number_of_iterations):
         output_dir = os.path.join(root, f"{i+1}")
         if number_of_iterations == 1:
@@ -220,6 +222,7 @@ def opt_and_test_multi(cfg: DictConfig):
                 subdir="opt",
                 interval=cfg.market.interval,
                 plot=cfg.generate_plots,
+                tickers=tickers,
             )
 
             logger.debug("--- Starting Test ---")
@@ -235,6 +238,7 @@ def opt_and_test_multi(cfg: DictConfig):
                 subdir="test",
                 interval=cfg.market.interval,
                 plot=cfg.generate_plots,
+                tickers=tickers,
             )
 
             opt_results.append(result_opt)
@@ -251,6 +255,7 @@ def opt_and_test_multi(cfg: DictConfig):
                 prefix="opt_",
                 interval=cfg.market.interval,
                 plot=cfg.generate_plots,
+                tickers=tickers,
             )
             merge_multi_pair_results(
                 output_dir=output_dir,
@@ -262,6 +267,7 @@ def opt_and_test_multi(cfg: DictConfig):
                 prefix="test_",
                 interval=cfg.market.interval,
                 plot=cfg.generate_plots,
+                tickers=tickers,
             )
 
     if number_of_iterations > 1:
@@ -274,6 +280,7 @@ def opt_and_test_multi(cfg: DictConfig):
             prefix="opt_",
             interval=cfg.market.interval,
             plot=cfg.generate_plots,
+            tickers=tickers,
         )
         merge_multi_period_results(
             output_dir=root,
@@ -284,6 +291,7 @@ def opt_and_test_multi(cfg: DictConfig):
             prefix="test_",
             interval=cfg.market.interval,
             plot=cfg.generate_plots,
+            tickers=tickers,
         )
 
     logger.info(f"Results saved in {root}.")

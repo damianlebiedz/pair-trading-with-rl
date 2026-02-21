@@ -56,6 +56,8 @@ def test_multi(cfg: DictConfig):
     logger.info(f"Saving results to: {root}")
     logger.info("CONFIG:\n%s", OmegaConf.to_yaml(cfg))
 
+    tickers = cfg.tickers if cfg.generate_plots else None
+
     for i in range(number_of_iterations):
         output_dir = os.path.join(root, f"{i+1}")
         if number_of_iterations == 1:
@@ -225,6 +227,7 @@ def test_multi(cfg: DictConfig):
                 subdir="test",
                 interval=cfg.market.interval,
                 plot=cfg.generate_plots,
+                tickers=tickers,
             )
 
             test_results.append(result_test)
@@ -239,6 +242,7 @@ def test_multi(cfg: DictConfig):
                 test_end=lists["test_end_list"][i],
                 interval=cfg.market.interval,
                 plot=cfg.generate_plots,
+                tickers=tickers,
             )
 
     if number_of_iterations > 1:
@@ -250,6 +254,7 @@ def test_multi(cfg: DictConfig):
             risk_free_rate_annual=cfg.market.risk_free_rate_annual,
             interval=cfg.market.interval,
             plot=cfg.generate_plots,
+            tickers=tickers,
         )
 
     logger.info(f"Results saved in {root}.")

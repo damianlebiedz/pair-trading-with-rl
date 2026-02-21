@@ -6,8 +6,8 @@ defaults:
   - rl_algo: a2c_baseline # 'a2c_baseline' or 'recurrent_ppo'
 
 rl:
-  reward: "vol_penalty" # "pnl", "risk_adj", "vol_penalty", or "diff_sharpe"
-  passes_per_pair: 100
+  reward: "risk_adj" # "pnl", "risk_adj", or "diff_sharpe"
+  passes_per_pair: 200
   seed: 42
   verbose: 1
   obs_space_type: "full" # "full", "standard", or "minimal"

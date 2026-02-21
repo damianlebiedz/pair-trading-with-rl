@@ -13,6 +13,7 @@ from modules.data_services.data_utils import (
     load_btc_benchmark,
     save_dataframe,
     load_strategy_result,
+    load_ewp_benchmark,
 )
 from modules.performance.multi_pair_optimizer import MultiPairOptimizer
 from modules.data_services.merge_utils import (
@@ -103,6 +104,7 @@ def execute_testing(
     test_end: str,
     interval: str,
     plot: bool,
+    tickers: list[str],
     subdir: str | None = None,
 ) -> StrategyResult:
 
@@ -150,7 +152,19 @@ def execute_testing(
             test_end=test_end,
             interval=interval,
         )
-        plot_returns(result, btc_data, directory=output_dir, save=True)
+        ewp_data = load_ewp_benchmark(
+            tickers=tickers,
+            test_start=test_start,
+            test_end=test_end,
+            interval=interval,
+        )
+        plot_returns(
+            result=result,
+            btc_data=btc_data,
+            ewp_data=ewp_data,
+            directory=output_dir,
+            save=True,
+        )
 
         logger.debug("Testing completed, returning StrategyResult.")
 
@@ -263,6 +277,7 @@ def merge_multi_pair_results(
     test_end: str,
     interval: str,
     plot: bool,
+    tickers: list[str],
     prefix: str | None = "",
 ) -> StrategyResult:
     """Merges multiple StrategyResult objects into one aggregate result and saves it."""
@@ -315,9 +330,16 @@ def merge_multi_pair_results(
             test_end=final_result.end,
             interval=interval,
         )
+        ewp_data = load_ewp_benchmark(
+            tickers=tickers,
+            test_start=final_result.start,
+            test_end=final_result.end,
+            interval=interval,
+        )
         plot_returns(
             result=final_result,
             btc_data=btc_data,
+            ewp_data=ewp_data,
             directory=output_dir,
             save=True,
             prefix=prefix,
@@ -336,6 +358,7 @@ def merge_multi_period_results(
     risk_free_rate_annual: float,
     interval: str,
     plot: bool,
+    tickers: list[str],
     prefix: str = "",
 ) -> StrategyResult | None:
     """
@@ -423,9 +446,16 @@ def merge_multi_period_results(
             test_end=final_result.end,
             interval=interval,
         )
+        ewp_data = load_ewp_benchmark(
+            tickers=tickers,
+            test_start=final_result.start,
+            test_end=final_result.end,
+            interval=interval,
+        )
         plot_returns(
             result=final_result,
             btc_data=btc_data,
+            ewp_data=ewp_data,
             directory=output_dir,
             save=True,
             prefix=prefix,

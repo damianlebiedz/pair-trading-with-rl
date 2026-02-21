@@ -1,6 +1,4 @@
 from abc import ABC, abstractmethod
-from collections import deque
-
 import numpy as np
 
 
@@ -46,43 +44,6 @@ class RiskAdjustedReward(RewardScheme):
     ) -> float:
         drawdown_pct = info.get("drawdown_pct", 0.0)
         return step_pnl - (drawdown_pct * self.risk_penalty)
-
-
-class VolatilityPenaltyReward(RewardScheme):
-    """
-    Mean-Variance Optimization
-    Reward = Returns - (Vol_Penalty * Returns^2)
-    """
-
-    def __init__(self, penalty_factor: float = 0.5, window_size: int = 50):
-        self.penalty_factor = penalty_factor
-        self.returns_window = deque(maxlen=window_size)
-
-    def reset(self):
-        self.returns_window.clear()
-
-    def calculate(
-        self,
-        step_pnl: float,
-        equity: float,
-        position: float,
-        step_fees: float,
-        info: dict,
-    ) -> float:
-        safe_equity = equity if equity > 1e-6 else 1.0
-        step_return = step_pnl / safe_equity
-
-        self.returns_window.append(step_return)
-
-        if len(self.returns_window) < 2:
-            return step_return * 100.0
-
-        current_vol = np.std(self.returns_window)
-
-        # Reward = Return - (lambda * Volatility)
-        reward = (step_return * 100.0) - (self.penalty_factor * (current_vol * 100.0))
-
-        return reward
 
 
 class DifferentialSharpeReward(RewardScheme):

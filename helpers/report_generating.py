@@ -5,7 +5,7 @@ from pathlib import Path
 from datetime import datetime
 
 from modules.utils.plots import _get_custom_tickvals
-from modules.data_services.data_utils import load_btc_benchmark
+from modules.data_services.data_utils import load_btc_benchmark, load_ewp_benchmark
 
 # ==========================================
 STRATEGIES = {
@@ -142,6 +142,44 @@ def generate_comparison_report(strategies_input: dict | list) -> None:
             test_start=global_start, test_end=global_end, interval="1h"
         )
 
+        ewp_data = load_ewp_benchmark(
+            tickers=[
+                "BTCUSDT",
+                "ETHUSDT",
+                "BNBUSDT",
+                "SOLUSDT",
+                "XRPUSDT",
+                "ADAUSDT",
+                "AVAXUSDT",
+                "DOGEUSDT",
+                "TRXUSDT",
+                "DOTUSDT",
+                "LINKUSDT",
+                "SHIBUSDT",
+                "LTCUSDT",
+                "BCHUSDT",
+                "UNIUSDT",
+                "XLMUSDT",
+                "ATOMUSDT",
+                "ICPUSDT",
+                "FILUSDT",
+                "LDOUSDT",
+                "APTUSDT",
+                "QNTUSDT",
+                "ARBUSDT",
+                "VETUSDT",
+                "MKRUSDT",
+                "OPUSDT",
+                "NEARUSDT",
+                "GRTUSDT",
+                "AAVEUSDT",
+                "ALGOUSDT",
+            ],
+            test_start=global_start,
+            test_end=global_end,
+            interval="1h",
+        )
+
         fig = go.Figure()
         colors = [
             "#1f77b4",
@@ -209,12 +247,28 @@ def generate_comparison_report(strategies_input: dict | list) -> None:
                             y=btc_ret,
                             mode="lines",
                             name="BTC Benchmark",
-                            line=dict(color="grey", width=1.5, dash="dash"),
+                            line=dict(color="grey", width=1.5, dash="dot"),
                             opacity=0.6,
-                            hovertemplate="<b>BTC</b>: %{{y:.2%}}<extra></extra>",
+                            hovertemplate="<b>BTC Benchmark</b>: %{{y:.2%}}<extra></extra>",
                             visible="legendonly",
                         )
                     )
+
+        if ewp_data is not None and not ewp_data.empty:
+            if ewp_data.index.tz is not None and first_df.index.tz is None:
+                ewp_data.index = ewp_data.index.tz_localize(None)
+
+            fig.add_trace(
+                go.Scatter(
+                    x=ewp_data.index,
+                    y=ewp_data["ewp_return"],
+                    mode="lines",
+                    name="EWP Benchmark",
+                    line=dict(color="grey", width=1.5, dash="dot"),
+                    hovertemplate="<b>EWP Benchmark</b>: %{y:.2%}<extra></extra>",
+                    visible="legendonly",
+                )
+            )
 
         fig.update_layout(
             title=dict(

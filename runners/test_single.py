@@ -37,6 +37,8 @@ def test_single(cfg: DictConfig):
     logger.info(f"Saving results to: {output_dir}")
     logger.info("CONFIG:\n%s", OmegaConf.to_yaml(cfg))
 
+    tickers = cfg.tickers if cfg.generate_plots else None
+
     agent = None
     if cfg.rl.use:
         valid_spaces = ["full", "standard", "minimal"]  # TODO: schemas
@@ -108,6 +110,7 @@ def test_single(cfg: DictConfig):
         subdir="test",
         interval=cfg.market.interval,
         plot=cfg.generate_plots,
+        tickers=tickers,
     )
 
     logger.info(f"Results saved in {output_dir}.")
