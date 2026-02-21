@@ -40,9 +40,7 @@ class Strategy:
         beta_hedge (str): Hedge ratio mode: "static", "rolling", or "no_hedge".
         beta_method (str): Beta calculation method: "ols" or "kalman".
         delayed_entry (bool): Delayed execution or standard one.
-        time_decay_sl (tuple(float, float)): Parameters 'time_decay_start' and 'time_decay_end' for time decay stop loss.
-            - time_decay_start: decay will begin when position exists for at least time_decay_start * window intervals.
-            - time_decay_end: stop loss threshold will be equal to exit threshold after time_decay_end * window intervals.
+        time_decay_sl (bool): Time Decay SL: if true, SL decay will start from 0.5 * window and be equal to exit threshold at window size.
         agent (RLAgentAdapter): RL Agent, if None - trade without agent, otherwise - use agent's actions.
         vol_window (int): Volatility window size. Default = 24 (one day in '1h' interval).
         valid_window (tuple(int, int)): Min and max Z-Score window.
@@ -66,7 +64,7 @@ class Strategy:
         sl_lock: bool,
         vol_window: int,
         valid_window: tuple[int, int],
-        time_decay_sl: tuple[float, float] | None = None,
+        time_decay_sl: bool,
         agent: RLAgentAdapter | None = None,
         source: str = "log",
     ):
@@ -342,8 +340,8 @@ class Strategy:
                     and win is not None
                     and exit_threshold is not None
                 ):
-                    time_decay_start = self.time_decay_sl[0]
-                    time_decay_end = self.time_decay_sl[1]
+                    time_decay_start = 0.5
+                    time_decay_end = 1.0
 
                     hl_diff = (time_decay_end * win) - (time_decay_start * win)
                     sl_exit_diff = stop_loss_thr - exit_threshold

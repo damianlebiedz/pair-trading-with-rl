@@ -166,10 +166,7 @@ def test_multi(cfg: DictConfig):
                 window_method=cfg.performance.window_method,
                 delayed_entry=cfg.performance.delayed_entry,
                 sl_lock=cfg.performance.sl_lock,
-                time_decay_sl=(
-                    cfg.performance.time_decay_start,
-                    cfg.performance.time_decay_end,
-                ),
+                time_decay_sl=cfg.performance.time_decay_sl,
                 valid_window=(cfg.performance.window_min, cfg.performance.window_max),
                 vol_window=cfg.performance.vol_window,
                 agent=agent,

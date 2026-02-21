@@ -21,8 +21,7 @@ performance:
 
   delayed_entry: True # True or False
   sl_lock: True
-  time_decay_start: 0.5
-  time_decay_end: 1.0
+  time_decay_sl: True # True or False
   rl_reward: "pnl" # "pnl" or "risk_adj"
 
   vol_window: 24
