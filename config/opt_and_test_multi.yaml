@@ -39,7 +39,7 @@ performance:
     end: "2024-01-01"
 
     # Search parameters
-    n_iter: 200
+    n_iter: 100
     penalty_bad: -100
 
     # Parameters space
