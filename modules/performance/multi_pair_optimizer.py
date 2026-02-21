@@ -2,7 +2,6 @@ import logging
 from typing import Any, Literal
 import pandas as pd
 import numpy as np
-from joblib import Parallel, delayed
 
 from modules.core.search_methods import random_search
 from modules.data_services.merge_utils import aggregate_strategy_results
@@ -22,7 +21,6 @@ class MultiPairOptimizer:
         opt_win_start: int,
         penalty_bad: float,
         n_iter: int,
-        replicates: int,
         interval: str,
         risk_free_rate_annual: float,
         min_trades_per_pair: int,
@@ -35,7 +33,6 @@ class MultiPairOptimizer:
         self.opt_win_start = opt_win_start
         self.penalty_bad = penalty_bad
         self.n_iter = n_iter
-        self.replicates = replicates
         self.interval = interval
         self.risk_free_rate_annual = risk_free_rate_annual
         self.min_trades_per_pair = min_trades_per_pair
@@ -85,18 +82,26 @@ class MultiPairOptimizer:
             exit_threshold = params.get("exit_threshold")
             stop_loss = params.get("stop_loss")
 
-            results = Parallel(n_jobs=-1)(
-                delayed(strat.run_strategy)(
-                    fixed_window=fixed_window,
-                    entry_threshold=entry_threshold,
-                    exit_threshold=exit_threshold,
-                    stop_loss=stop_loss,
-                    test_start=self.opt_start,
-                    test_end=self.opt_end,
-                    win_test_start=self.opt_win_start,
-                )
-                for strat in self.strategies
-            )
+            results = []
+
+            for strat in self.strategies:
+                try:
+                    res = strat.run_strategy(
+                        fixed_window=fixed_window,
+                        entry_threshold=entry_threshold,
+                        exit_threshold=exit_threshold,
+                        stop_loss=stop_loss,
+                        test_start=self.opt_start,
+                        test_end=self.opt_end,
+                        win_test_start=self.opt_win_start,
+                    )
+                    results.append(res)
+
+                except Exception as e:
+                    logger.error(
+                        f"[MultiPairOpt Error] during {strat.ticker_x}-{strat.ticker_y}: {e}"
+                    )
+                    raise e
 
             merged_df, merged_exec_res = aggregate_strategy_results(
                 results=results,
@@ -147,7 +152,6 @@ class MultiPairOptimizer:
             static_params=static_params,
             metric_type=metric_type,
             n_iter=self.n_iter,
-            replicates=self.replicates,
             penalty_bad=self.penalty_bad,
         )
 

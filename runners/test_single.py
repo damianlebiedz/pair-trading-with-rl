@@ -1,8 +1,7 @@
 import logging
 import os
-
 import hydra
-from omegaconf import OmegaConf, DictConfig
+from omegaconf import DictConfig
 
 from modules.learning.agents import RLAgentAdapter
 from modules.performance.strategy import Strategy
@@ -32,18 +31,47 @@ def test_single(cfg: DictConfig):
     }
 
     rl_output_dir = None
-    if cfg.performance.rl:
+    if cfg.rl.use:
         rl_output_dir = setup_rl_run_environment(__file__)
 
     logger.info(f"Saving results to: {output_dir}")
-    logger.info("CONFIG:\n%s", OmegaConf.to_yaml(cfg))
+
+    tickers = cfg.tickers if cfg.generate_plots else None
 
     agent = None
-    if cfg.performance.rl:
-        model_path = os.path.join(rl_output_dir, "models")
+    if cfg.rl.use:
+        valid_spaces = ["full", "standard", "minimal"]  # TODO: schemas
+        obs_space_type = next(
+            (space for space in valid_spaces if f"_{space}_" in cfg.rl.model_name), None
+        )
+
+        if not obs_space_type:
+            raise ValueError(
+                f"Error: wrong obs_space_type in model_name: '{cfg.rl.model_name}'. "
+                f"Must be one of: {valid_spaces}"
+            )
+
+        base_model_path = os.path.join(rl_output_dir, "models", cfg.rl.model_name)
+        model_zip_path = f"{base_model_path}.zip"
+        vec_normalize_path = f"{base_model_path}_normalize.pkl"
+
+        if not os.path.exists(model_zip_path):
+            raise FileNotFoundError(f"Model file not found: {model_zip_path}")
+        if not os.path.exists(vec_normalize_path):
+            raise FileNotFoundError(
+                f"Vec-Normalize file not found: {vec_normalize_path}"
+            )
+
         try:
-            model = load_model(path=model_path)
-            agent = RLAgentAdapter(model=model, training_mode=False)
+            model, vec_normalize = load_model(
+                model_path=base_model_path, vec_normalize_path=vec_normalize_path
+            )
+            agent = RLAgentAdapter(
+                model=model,
+                vec_normalize=vec_normalize,
+                training_mode=False,
+                obs_space_type=obs_space_type,
+            )
             logger.info("RL Agent loaded successfully.")
         except Exception as e:
             logger.error(f"Failed to load RL model: {e}")
@@ -62,10 +90,7 @@ def test_single(cfg: DictConfig):
         window_method=cfg.performance.window_method,
         delayed_entry=cfg.performance.delayed_entry,
         sl_lock=cfg.performance.sl_lock,
-        time_decay_sl=(
-            cfg.performance.time_decay_start,
-            cfg.performance.time_decay_end,
-        ),
+        time_decay_sl=cfg.performance.time_decay_sl,
         valid_window=(cfg.performance.window_min, cfg.performance.window_max),
         vol_window=cfg.performance.vol_window,
         agent=agent,
@@ -83,7 +108,8 @@ def test_single(cfg: DictConfig):
         test_end=cfg.performance.test.end,
         subdir="test",
         interval=cfg.market.interval,
-        plot=cfg.settings.plot,
+        plot=cfg.generate_plots,
+        tickers=tickers,
     )
 
     logger.info(f"Results saved in {output_dir}.")

@@ -467,6 +467,7 @@ def plot_spread_pos(
 def plot_returns(
     result: StrategyResult,
     btc_data: pd.DataFrame | None = None,
+    ewp_data: pd.DataFrame | None = None,
     directory: str | None = None,
     save: bool = True,
     prefix: str | None = "",
@@ -518,9 +519,22 @@ def plot_returns(
                 y=btc_data["BTC_return"],
                 mode="lines",
                 name="BTC Return",
-                line=dict(color="red", width=1, dash="dot"),
+                line=dict(color="orange", width=1, dash="dot"),
                 visible="legendonly",
                 hovertemplate="<b>BTC Return</b>: %{y:.4f}<extra></extra>",
+            )
+        )
+
+    if ewp_data is not None:
+        fig.add_trace(
+            go.Scatter(
+                x=ewp_data.index,
+                y=ewp_data["ewp_return"],
+                mode="lines",
+                name="EWP Return",
+                line=dict(color="red", width=1, dash="dot"),
+                visible="legendonly",
+                hovertemplate="<b>EWP Return</b>: %{y:.4f}<extra></extra>",
             )
         )
 

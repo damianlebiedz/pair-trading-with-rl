@@ -13,6 +13,7 @@ from modules.data_services.data_utils import (
     load_btc_benchmark,
     save_dataframe,
     load_strategy_result,
+    load_ewp_benchmark,
 )
 from modules.performance.multi_pair_optimizer import MultiPairOptimizer
 from modules.data_services.merge_utils import (
@@ -32,9 +33,10 @@ def setup_run_environment(calling_file: str) -> str:
     script_dir = os.path.dirname(os.path.abspath(calling_file))
     project_root = os.path.abspath(os.path.join(script_dir, ".."))
 
+    file_stem = Path(calling_file).stem
     unique_id = uuid.uuid4().hex[:6]
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S") + f"_{unique_id}"
-    output_dir = os.path.join(project_root, "results", timestamp)
+    output_dir = os.path.join(project_root, "results", f"{file_stem}_{timestamp}")
 
     os.makedirs(output_dir, exist_ok=True)
 
@@ -64,32 +66,18 @@ def setup_rl_run_environment(calling_file: str) -> str:
     script_dir = os.path.dirname(os.path.abspath(calling_file))
     project_root = os.path.abspath(os.path.join(script_dir, ".."))
 
-    unique_id = uuid.uuid4().hex[:6]
-    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S") + f"_{unique_id}"
-    output_dir = os.path.join(project_root, "data_rl")
+    data_dir = os.path.join(project_root, "data_rl")
+    models_dir = os.path.join(data_dir, "models")
+    training_data_dir = os.path.join(data_dir, "training_data")
 
-    os.makedirs(output_dir, exist_ok=True)
-
-    root_logger = logging.getLogger()
-    root_logger.setLevel(logging.INFO)
-
-    formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    )
-
-    file_handler = logging.FileHandler(os.path.join(output_dir, f"{timestamp}.log"))
-    file_handler.setFormatter(formatter)
-    root_logger.addHandler(file_handler)
-
-    if not any(isinstance(h, logging.StreamHandler) for h in root_logger.handlers):
-        console_handler = logging.StreamHandler(sys.stdout)
-        console_handler.setFormatter(formatter)
-        root_logger.addHandler(console_handler)
+    os.makedirs(data_dir, exist_ok=True)
+    os.makedirs(models_dir, exist_ok=True)
+    os.makedirs(training_data_dir, exist_ok=True)
 
     logger.debug("--- RL Environment Setup ---")
-    logger.debug(f"Output Directory: {output_dir}")
+    logger.debug(f"Directory: {data_dir}")
 
-    return output_dir
+    return data_dir
 
 
 def execute_testing(
@@ -103,6 +91,7 @@ def execute_testing(
     test_end: str,
     interval: str,
     plot: bool,
+    tickers: list[str],
     subdir: str | None = None,
 ) -> StrategyResult:
 
@@ -150,7 +139,19 @@ def execute_testing(
             test_end=test_end,
             interval=interval,
         )
-        plot_returns(result, btc_data, directory=output_dir, save=True)
+        ewp_data = load_ewp_benchmark(
+            tickers=tickers,
+            test_start=test_start,
+            test_end=test_end,
+            interval=interval,
+        )
+        plot_returns(
+            result=result,
+            btc_data=btc_data,
+            ewp_data=ewp_data,
+            directory=output_dir,
+            save=True,
+        )
 
         logger.debug("Testing completed, returning StrategyResult.")
 
@@ -210,7 +211,6 @@ def execute_multi_pair_optimization(
     opt_win_start: str,
     penalty_bad: float,
     n_iter: int,
-    replicates: int,
     interval: str,
     risk_free_rate_annual: float,
     min_trades_per_pair: int,
@@ -234,7 +234,6 @@ def execute_multi_pair_optimization(
         opt_win_start=opt_win_start,
         penalty_bad=penalty_bad,
         n_iter=n_iter,
-        replicates=replicates,
         interval=interval,
         risk_free_rate_annual=risk_free_rate_annual,
         min_trades_per_pair=min_trades_per_pair,
@@ -265,6 +264,7 @@ def merge_multi_pair_results(
     test_end: str,
     interval: str,
     plot: bool,
+    tickers: list[str],
     prefix: str | None = "",
 ) -> StrategyResult:
     """Merges multiple StrategyResult objects into one aggregate result and saves it."""
@@ -317,9 +317,16 @@ def merge_multi_pair_results(
             test_end=final_result.end,
             interval=interval,
         )
+        ewp_data = load_ewp_benchmark(
+            tickers=tickers,
+            test_start=final_result.start,
+            test_end=final_result.end,
+            interval=interval,
+        )
         plot_returns(
             result=final_result,
             btc_data=btc_data,
+            ewp_data=ewp_data,
             directory=output_dir,
             save=True,
             prefix=prefix,
@@ -338,6 +345,7 @@ def merge_multi_period_results(
     risk_free_rate_annual: float,
     interval: str,
     plot: bool,
+    tickers: list[str],
     prefix: str = "",
 ) -> StrategyResult | None:
     """
@@ -425,9 +433,16 @@ def merge_multi_period_results(
             test_end=final_result.end,
             interval=interval,
         )
+        ewp_data = load_ewp_benchmark(
+            tickers=tickers,
+            test_start=final_result.start,
+            test_end=final_result.end,
+            interval=interval,
+        )
         plot_returns(
             result=final_result,
             btc_data=btc_data,
+            ewp_data=ewp_data,
             directory=output_dir,
             save=True,
             prefix=prefix,

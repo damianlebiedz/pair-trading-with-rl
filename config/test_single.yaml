@@ -8,6 +8,12 @@ entry_threshold: 2.5
 exit_threshold: 0.2
 stop_loss: 2
 
+generate_plots: False
+
+rl:
+  use: False
+  model_name: "recurrent_ppo_standard_abc123_seed42"
+
 performance:
   beta_method: "kalman" # "ols" or "kalman"
   beta_hedge: "static" # "static" or "rolling"
@@ -15,10 +21,7 @@ performance:
 
   delayed_entry: True # True or False
   sl_lock: True
-  time_decay_start: 0.5
-  time_decay_end: 1.0
-
-  rl: False
+  time_decay_sl: True # True or False
 
   vol_window: 24
   window_min: 48

@@ -1,7 +1,5 @@
 from typing import Literal
 import numpy as np
-import pandas as pd
-import statsmodels.api as sm
 
 
 class KalmanState:
@@ -119,9 +117,8 @@ def generate_signal(
 
 
 def calculate_beta(
-    x_col: str,
-    y_col: str,
-    df: pd.DataFrame,
+    X_slice: np.ndarray,
+    Y_slice: np.ndarray,
     beta_method: Literal["ols", "kalman"],
 ) -> float:
     """
@@ -134,123 +131,28 @@ def calculate_beta(
        and 'y_col' is the feature.
     2. **Kalman**: Applies an online Kalman Filter to estimate the evolving beta step-by-step,
        treating 'y_col' as the observable state predictor for 'x_col'.
-
-    Args:
-        x_col: Column name for the dependent asset (X).
-        y_col: Column name for the independent asset (Y, hedge).
-        df: DataFrame containing the price series.
-        beta_method: Method to use ('ols', or 'kalman').
-
-    Returns:
-        float: Calculated beta coefficient.
-
-    Raises:
-        ValueError: If an invalid beta_method is provided.
     """
     if beta_method not in ["ols", "kalman"]:
         raise ValueError("coint_method should be 'ols' or 'kalman'")
 
     if beta_method == "ols":
-        X = sm.add_constant(df[y_col])
-        y = df[x_col]
-        model = sm.OLS(y, X, missing="drop").fit()
-        beta = model.params[y_col]
+        cov_matrix = np.cov(X_slice, Y_slice, ddof=1)
+        var_y = cov_matrix[1, 1]
 
+        if var_y == 0:
+            return 0.0
+
+        beta = cov_matrix[0, 1] / var_y
         return beta
 
     else:
-        data = df[[x_col, y_col]].dropna()
         kf = KalmanState()
         current_beta = 0.0
 
-        for i in range(len(data)):
-            obs_x = data[y_col].iloc[i]
-            obs_y = data[x_col].iloc[i]
-            current_beta = kf.update(obs_x, obs_y)
+        for i in range(len(X_slice)):
+            current_beta = kf.update(obs_x=Y_slice[i], obs_y=X_slice[i])
 
         return current_beta
-
-
-def calculate_spread_statistics(
-    x_col: str, y_col: str, beta: float, df: pd.DataFrame
-) -> tuple[float, float, float]:
-    """
-    Calculates basic spread statistics for a pair of assets.
-
-    This function derives the spread time series based on the formula:
-    spread = x - beta * y. It then computes the most recent spread value,
-    the rolling mean, and the standard deviation for the provided data window.
-
-    Args:
-        x_col (str): Column name for the dependent asset (X).
-        y_col (str): Column name for the independent asset (Y, hedge).
-        beta (float): The hedge ratio (beta) used to construct the spread.
-        df (pd.DataFrame): DataFrame containing price series for both assets.
-
-    Returns:
-        tuple[float, float, float]: A tuple containing:
-            - spread (float): The current (last) value of the spread series.
-            - mean (float): The arithmetic mean of the spread in the current window.
-            - std (float): The standard deviation of the spread in the current window.
-    """
-    spread_series = df[x_col] - (beta * df[y_col])
-
-    spread = spread_series.iloc[-1]
-    mean = spread_series.mean()
-    std = spread_series.std()
-
-    return spread, mean, std
-
-
-def calculate_hurst(
-    x_col: str, y_col: str, beta: float, df: pd.DataFrame, max_lags: int = 20
-) -> float:
-    """
-    Calculates the Hurst Exponent to determine the time series memory.
-
-    The Hurst exponent (H) characterizes the long-term memory of a time series.
-    It is used to identify whether a series is mean-reverting, trending, or
-    following a random walk.
-
-    Hurst Exponent Interpretation:
-        - H < 0.5: Mean-reverting series (anti-persistent).
-        - H = 0.5: Random walk (Geometric Brownian Motion).
-        - H > 0.5: Trending series (persistent).
-
-    Args:
-        x_col (str): Column name for asset X.
-        y_col (str): Column name for asset Y.
-        beta (float): The hedge ratio used to construct the spread.
-        df (pd.DataFrame): DataFrame containing price series.
-        max_lags (int, optional): The maximum number of lags to consider
-            for the calculation. Defaults to 20.
-
-    Returns:
-        float: The calculated Hurst Exponent. Returns 0.5 as a fallback if
-            there is insufficient data or an error occurs.
-    """
-    lags = range(2, max_lags)
-    tau = []
-
-    spread_series = df[x_col] - (beta * df[y_col])
-    series_val = spread_series.values
-
-    if len(series_val) < max_lags * 2:
-        return 0.5
-
-    for lag in lags:
-        diff = series_val[lag:] - series_val[:-lag]
-        if len(diff) == 0:
-            continue
-        tau.append(np.std(diff))
-
-    if not tau:
-        return 0.5
-
-    m = np.polyfit(np.log(lags), np.log(tau), 1)
-    hurst = m[0]
-
-    return hurst
 
 
 def calculate_z_score(spread: float, mean: float, std: float) -> float | None:
@@ -276,11 +178,7 @@ def calculate_z_score(spread: float, mean: float, std: float) -> float | None:
 
 
 def calculate_half_life_window(
-    x_col: str,
-    y_col: str,
-    beta: float,
-    df: pd.DataFrame,
-    valid_window: tuple[int, int],
+    X_slice: np.ndarray, Y_slice: np.ndarray, beta: float, valid_window: tuple[int, int]
 ) -> int | None:
     """
     Estimates the mean-reversion Half-Life via the Ornstein-Uhlenbeck (OU) process
@@ -290,36 +188,27 @@ def calculate_half_life_window(
     1. Construct the spread series using the provided beta: spread = x - beta * y.
     2. Discretize the OU process as: Δspread_t = λ * spread_{t-1} + ε_t.
     3. Regress the daily change in spread (Δspread) against the lagged spread to estimate
-       the mean reversion speed (λ).
+        the mean reversion speed (λ).
     4. Validate λ: If λ >= 0, the process is not mean-reverting (explosive or random walk),
-       and the function returns None.
+        and the function returns None.
     5. Calculate Half-Life: -ln(2) / λ.
-
-    Args:
-        x_col: Column name for asset X.
-        y_col: Column name for asset Y.
-        beta: Hedge ratio.
-        df: DataFrame containing price data.
-        valid_window: min and max values of window.
-
-    Returns:
-        int | None: The calculated window size, or None if the spread is not mean-reverting
-        (beta <= 0 or lambda >= 0) or if the calculated window is invalid.
     """
     if beta <= 0:
         return None
 
-    series = df[x_col] - (beta * df[y_col])
+    series = X_slice - beta * Y_slice
 
-    lag = series.shift(1)
-    ret = series - lag
+    lag = series[:-1]
+    diff = series[1:] - series[:-1]
 
-    lag = lag.iloc[1:]
-    ret = ret.iloc[1:]
+    cov_matrix = np.cov(lag, diff, ddof=1)
+    var_lag = cov_matrix[0, 0]
+    cov_lag_diff = cov_matrix[0, 1]
 
-    X = sm.add_constant(lag)
-    model = sm.OLS(ret, X, missing="drop").fit()
-    lam = model.params.iloc[1]
+    if var_lag == 0:
+        return None
+
+    lam = cov_lag_diff / var_lag
 
     if lam >= 0:
         return None
@@ -330,3 +219,42 @@ def calculate_half_life_window(
         return None
 
     return int(half_life)
+
+
+def calculate_hurst(
+    X_slice: np.ndarray, Y_slice: np.ndarray, beta: float, max_lags: int = 20
+) -> float:
+    """
+    Calculates the Hurst Exponent to determine the time series memory.
+
+    The Hurst exponent (H) characterizes the long-term memory of a time series.
+    It is used to identify whether a series is mean-reverting, trending, or
+    following a random walk.
+
+    Hurst Exponent Interpretation:
+        - H < 0.5: Mean-reverting series (anti-persistent).
+        - H = 0.5: Random walk (Geometric Brownian Motion).
+        - H > 0.5: Trending series (persistent).
+    """
+    series_val = X_slice - beta * Y_slice
+    if len(series_val) < max_lags * 2:
+        return 0.5
+
+    lags = range(2, max_lags)
+    tau = [np.std(series_val[lag:] - series_val[:-lag], ddof=0) for lag in lags]
+
+    if not tau:
+        return 0.5
+    return np.polyfit(np.log(list(lags)), np.log(tau), 1)[0]
+
+
+def calculate_spread_statistics(X_slice: np.ndarray, Y_slice: np.ndarray, beta: float):
+    """
+    Calculates basic spread statistics for a pair of assets.
+
+    This function derives the spread time series based on the formula:
+    spread = x - beta * y. It then computes the most recent spread value,
+    the rolling mean, and the standard deviation for the provided data window.
+    """
+    spread_arr = X_slice - beta * Y_slice
+    return spread_arr[-1], np.mean(spread_arr), np.std(spread_arr, ddof=1)

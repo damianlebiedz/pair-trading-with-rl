@@ -5,6 +5,8 @@ entry_threshold: null
 exit_threshold: null
 stop_loss: null
 
+generate_plots: False
+
 pair_selection:
   top_n_factor: 20
   coint_type: "eg" # "eg" or "johansen"
@@ -21,15 +23,14 @@ performance:
 
   delayed_entry: True # True or False
   sl_lock: True
-  time_decay_start: 0.5
-  time_decay_end: 1.0
+  time_decay_sl: True # True or False
   rl_reward: "pnl" # "pnl" or "risk_adj"
 
   vol_window: 24
   window_min: 48
   window_max: 336
 
-  min_trades_per_pair: 10
+  min_trades_per_pair: 1
 
   optimization:
     objective_func: "sortino" # "sortino"
@@ -40,19 +41,18 @@ performance:
     end: "2024-01-01"
 
     # Search parameters
-    n_iter: 200
-    replicates: 1
+    n_iter: 100
     penalty_bad: -100
 
     # Parameters space
-    entry_threshold_min: 1.50
+    entry_threshold_min: 2.00
     entry_threshold_max: 3.50
 
     exit_threshold_min: 0.00
     exit_threshold_max: 0.50
 
-    stop_loss_min: 1.05
-    stop_loss_max: 3.00
+    stop_loss_min: 1.10
+    stop_loss_max: 2.50
 
   test:
     win_start: "2023-12-01"

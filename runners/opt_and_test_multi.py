@@ -2,7 +2,7 @@ import logging
 import os
 import hydra
 import pandas as pd
-from omegaconf import OmegaConf, DictConfig
+from omegaconf import DictConfig
 from skopt.space import Real, Integer
 
 from modules.performance.models import StrategyResult
@@ -46,7 +46,8 @@ def opt_and_test_multi(cfg: DictConfig):
     lists = generate_date_lists(config, number_of_iterations)
 
     logger.info(f"Saving results to: {root}")
-    logger.info("CONFIG:\n%s", OmegaConf.to_yaml(cfg))
+
+    tickers = cfg.tickers if cfg.generate_plots else None
 
     for i in range(number_of_iterations):
         output_dir = os.path.join(root, f"{i+1}")
@@ -172,10 +173,7 @@ def opt_and_test_multi(cfg: DictConfig):
                 window_method=cfg.performance.window_method,
                 delayed_entry=cfg.performance.delayed_entry,
                 sl_lock=cfg.performance.sl_lock,
-                time_decay_sl=(
-                    cfg.performance.time_decay_start,
-                    cfg.performance.time_decay_end,
-                ),
+                time_decay_sl=cfg.performance.time_decay_sl,
                 valid_window=(cfg.performance.window_min, cfg.performance.window_max),
                 vol_window=cfg.performance.vol_window,
             )
@@ -193,7 +191,6 @@ def opt_and_test_multi(cfg: DictConfig):
             opt_win_start=lists["opt_win_start_list"][i],
             penalty_bad=cfg.performance.optimization.penalty_bad,
             n_iter=cfg.performance.optimization.n_iter,
-            replicates=cfg.performance.optimization.replicates,
             interval=cfg.market.interval,
             risk_free_rate_annual=cfg.market.risk_free_rate_annual,
             min_trades_per_pair=cfg.performance.min_trades_per_pair,
@@ -223,7 +220,8 @@ def opt_and_test_multi(cfg: DictConfig):
                 test_end=lists["opt_end_list"][i],
                 subdir="opt",
                 interval=cfg.market.interval,
-                plot=cfg.settings.plot,
+                plot=cfg.generate_plots,
+                tickers=tickers,
             )
 
             logger.debug("--- Starting Test ---")
@@ -238,7 +236,8 @@ def opt_and_test_multi(cfg: DictConfig):
                 test_end=lists["test_end_list"][i],
                 subdir="test",
                 interval=cfg.market.interval,
-                plot=cfg.settings.plot,
+                plot=cfg.generate_plots,
+                tickers=tickers,
             )
 
             opt_results.append(result_opt)
@@ -254,7 +253,8 @@ def opt_and_test_multi(cfg: DictConfig):
                 test_end=lists["test_end_list"][i],
                 prefix="opt_",
                 interval=cfg.market.interval,
-                plot=cfg.settings.plot,
+                plot=cfg.generate_plots,
+                tickers=tickers,
             )
             merge_multi_pair_results(
                 output_dir=output_dir,
@@ -265,7 +265,8 @@ def opt_and_test_multi(cfg: DictConfig):
                 test_end=lists["test_end_list"][i],
                 prefix="test_",
                 interval=cfg.market.interval,
-                plot=cfg.settings.plot,
+                plot=cfg.generate_plots,
+                tickers=tickers,
             )
 
     if number_of_iterations > 1:
@@ -277,7 +278,8 @@ def opt_and_test_multi(cfg: DictConfig):
             risk_free_rate_annual=cfg.market.risk_free_rate_annual,
             prefix="opt_",
             interval=cfg.market.interval,
-            plot=cfg.settings.plot,
+            plot=cfg.generate_plots,
+            tickers=tickers,
         )
         merge_multi_period_results(
             output_dir=root,
@@ -287,7 +289,8 @@ def opt_and_test_multi(cfg: DictConfig):
             risk_free_rate_annual=cfg.market.risk_free_rate_annual,
             prefix="test_",
             interval=cfg.market.interval,
-            plot=cfg.settings.plot,
+            plot=cfg.generate_plots,
+            tickers=tickers,
         )
 
     logger.info(f"Results saved in {root}.")
