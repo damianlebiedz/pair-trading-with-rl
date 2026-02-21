@@ -59,9 +59,7 @@ def train_agent(cfg: DictConfig):
     set_random_seed(seed)
     logger.info(f"Random seed set to: {seed}")
 
-    data_path = os.path.join(
-        Path(rl_root), "training_data", cfg.rl.training_subfolder
-    )
+    data_path = os.path.join(Path(rl_root), "training_data", cfg.rl.training_subfolder)
     model_dir = os.path.join(root, "models")
     log_dir = os.path.join(root, "tensorboard_logs")
 
