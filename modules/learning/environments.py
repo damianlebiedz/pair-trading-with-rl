@@ -52,17 +52,29 @@ def build_multi_env(
 
 
 class MockEnv(gym.Env):
-    def __init__(self):
+    def __init__(self, obs_space_type: Literal["full", "standard", "minimal"]):
+        super().__init__()
+
+        if obs_space_type == "minimal":
+            obs_shape = (3,)
+        elif obs_space_type == "standard":
+            obs_shape = (6,)
+        else:
+            obs_shape = (9,)
+
         self.observation_space = spaces.Box(
-            low=-np.inf, high=np.inf, shape=(9,), dtype=np.float32
+            low=-np.inf, high=np.inf, shape=obs_shape, dtype=np.float32
         )
         self.action_space = spaces.Discrete(3)
 
     def reset(self, seed=None, options=None):
-        pass
+        super().reset(seed=seed)
+        obs = np.zeros(self.observation_space.shape, dtype=np.float32)
+        return obs, {}
 
     def step(self, action):
-        pass
+        obs = np.zeros(self.observation_space.shape, dtype=np.float32)
+        return obs, 0.0, False, False, {}
 
 
 class PairsTradingEnv(gym.Env):
@@ -84,7 +96,7 @@ class PairsTradingEnv(gym.Env):
         if obs_space_type == "minimal":
             obs_shape = (3,)
         elif obs_space_type == "standard":
-            obs_shape = (5,)
+            obs_shape = (6,)
         else:
             obs_shape = (9,)
 
@@ -199,7 +211,7 @@ class PairsTradingEnv(gym.Env):
         market_z_score = row.get("market_z_score")
         market_std = row.get("market_std")
         market_beta = row.get("market_beta")
-        market_hurst = row.get("market_hurst")
+        market_hurst = row.get("hurst")
         market_vol = row.get("market_vol")
 
         time_in_pos = self.position_state.time_in_pos

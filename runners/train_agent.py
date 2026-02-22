@@ -1,3 +1,4 @@
+import copy
 import logging
 from pathlib import Path
 import hydra
@@ -105,25 +106,44 @@ def train_agent(cfg: DictConfig):
         "market_z_score",
         "market_std",
         "market_beta",
+        "hurst",
         "market_win",
         "market_vol",
-        "hurst",
     ]
 
     valid_results = []
+    MIN_STEPS_REQUIRED = 168
+
     for res in results:
-        missing_cols = [col for col in required_cols if col not in res.data.columns]
+        df = res.data
+
+        missing_cols = [col for col in required_cols if col not in df.columns]
         if missing_cols:
             logger.warning(
                 f"Skipping pair: {res.ticker_x}-{res.ticker_y} - Data not found in: {missing_cols}"
             )
             continue
 
-        if res.data[required_cols].isnull().values.any():
-            logger.warning(f"Skipping pair: {res.ticker_x}-{res.ticker_y} - NaN data")
-            continue
+        is_valid = df[required_cols].notnull().all(axis=1)
+        blocks = is_valid.ne(is_valid.shift()).cumsum()
 
-        valid_results.append(res)
+        part_counter = 1
+        for block_id, block_df in df.groupby(blocks):
+            if is_valid.loc[block_df.index[0]]:
+
+                if len(block_df) >= MIN_STEPS_REQUIRED:
+                    chunk_res = copy.copy(res)
+                    chunk_res.data = block_df.copy().reset_index(drop=True)
+
+                    valid_results.append(chunk_res)
+                    part_counter += 1
+
+        if part_counter > 2:
+            logger.info(
+                f"Split pair {res.ticker_x}-{res.ticker_y} into {part_counter - 1} episodes.")
+        elif part_counter == 1:
+            logger.warning(
+                f"Pair rejected {res.ticker_x}-{res.ticker_y}.")
 
     results = valid_results
 

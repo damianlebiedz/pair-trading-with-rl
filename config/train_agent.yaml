@@ -8,7 +8,7 @@ defaults:
 rl:
   training_subfolder: "WINNER_5_hybrid_fixed"
   reward: "pnl" # "pnl" or "diff_sharpe"
+  obs_space_type: "minimal" # "full", "standard", or "minimal"
   passes_per_pair: 10
   seed: 42
   verbose: 1
-  obs_space_type: "minimal" # "full", "standard", or "minimal"
