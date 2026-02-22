@@ -140,10 +140,10 @@ def train_agent(cfg: DictConfig):
 
         if part_counter > 2:
             logger.info(
-                f"Split pair {res.ticker_x}-{res.ticker_y} into {part_counter - 1} episodes.")
+                f"Split pair {res.ticker_x}-{res.ticker_y} into {part_counter - 1} episodes."
+            )
         elif part_counter == 1:
-            logger.warning(
-                f"Pair rejected {res.ticker_x}-{res.ticker_y}.")
+            logger.warning(f"Pair rejected {res.ticker_x}-{res.ticker_y}.")
 
     results = valid_results
 

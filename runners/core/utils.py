@@ -54,7 +54,7 @@ def load_model(
     model_path: str,
     vec_normalize_path: str,
     obs_space_type: Literal["full", "standard", "minimal"],
-    device: str = "cpu"
+    device: str = "cpu",
 ) -> tuple[BaseAlgorithm, VecNormalize | None]:
     filename = os.path.basename(model_path).lower()
     vec_normalize = None

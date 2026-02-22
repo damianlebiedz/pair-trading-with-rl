@@ -47,7 +47,14 @@ class AgentState:
 
         elif obs_space_type == "standard":
             return np.array(
-                [self.z_score, self.std, self.beta, self.hurst, self.position, self.norm_time_in_pos],
+                [
+                    self.z_score,
+                    self.std,
+                    self.beta,
+                    self.hurst,
+                    self.position,
+                    self.norm_time_in_pos,
+                ],
                 dtype=np.float32,
             )
 
