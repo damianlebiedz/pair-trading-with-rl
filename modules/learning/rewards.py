@@ -27,25 +27,11 @@ class PnLReward(RewardScheme):
         step_fees: float,
         info: dict,
     ) -> float:
+        if equity <= 0:
+            return -1.0
+
         net_pnl = step_pnl - step_fees
-        return net_pnl
-
-
-class RiskAdjustedReward(RewardScheme):
-    def __init__(self, risk_penalty: float = 0.1):
-        self.risk_penalty = risk_penalty
-
-    def calculate(
-        self,
-        step_pnl: float,
-        equity: float,
-        position: float,
-        step_fees: float,
-        info: dict,
-    ) -> float:
-        drawdown_pct = info.get("drawdown_pct", 0.0)
-        net_pnl = step_pnl - step_fees
-        return net_pnl - (drawdown_pct * self.risk_penalty)
+        return net_pnl / equity
 
 
 class DifferentialSharpeReward(RewardScheme):

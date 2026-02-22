@@ -7,7 +7,7 @@ defaults:
 
 rl:
   training_subfolder: "WINNER_5_hybrid_fixed"
-  reward: "risk_adj" # "pnl", "risk_adj", or "diff_sharpe"
+  reward: "pnl" # "pnl" or "diff_sharpe"
   passes_per_pair: 10
   seed: 42
   verbose: 1
