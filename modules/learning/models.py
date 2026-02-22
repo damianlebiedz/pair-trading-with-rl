@@ -3,21 +3,17 @@ from typing import Literal
 import numpy as np
 
 
-def _f(x: float | int | None):
-    return 0.0 if x is None else float(x)
-
-
 @dataclass(slots=True)
 class AgentState:
     """
     Encapsulates the observable state of the trading environment for the RL agent.
 
     Attributes:
-        z_score (float | None): Current z-score of the spread between the two assets.
-        std (float | None): Rolling standard deviation of the spread.
+        z_score (float): Current z-score of the spread between the two assets.
+        std (float): Rolling standard deviation of the spread.
         beta (float): Hedge ratio between the two assets, used to size positions.
         hurst (float): Hurst Exponent value.
-        window (int | None): Lookback window length used for z-score calculation.
+        window (int): Lookback window length used for z-score calculation.
         position (float): Current position in the strategy (-1, 0, 1 scaled by capital).
         norm_time_in_pos (float): Normalized time in current position (0.0–1.0), where 1.0 means equal to window length.
         drawdown_pct (float): Current drawdown as a fraction of peak equity.
@@ -26,14 +22,14 @@ class AgentState:
     Methods:
         get_state_arr() -> np.ndarray:
             Converts the dataclass into a fixed-size float32 array suitable as
-            input to RL agents. Missing values (None) are replaced with 0.0.
+            input to RL agents.
     """
 
-    z_score: float | None
-    std: float | None
+    z_score: float
+    std: float
     beta: float
     hurst: float
-    window: int | None
+    window: int
     position: float
     norm_time_in_pos: float
     drawdown_pct: float
@@ -43,62 +39,30 @@ class AgentState:
         self,
         obs_space_type: Literal["full", "standard", "minimal"],
     ) -> np.ndarray:
-        """
-        Converts the state into a fixed-size NumPy array with feature masking.
-
-        Args:
-            obs_space_type: Determines which features are visible to the agent.
-                - 'minimal': Z-score, Position, Drawdown.
-                - 'standard': Minimal + Volatility (STD), Beta.
-                - 'full': All available market and agent metrics.
-
-        Returns:
-            np.ndarray: A 9-dimensional float32 array. Hidden features are zeroed out.
-        """
         if obs_space_type == "minimal":
             return np.array(
-                [
-                    _f(self.z_score),
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    float(self.position),
-                    0.0,
-                    float(self.drawdown_pct),
-                    0.0,
-                ],
+                [self.z_score, self.position, self.drawdown_pct],
                 dtype=np.float32,
             )
 
         elif obs_space_type == "standard":
             return np.array(
-                [
-                    _f(self.z_score),
-                    _f(self.std),
-                    float(self.beta),
-                    0.0,
-                    0.0,
-                    float(self.position),
-                    0.0,
-                    float(self.drawdown_pct),
-                    0.0,
-                ],
+                [self.z_score, self.std, self.beta, self.position, self.drawdown_pct],
                 dtype=np.float32,
             )
 
         else:
             return np.array(
                 [
-                    _f(self.z_score),
-                    _f(self.std),
-                    float(self.beta),
-                    float(self.hurst),
-                    _f(self.window),
-                    float(self.position),
-                    float(self.norm_time_in_pos),
-                    float(self.drawdown_pct),
-                    float(self.current_market_vol),
+                    self.z_score,
+                    self.std,
+                    self.beta,
+                    self.hurst,
+                    float(self.window),
+                    self.position,
+                    self.norm_time_in_pos,
+                    self.drawdown_pct,
+                    self.current_market_vol,
                 ],
                 dtype=np.float32,
             )

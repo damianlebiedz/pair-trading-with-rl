@@ -101,12 +101,38 @@ def train_agent(cfg: DictConfig):
         except Exception as e:
             logger.warning(f"Error loading {file_path.name}: {e}")
 
+    required_cols = [
+        "market_z_score",
+        "market_std",
+        "market_beta",
+        "market_win",
+        "market_vol",
+        "hurst",
+    ]
+
+    valid_results = []
+    for res in results:
+        missing_cols = [col for col in required_cols if col not in res.data.columns]
+        if missing_cols:
+            logger.warning(
+                f"Skipping pair: {res.ticker_x}-{res.ticker_y} - Data not found in: {missing_cols}"
+            )
+            continue
+
+        if res.data[required_cols].isnull().values.any():
+            logger.warning(f"Skipping pair: {res.ticker_x}-{res.ticker_y} - NaN data")
+            continue
+
+        valid_results.append(res)
+
+    results = valid_results
+
     if not results:
         logger.error("Data not found")
         wandb.finish()
         return
 
-    logger.info(f"Successfully loaded {len(results)} environments")
+    logger.info(f"Successfully loaded {len(results)} environments after filtering")
 
     if wandb.run is not None:
         data_artifact = wandb.Artifact(name="training_dataset", type="dataset")

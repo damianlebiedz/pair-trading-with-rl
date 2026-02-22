@@ -151,6 +151,7 @@ class PairSelector:
                 )
 
                 if beta <= 0:
+                    logger.debug(f"Pair {pair} rejected. Beta {beta:.3f} <= 0")
                     continue
 
                 hurst = calculate_hurst(
@@ -173,6 +174,7 @@ class PairSelector:
                     valid_window=self.valid_window,
                 )
                 if win is None:
+                    logger.debug(f"Pair {pair} rejected. Window = None")
                     continue
 
                 res_row = row.to_dict()

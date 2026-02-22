@@ -3,10 +3,10 @@ import gymnasium as gym
 import numpy as np
 import pandas as pd
 from gymnasium import spaces
+from stable_baselines3.common.monitor import Monitor
 
 from modules.performance.models import (
     StrategyResult,
-    ExecLogger,
     PositionState,
 )
 from modules.core.execution import TradeExecutor
@@ -37,11 +37,12 @@ def build_multi_env(
                 "diff_sharpe": DifferentialSharpeReward,
             }
             reward_schema = reward_map[rl_reward]()
-            return PairsTradingEnv(
+            env = PairsTradingEnv(
                 result=result,
                 reward_scheme=reward_schema,
                 obs_space_type=obs_space_type,
             )
+            return Monitor(env)
 
         env_fns.append(make_env)
 
@@ -79,40 +80,18 @@ class PairsTradingEnv(gym.Env):
 
         self.result = result
         self.df = result.data.reset_index(drop=True)
-
-        valid_indices = self.df.dropna(
-            subset=[
-                "spread",
-                "mean",
-                "hurst",
-                "market_vol",
-                "market_std",
-                "market_beta",
-            ]
-        ).index
-        self.warmup_offset = valid_indices[0] if not valid_indices.empty else 0
-
         self.position_state = PositionState()
-        self.exec_logger = ExecLogger()
-
-        required_cols = [
-            "spread",
-            "mean",
-            "market_std",
-            "market_beta",
-            "market_win",
-            self.result.ticker_x,
-            self.result.ticker_y,
-        ]
-
-        missing = [c for c in required_cols if c not in self.df.columns]
-        if missing:
-            raise ValueError(f"Missing columns in df: {missing}")
-
         self.action_space = spaces.Discrete(3)
 
+        if obs_space_type == "minimal":
+            obs_shape = (3,)
+        elif obs_space_type == "standard":
+            obs_shape = (5,)
+        else:
+            obs_shape = (9,)
+
         self.observation_space = spaces.Box(
-            low=-np.inf, high=np.inf, shape=(9,), dtype=np.float32
+            low=-np.inf, high=np.inf, shape=obs_shape, dtype=np.float32
         )
 
         self.initial_equity = self.df["equity"].iloc[0]
@@ -128,13 +107,11 @@ class PairsTradingEnv(gym.Env):
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
 
-        self.current_step = self.warmup_offset
+        self.current_step = 0
         self.equity = self.initial_equity
         self.peak_equity = self.initial_equity
-
         self.position_state.clear_position()
         self._update_state_object()
-
         self.reward_scheme.reset()
 
         return self._get_observation(), {}
@@ -171,7 +148,7 @@ class PairsTradingEnv(gym.Env):
             beta=exec_beta,
             win=exec_win,
             equity=self.equity,
-            exec_logger=self.exec_logger,
+            exec_logger=None,
             std=exec_std,
             sl_lock=False,
         )
@@ -215,40 +192,35 @@ class PairsTradingEnv(gym.Env):
             return np.zeros(self.observation_space.shape, dtype=np.float32)
 
         obs = self.state.get_state_arr(self.obs_space_type)
-        return np.nan_to_num(obs).astype(np.float32)
+        return np.array(obs, dtype=np.float32)
 
     def _update_state_object(self):
         row = self.df.iloc[self.current_step]
 
         market_win = row.get("market_win")
-        spread = row.get("spread")
-        mean = row.get("mean")
+        market_z_score = row.get("market_z_score")
         market_std = row.get("market_std")
-
-        market_z_score = None
-        if (
-            spread is not None
-            and mean is not None
-            and market_std is not None
-            and market_std > 0
-        ):
-            market_z_score = (spread - mean) / market_std
+        market_beta = row.get("market_beta")
+        market_hurst = row.get("market_hurst")
+        market_vol = row.get("market_vol")
 
         time_in_pos = self.position_state.time_in_pos
-        norm_time = time_in_pos / market_win if market_win and market_win > 0 else 0.0
+        norm_time = 0.0
+        if pd.notna(market_win) and market_win > 0:
+            norm_time = time_in_pos / market_win
 
         drawdown_pct = 0.0
         if self.peak_equity > 0:
             drawdown_pct = (self.peak_equity - self.equity) / self.peak_equity
 
         self.state = AgentState(
-            z_score=market_z_score,
-            std=market_std,
-            beta=row.get("market_beta", None),
-            hurst=row.get("hurst", None),
-            window=int(market_win) if pd.notna(market_win) else 0,
+            z_score=float(market_z_score),
+            std=float(market_std),
+            beta=float(market_beta),
+            hurst=float(market_hurst),
+            window=int(market_win),
             position=float(self.position_state.position),
             norm_time_in_pos=float(norm_time),
             drawdown_pct=float(drawdown_pct),
-            current_market_vol=row.get("market_vol"),
+            current_market_vol=float(market_vol),
         )

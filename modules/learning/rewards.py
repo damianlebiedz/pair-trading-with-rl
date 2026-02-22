@@ -27,7 +27,8 @@ class PnLReward(RewardScheme):
         step_fees: float,
         info: dict,
     ) -> float:
-        return step_pnl
+        net_pnl = step_pnl - step_fees
+        return net_pnl
 
 
 class RiskAdjustedReward(RewardScheme):

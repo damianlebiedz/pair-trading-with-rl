@@ -296,7 +296,8 @@ class Strategy:
             idx = df.index[i]
 
             if is_bankrupt:
-                z_score, spread, mean, std, market_std, hurst = (
+                z_score, market_z_score, spread, mean, std, market_std, market_hurst = (
+                    None,
                     None,
                     None,
                     None,
@@ -312,13 +313,11 @@ class Strategy:
                 if self.beta_hedge == "rolling" and i != test_start_pos:
                     if self.beta_method == "kalman":
                         market_beta = precalc_kalman_beta[i]
-                    elif self.beta_method == "ols" and position_state.position == 0:
+                    elif self.beta_method == "ols":
                         market_beta = precalc_ols_beta[i]
 
                 if self.window_method == "rolling" and i != test_start_pos:
-                    if self.beta_method == "kalman" or (
-                        self.beta_method == "ols" and position_state.position == 0
-                    ):
+                    if self.beta_method in ["kalman", "ols"]:
                         market_win = precalc_win_free[i]
                     else:
                         slice_x = X_vals[i - lookback_len + 1 : i + 1]
@@ -340,7 +339,7 @@ class Strategy:
                     and win is not None
                     and exit_threshold is not None
                 ):
-                    time_decay_start = 0.5
+                    time_decay_start = 0.5  # TODO: wynieść do cfg
                     time_decay_end = 1.0
 
                     hl_diff = (time_decay_end * win) - (time_decay_start * win)
@@ -360,8 +359,8 @@ class Strategy:
                 else:
                     beta = market_beta
 
-                if market_win is None or market_beta <= 0:
-                    z_score, spread, mean, std, market_std, hurst = (
+                if win is None or beta <= 0:
+                    z_score, market_z_score, spread, mean, std, market_std = (
                         None,
                         None,
                         None,
@@ -373,7 +372,9 @@ class Strategy:
                     slice_x_win = X_vals[i - win + 1 : i + 1]
                     slice_y_win = Y_vals[i - win + 1 : i + 1]
                     spread, mean, market_std = calculate_spread_statistics(
-                        slice_x_win, slice_y_win, beta
+                        X_slice=slice_x_win,
+                        Y_slice=slice_y_win,
+                        beta=beta,
                     )
 
                     if (
@@ -381,8 +382,12 @@ class Strategy:
                         and position_state.entry_std is not None
                     ):
                         std = position_state.entry_std
+                        market_z_score = calculate_z_score(
+                            spread=spread, mean=mean, std=market_std
+                        )
                     else:
                         std = market_std
+                        market_z_score = None
 
                     z_score = calculate_z_score(spread=spread, mean=mean, std=std)
 
@@ -421,19 +426,14 @@ class Strategy:
                         if break_above or break_below:
                             position_state.sl_lock = False
 
-                if self.beta_method == "kalman" or position_state.position == 0:
-                    hurst = precalc_hurst_free[i]
-                else:
-                    slice_x = X_vals[i - lookback_len + 1 : i + 1]
-                    slice_y = Y_vals[i - lookback_len + 1 : i + 1]
-                    hurst = calculate_hurst(slice_x, slice_y, market_beta)
+                market_hurst = precalc_hurst_free[i]
 
                 if self.agent:
                     current_state = AgentState(
-                        z_score=z_score,
+                        z_score=market_z_score,
                         std=market_std,
                         beta=market_beta,
-                        hurst=hurst,
+                        hurst=market_hurst,
                         window=market_win,
                         position=position_state.position,
                         norm_time_in_pos=position_state.time_in_pos / win if win else 0,
@@ -489,15 +489,16 @@ class Strategy:
                 {
                     "index": idx,
                     "z_score": z_score,
+                    "market_z_score": market_z_score or z_score,
                     "spread": spread,
                     "mean": mean,
-                    "std": position_state.entry_std,
+                    "std": position_state.entry_std or market_std,
                     "market_std": market_std,
-                    "window": position_state.entry_win,
+                    "window": position_state.entry_win or market_win,
                     "market_win": market_win,
-                    "beta": position_state.entry_beta,
+                    "beta": position_state.entry_beta or market_beta,
                     "market_beta": market_beta,
-                    "hurst": hurst,
+                    "hurst": market_hurst,
                     "entry_thr": entry_threshold,
                     "exit_thr": exit_threshold,
                     "sl_thr": position_state.sl_thr,
