@@ -9,8 +9,11 @@ class RewardScheme(ABC):
         step_pnl: float,
         equity: float,
         position: float,
+        signal: float,
         step_fees: float,
-        info: dict,
+        is_bankrupt: bool,
+        fee_rate: float,
+        market_win: int,
     ) -> float:
         pass
 
@@ -23,14 +26,44 @@ class PnLReward(RewardScheme):
         self,
         step_pnl: float,
         equity: float,
-        position: float,
+        position: float | None,
+        signal: float | None,
         step_fees: float,
-        info: dict,
+        is_bankrupt: bool,
+        fee_rate: float | None,
+        market_win: int | None,
     ) -> float:
-        if equity <= 0:
+        if is_bankrupt:
             return -1.0
 
         net_pnl = step_pnl - step_fees
+        return net_pnl / equity
+
+
+class PnLSignalReward(RewardScheme):
+    def calculate(
+        self,
+        step_pnl: float,
+        equity: float,
+        position: float,
+        signal: float,
+        step_fees: float,
+        is_bankrupt: bool,
+        fee_rate: float,
+        market_win: int,
+    ) -> float:
+        if is_bankrupt:
+            return -1.0
+
+        if position != signal:
+            multiplier = (
+                2.0 if (signal != 0 and position != 0 and signal != position) else 1.0
+            )
+            penalty = (multiplier * 2 * fee_rate * equity) / market_win
+        else:
+            penalty = 0.0
+
+        net_pnl = step_pnl - step_fees - penalty
         return net_pnl / equity
 
 
@@ -58,12 +91,15 @@ class DifferentialSharpeReward(RewardScheme):
         self,
         step_pnl: float,
         equity: float,
-        position: float,
+        position: float | None,
+        signal: float | None,
         step_fees: float,
-        info: dict,
+        is_bankrupt: bool,
+        fee_rate: float | None,
+        market_win: int,
     ) -> float:
-        if equity <= 1e-6:
-            return -1.0  # bankrupt penalty
+        if is_bankrupt:
+            return -1.0
 
         net_pnl = step_pnl - step_fees
         r_t = net_pnl / equity

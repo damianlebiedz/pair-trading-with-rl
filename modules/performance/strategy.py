@@ -428,6 +428,15 @@ class Strategy:
 
                 market_hurst = precalc_hurst_free[i]
 
+                action, sl_lock = TradeExecutor.decide(
+                    position_state=position_state,
+                    signal=signal,
+                    z_score=z_score,
+                    exit_threshold=exit_threshold,
+                )
+                if sl_lock and self.sl_lock:
+                    position_state.sl_lock = True
+
                 if self.agent:
                     current_state = AgentState(
                         z_score=market_z_score,
@@ -436,20 +445,12 @@ class Strategy:
                         hurst=market_hurst,
                         window=market_win,
                         position=position_state.position,
+                        signal=action,
                         norm_time_in_pos=position_state.time_in_pos / win if win else 0,
                         drawdown_pct=drawdown_pct,
                         current_market_vol=df["market_vol"].iloc[i],
                     )
                     action = self.agent.get_action(current_state)
-                else:
-                    action, sl_lock = TradeExecutor.decide(
-                        position_state=position_state,
-                        signal=signal,
-                        z_score=z_score,
-                        exit_threshold=exit_threshold,
-                    )
-                    if sl_lock and self.sl_lock:
-                        position_state.sl_lock = True
 
                 position_state.open_time = idx
 

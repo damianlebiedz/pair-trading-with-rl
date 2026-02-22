@@ -31,6 +31,7 @@ class AgentState:
     hurst: float
     window: int
     position: float
+    signal: float
     norm_time_in_pos: float
     drawdown_pct: float
     current_market_vol: float
@@ -41,7 +42,7 @@ class AgentState:
     ) -> np.ndarray:
         if obs_space_type == "minimal":
             return np.array(
-                [self.z_score, self.position, self.norm_time_in_pos],
+                [self.z_score, self.position, self.norm_time_in_pos, self.signal],
                 dtype=np.float32,
             )
 
@@ -54,6 +55,7 @@ class AgentState:
                     self.hurst,
                     self.position,
                     self.norm_time_in_pos,
+                    self.signal,
                 ],
                 dtype=np.float32,
             )
@@ -68,6 +70,7 @@ class AgentState:
                     float(self.window),
                     self.position,
                     self.norm_time_in_pos,
+                    self.signal,
                     self.drawdown_pct,
                     self.current_market_vol,
                 ],

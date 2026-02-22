@@ -11,7 +11,7 @@ from modules.performance.models import (
 )
 from modules.core.execution import TradeExecutor
 from modules.learning.models import AgentState
-from modules.learning.rewards import RewardScheme
+from modules.learning.rewards import RewardScheme, PnLSignalReward
 from stable_baselines3.common.vec_env import DummyVecEnv
 from modules.learning.rewards import (
     PnLReward,
@@ -23,6 +23,7 @@ def build_multi_env(
     results: list[StrategyResult],
     rl_reward: str,
     obs_space_type: Literal["full", "standard", "minimal"],
+    fee_rate: float,
     seed: int = None,
 ) -> DummyVecEnv:
     env_fns = []
@@ -32,6 +33,7 @@ def build_multi_env(
         def make_env(result=res):
             reward_map = {
                 "pnl": PnLReward,
+                "pnl_signal": PnLSignalReward,
                 "diff_sharpe": DifferentialSharpeReward,
             }
             reward_schema = reward_map[rl_reward]()
@@ -39,6 +41,7 @@ def build_multi_env(
                 result=result,
                 reward_scheme=reward_schema,
                 obs_space_type=obs_space_type,
+                fee_rate=fee_rate,
             )
             return Monitor(env)
 
@@ -56,11 +59,11 @@ class MockEnv(gym.Env):
         super().__init__()
 
         if obs_space_type == "minimal":
-            obs_shape = (3,)
+            obs_shape = (4,)
         elif obs_space_type == "standard":
-            obs_shape = (6,)
+            obs_shape = (7,)
         else:
-            obs_shape = (9,)
+            obs_shape = (10,)
 
         self.observation_space = spaces.Box(
             low=-np.inf, high=np.inf, shape=obs_shape, dtype=np.float32
@@ -85,6 +88,7 @@ class PairsTradingEnv(gym.Env):
         result: StrategyResult,
         reward_scheme: RewardScheme,
         obs_space_type: Literal["full", "standard", "minimal"],
+        fee_rate: float,
     ):
         super(PairsTradingEnv, self).__init__()
 
@@ -92,13 +96,14 @@ class PairsTradingEnv(gym.Env):
         self.df = result.data.reset_index(drop=True)
         self.position_state = PositionState()
         self.action_space = spaces.Discrete(3)
+        self.fee_rate = fee_rate
 
         if obs_space_type == "minimal":
-            obs_shape = (3,)
+            obs_shape = (4,)
         elif obs_space_type == "standard":
-            obs_shape = (6,)
+            obs_shape = (7,)
         else:
-            obs_shape = (9,)
+            obs_shape = (10,)
 
         self.observation_space = spaces.Box(
             low=-np.inf, high=np.inf, shape=obs_shape, dtype=np.float32
@@ -135,6 +140,7 @@ class PairsTradingEnv(gym.Env):
         row = self.df.iloc[self.current_step]
         price_x = row[self.result.ticker_x]
         price_y = row[self.result.ticker_y]
+        position = row["position"]
 
         if (
             self.position_state.position != 0
@@ -191,8 +197,11 @@ class PairsTradingEnv(gym.Env):
             step_pnl=step_pnl,
             equity=self.equity,
             position=self.position_state.position,
+            signal=position,
             step_fees=step_fees,
-            info=info,
+            is_bankrupt=is_bankrupt,
+            fee_rate=self.fee_rate,
+            market_win=exec_win,
         )
 
         return self._get_observation(), reward, terminated, truncated, info
@@ -213,6 +222,7 @@ class PairsTradingEnv(gym.Env):
         market_beta = row.get("market_beta")
         market_hurst = row.get("hurst")
         market_vol = row.get("market_vol")
+        position = row.get("position")
 
         time_in_pos = self.position_state.time_in_pos
         norm_time = 0.0
@@ -230,6 +240,7 @@ class PairsTradingEnv(gym.Env):
             hurst=float(market_hurst),
             window=int(market_win),
             position=float(self.position_state.position),
+            signal=float(position),
             norm_time_in_pos=float(norm_time),
             drawdown_pct=float(drawdown_pct),
             current_market_vol=float(market_vol),
