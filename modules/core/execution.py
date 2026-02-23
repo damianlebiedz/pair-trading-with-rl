@@ -61,7 +61,7 @@ class TradeExecutor:
         beta: float,
         win: int | None,
         equity: float,
-        exec_logger: ExecLogger,
+        exec_logger: ExecLogger | None,
         std: float | None,
         sl_lock: bool,
     ) -> tuple[float, float]:
@@ -124,7 +124,7 @@ class TradeExecutor:
         price_x: float,
         price_y: float,
         equity: float,
-        exec_logger: ExecLogger,
+        exec_logger: ExecLogger | None,
         std: float,
     ) -> tuple[float, float]:
         wx = 1 / (beta + 1)
@@ -158,18 +158,19 @@ class TradeExecutor:
 
         fees = pos_cash * fee_rate
 
-        exec_logger.log(
-            open_time=position_state.open_time,
-            price_x=price_x,
-            price_y=price_y,
-            qx=qx,
-            qy=qy,
-            position=position_state.position,
-            fees=fees,
-            pnl=0.0,
-            entry_equity=pos_cash,
-            time_in_pos=0,
-        )
+        if exec_logger:
+            exec_logger.log(
+                open_time=position_state.open_time,
+                price_x=price_x,
+                price_y=price_y,
+                qx=qx,
+                qy=qy,
+                position=position_state.position,
+                fees=fees,
+                pnl=0.0,
+                entry_equity=pos_cash,
+                time_in_pos=0,
+            )
 
         return 0.0, fees
 
@@ -180,7 +181,7 @@ class TradeExecutor:
         position_state: PositionState,
         price_x: float,
         price_y: float,
-        exec_logger: ExecLogger,
+        exec_logger: ExecLogger | None,
     ) -> tuple[float, float]:
         exit_dif = position_state.q_x * price_x + position_state.q_y * price_y
         exit_val = abs(position_state.q_x) * price_x + abs(position_state.q_y) * price_y
@@ -190,18 +191,19 @@ class TradeExecutor:
 
         position_state.time_in_pos += 1
 
-        exec_logger.log(
-            open_time=position_state.open_time,
-            price_x=price_x,
-            price_y=price_y,
-            qx=0.0,
-            qy=0.0,
-            position=0.0,
-            fees=fees,
-            pnl=exit_dif - position_state.entry_dif,
-            entry_equity=position_state.entry_equity,
-            time_in_pos=position_state.time_in_pos,
-        )
+        if exec_logger:
+            exec_logger.log(
+                open_time=position_state.open_time,
+                price_x=price_x,
+                price_y=price_y,
+                qx=0.0,
+                qy=0.0,
+                position=0.0,
+                fees=fees,
+                pnl=exit_dif - position_state.entry_dif,
+                entry_equity=position_state.entry_equity,
+                time_in_pos=position_state.time_in_pos,
+            )
 
         position_state.clear_position()
 
@@ -228,7 +230,7 @@ class TradeExecutor:
         position_state: PositionState,
         price_x: float,
         price_y: float,
-        exec_logger: ExecLogger,
+        exec_logger: ExecLogger | None,
     ) -> tuple[float, float]:
         """
         Public wrapper to close a position.

@@ -64,7 +64,9 @@ def test_single(cfg: DictConfig):
 
         try:
             model, vec_normalize = load_model(
-                model_path=base_model_path, vec_normalize_path=vec_normalize_path
+                model_path=base_model_path,
+                vec_normalize_path=vec_normalize_path,
+                obs_space_type=obs_space_type,
             )
             agent = RLAgentAdapter(
                 model=model,

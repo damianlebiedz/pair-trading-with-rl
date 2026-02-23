@@ -1,3 +1,4 @@
+import copy
 import logging
 from pathlib import Path
 import hydra
@@ -101,12 +102,57 @@ def train_agent(cfg: DictConfig):
         except Exception as e:
             logger.warning(f"Error loading {file_path.name}: {e}")
 
+    required_cols = [
+        "market_z_score",
+        "market_std",
+        "market_beta",
+        "hurst",
+        "market_win",
+        "market_vol",
+    ]
+
+    valid_results = []
+    MIN_STEPS_REQUIRED = 168
+
+    for res in results:
+        df = res.data
+
+        missing_cols = [col for col in required_cols if col not in df.columns]
+        if missing_cols:
+            logger.warning(
+                f"Skipping pair: {res.ticker_x}-{res.ticker_y} - Data not found in: {missing_cols}"
+            )
+            continue
+
+        is_valid = df[required_cols].notnull().all(axis=1)
+        blocks = is_valid.ne(is_valid.shift()).cumsum()
+
+        part_counter = 1
+        for block_id, block_df in df.groupby(blocks):
+            if is_valid.loc[block_df.index[0]]:
+
+                if len(block_df) >= MIN_STEPS_REQUIRED:
+                    chunk_res = copy.copy(res)
+                    chunk_res.data = block_df.copy().reset_index(drop=True)
+
+                    valid_results.append(chunk_res)
+                    part_counter += 1
+
+        if part_counter > 2:
+            logger.info(
+                f"Split pair {res.ticker_x}-{res.ticker_y} into {part_counter - 1} episodes."
+            )
+        elif part_counter == 1:
+            logger.warning(f"Pair rejected {res.ticker_x}-{res.ticker_y}.")
+
+    results = valid_results
+
     if not results:
         logger.error("Data not found")
         wandb.finish()
         return
 
-    logger.info(f"Successfully loaded {len(results)} environments")
+    logger.info(f"Successfully loaded {len(results)} environments after filtering")
 
     if wandb.run is not None:
         data_artifact = wandb.Artifact(name="training_dataset", type="dataset")
@@ -117,6 +163,7 @@ def train_agent(cfg: DictConfig):
         results=results,
         rl_reward=cfg.rl.reward,
         obs_space_type=cfg.rl.obs_space_type,
+        fee_rate=cfg.market.fee_rate,
         seed=seed,
     )
     vec_env = VecNormalize(vec_env, norm_obs=True, norm_reward=True, clip_obs=10.0)

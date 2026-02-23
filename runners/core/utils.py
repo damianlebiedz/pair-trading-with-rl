@@ -1,6 +1,8 @@
 import logging
 import os
 from datetime import datetime
+from typing import Literal
+
 from dateutil.relativedelta import relativedelta
 from sb3_contrib import RecurrentPPO
 from stable_baselines3 import A2C
@@ -49,13 +51,16 @@ def generate_date_lists(initial_config, n):
 
 
 def load_model(
-    model_path: str, vec_normalize_path: str, device: str = "cpu"
+    model_path: str,
+    vec_normalize_path: str,
+    obs_space_type: Literal["full", "standard", "minimal"],
+    device: str = "cpu",
 ) -> tuple[BaseAlgorithm, VecNormalize | None]:
     filename = os.path.basename(model_path).lower()
     vec_normalize = None
 
     if os.path.exists(vec_normalize_path):
-        mock_venv = DummyVecEnv([lambda: MockEnv()])
+        mock_venv = DummyVecEnv([lambda: MockEnv(obs_space_type=obs_space_type)])
         vec_normalize = VecNormalize.load(vec_normalize_path, mock_venv)
         vec_normalize.training = False
         vec_normalize.norm_reward = False

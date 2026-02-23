@@ -6,23 +6,23 @@ This project implements an advanced pairs trading framework comparing two distin
 - [Installation & Running](#installation--running)
   - [Poetry](#poetry)
   - [Docker](#docker)
+- [Project Structure](#project-structure)
 - [Data Acquisition](#data-acquisition)
 - [Usage & Workflows](#usage--workflows)
 - [Configuration](#Configuration)
-- [Project Structure](#project-structure)
 - [License](#license)
 
 ## Key Features
 
 ### 1. Statistical & Optimization Pipeline
-- **Pair Selection:** Automated search for cointegrated pairs with **Hurst Exponent** filter.
+- **Pair Selection:** Automated search for cointegrated pairs with Hurst Exponent filter.
 - **Optimization:** Hyperparameter tuning using **Random Search** to find optimal entry/exit thresholds and window sizes.
 - **Walk-Forward Analysis:** Robust backtesting engine with rolling windows (Selection → Optimization → Testing).
 
 ### 2. Reinforcement Learning Pipeline
 - **Custom Environment:** OpenAI Gym (`gymnasium`) compatible `PairsTradingEnv`.
 - **Algorithms:** Support for A2C (Stable Baselines 3) and Recurrent PPO (SB3 Contrib).
-- **Reward Engineering:** Implements various reward functions: PnL, Risk-Adjusted, Volatility Penalty, and Differential Sharpe Ratio.
+- **Reward Engineering:** Implements various reward functions: PnL, Risk-Adjusted, and Differential Sharpe Ratio.
 - **Monitoring:** Integrated with **Weights & Biases (WandB)** for experiment tracking.
 
 ---
@@ -34,8 +34,8 @@ This project implements an advanced pairs trading framework comparing two distin
 This project uses **Poetry** for dependency management and **Python 3.12**.
 
 Make sure that you have installed:
-- Python 3.12
-- Poetry 2.2.1
+- Python 3.12: https://www.python.org/downloads/release/python-3120/
+- Poetry: https://python-poetry.org/docs/#installation
 
 ```bash
 # Clone the repository
@@ -53,7 +53,7 @@ This project uses Docker to ensure a consistent environment.
 Follow a two-step workflow: first, build the **Base Image** containing all dependencies, and then use **Docker Compose** to run specific experiment scripts.
 
 Make sure that you have installed:
-- Docker
+- Docker Desktop: https://docs.docker.com/desktop/
 
 #### 1. Build the Base Image
 
@@ -74,7 +74,7 @@ To run a service and see the logs in your terminal:
 docker compose up <service_name>
 ```
 Available Services:
-- `train_agent`: Trains the RL model with data from `./data_rl/training_data`.
+- `train_agent`: Trains the RL model.
 - `pair_selection`: Executes the pair selection logic.
 - `test_single`: Runs a single backtest on specific parameters.
 - `test_multi`: Runs batch testing across multiple models/pairs on specific parameters.
@@ -83,18 +83,32 @@ Available Services:
 #### 3. Development Workflow
 - Configuration Changes: The `./config` directory is mapped as a volume. This means you can edit your `.yaml` files, and the changes will be applied instantly when you start a container. No rebuild is required for config changes.
 
-- Persistent Data: Training logs, data, and saved models are stored in ./tensorboard_logs, ./data, and ./models respectively. These folders are synchronized between your machine and the container.
+- Persistent Data: Training logs, data, and saved models are stored in `/tensorboard_logs`, `/data`, and `/models` respectively. These folders are synchronized between your machine and the container.
 
 - Overriding Parameters: You can override any Hydra configuration parameter on-the-fly without editing files:
 
 ```bash
-docker compose run --rm train_agent python runners/train_agent.py model.lr=0.001
+docker compose run --rm train_agent python runners/train_agent.py rl.obs_space_type=standard
 ```
 
 #### 4. Multirun
 You can use hydra multirun with Docker Compose:
 ```bash
 docker compose run --rm test_multi python runners/test_multi.py -m stop_loss=2,2.5
+```
+
+## Project Structure
+```
+.
+├── config/                 # Hydra configuration files
+├── data/                   # Market data (downloaded via helpers)
+├── helpers/                # Scripts for data fetching and reporting
+├── modules/
+│   ├── core/               # Execution logic, indicators, stat tests
+│   ├── data_services/      # Data loading and merging utils
+│   ├── learning/           # RL environments, agents, and rewards
+│   └── performance/        # Strategy logic, optimization objectives
+├── runners/                # Main entry points (scripts)
 ```
 
 ## Data Acquisition
@@ -133,20 +147,6 @@ The project currently uses standard **Hydra** YAML configuration files located i
 - `base.yaml`: General global settings.
 - `rl_algo/`: Specific configurations for A2C/PPO.
 - `opt_and_test_multi.yaml`: Settings for the statistical pipeline.
-
-## Project Structure
-```
-.
-├── config/                 # Hydra configuration files
-├── data/                   # Market data (downloaded via helpers)
-├── helpers/                # Scripts for data fetching and reporting
-├── modules/
-│   ├── core/               # Execution logic, indicators, stat tests
-│   ├── data_services/      # Data loading and merging utils
-│   ├── learning/           # RL environments, agents, and rewards
-│   └── performance/        # Strategy logic, optimization objectives
-├── runners/                # Main entry points (scripts)
-```
 
 ## License
 Only for research/educational purposes. Commercial use is prohibited. See LICENSE for full terms.
