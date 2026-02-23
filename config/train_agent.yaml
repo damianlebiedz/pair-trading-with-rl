@@ -7,7 +7,7 @@ defaults:
 
 rl:
   training_subfolder: "WINNER_5_hybrid_fixed"
-  reward: "pnl_signal" # "pnl", "pnl_signal", or "diff_sharpe"
+  reward: "pnl_signal" # "pnl" or "pnl_signal"
   obs_space_type: "minimal" # "full", "standard", or "minimal"
   passes_per_pair: 10
   seed: 42

@@ -11,12 +11,8 @@ from modules.performance.models import (
 )
 from modules.core.execution import TradeExecutor
 from modules.learning.models import AgentState
-from modules.learning.rewards import RewardScheme, PnLSignalReward
+from modules.learning.rewards import RewardScheme, PnLReward, PnLSignalReward
 from stable_baselines3.common.vec_env import DummyVecEnv
-from modules.learning.rewards import (
-    PnLReward,
-    DifferentialSharpeReward,
-)
 
 
 def build_multi_env(
@@ -34,7 +30,6 @@ def build_multi_env(
             reward_map = {
                 "pnl": PnLReward,
                 "pnl_signal": PnLSignalReward,
-                "diff_sharpe": DifferentialSharpeReward,
             }
             reward_schema = reward_map[rl_reward]()
             env = PairsTradingEnv(

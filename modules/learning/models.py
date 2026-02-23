@@ -40,6 +40,14 @@ class AgentState:
         self,
         obs_space_type: Literal["full", "standard", "minimal"],
     ) -> np.ndarray:
+        """
+        obs_space_type == "minimal":
+            - state_arr: z_score, position, norm_time_in_pos, signal
+        obs_space_type == "standard":
+            - state_arr: z_score, std, beta, hurst, position, norm_time_in_pos, signal
+        obs_space_type == "full":
+            - state_arr: z_score, std, beta, hurst, window, position, norm_time_in_pos, signal, drawdown_pct, current_market_vol
+        """
         if obs_space_type == "minimal":
             return np.array(
                 [self.z_score, self.position, self.norm_time_in_pos, self.signal],
