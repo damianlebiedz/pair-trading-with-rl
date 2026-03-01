@@ -67,6 +67,10 @@ def fetch_data_from_binance(
     pbar.close()
     print(f"Downloaded {len(klines_all)} records.")
 
+    if not klines_all:
+        print("No data downloaded. File will not be saved.")
+        return
+
     columns = [
         "open_time",
         "open",
