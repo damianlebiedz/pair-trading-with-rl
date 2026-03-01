@@ -198,7 +198,7 @@ def execute_pair_selection(
 
     save_dataframe(
         df=final_df,
-        file_name=f"pair_selection_{coint_type}_{ps_start}_{ps_end}",
+        file_name=f"pair_selection_{coint_type.value}_{ps_start}_{ps_end}",
         directory=output_dir,
     )
 

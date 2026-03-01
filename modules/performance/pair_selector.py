@@ -118,7 +118,7 @@ class PairSelector:
             tickers=tickers, start=min_val_start, end=ps_end, interval=interval
         )
 
-        for col in df_val.columns and self.source == Source.LOG:
+        for col in df_val.columns:
             if df_val[col].dtype in ["float64", "float32"]:
                 df_val[f"{col}_{Source.LOG}"] = np.log(df_val[col])
 

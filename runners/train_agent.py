@@ -54,11 +54,11 @@ class LogEquityCallback(BaseCallback):
 
 @hydra.main(version_base=None, config_path="../config", config_name="train_agent")
 def train_agent(cfg: DictConfig):
-    cfg = Config(**OmegaConf.to_container(cfg, resolve=True))
-
     root = setup_run_environment(__file__)
     rl_root = setup_rl_run_environment(__file__)
     save_hydra_config_snapshot(cfg=cfg, root_dir=root)
+
+    cfg = Config(**OmegaConf.to_container(cfg, resolve=True))
 
     seed = cfg.rl.seed
     set_random_seed(seed)

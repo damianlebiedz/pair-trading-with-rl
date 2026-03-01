@@ -259,7 +259,7 @@ class Config(BaseModel):
     settings: Settings
     pair_selection: PairSelection
     performance: Performance
-    rl: RL
-    run_backtest: RunBacktest
+    rl: RL | None = Field(default=None, description="RL config")
+    run_backtest: RunBacktest | None = Field(default=None, description="RunBacktest config")
     rl_algo: RLAlgoConfig | None = None
     wandb: Wandb | None = None

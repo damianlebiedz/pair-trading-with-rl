@@ -28,12 +28,12 @@ from runners.core.utils import (
 logger = logging.getLogger(__name__)
 
 
-@hydra.main(version_base=None, config_path="../config", config_name="backtest")
+@hydra.main(version_base=None, config_path="../config", config_name="run_backtest")
 def run_backtest(cfg: DictConfig):
-    cfg = Config(**OmegaConf.to_container(cfg, resolve=True))
-
     root = setup_run_environment(__file__)
     save_hydra_config_snapshot(cfg=cfg, root_dir=root)
+
+    cfg = Config(**OmegaConf.to_container(cfg, resolve=True))
 
     best_params = {
         "fixed_window": cfg.fixed_window,

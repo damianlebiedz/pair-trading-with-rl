@@ -21,10 +21,10 @@ def load_single_ticker(
     if not ticker_dir.exists():
         raise FileNotFoundError(f"Directory not found: {ticker_dir}")
 
-    files = list(ticker_dir.glob(f"*_{interval}.csv"))
+    files = list(ticker_dir.glob(f"*_{interval.value}.csv"))
     if not files:
         raise FileNotFoundError(
-            f"No CSV file with interval '{interval}' found in {ticker_dir}"
+            f"No CSV file with interval '{interval.value}' found in {ticker_dir}"
         )
 
     df = pd.read_csv(files[0], parse_dates=["open_time", "close_time"])
