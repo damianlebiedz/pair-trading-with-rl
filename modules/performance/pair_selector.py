@@ -175,11 +175,26 @@ class PairSelector:
         """
         Runs cointegration tests AND correlation analysis to compute a Composite Score.
 
+        The score combines long-term equilibrium (cointegration) with short-term linear
+        dependency (R-squared) to rank potential pairs.
+
+        Cointegration Normalization Logic:
+        - Johansen: Uses percentile ranking (`rank(pct=True)`) on the trace statistic.
+          This ensures a uniform distribution between 0.0 and 1.0 and makes the scoring
+          robust against extreme outliers that could distort distance-based scalers.
+        - Engle-Granger: Uses `1 - p_value`. This inverts the p-value scale so that
+          higher values (approaching 1) represent stronger statistical significance
+          of the cointegration.
+
         Score Logic:
         Score = 0.5 * Normalized(Coint_Strength) + 0.5 * R_Squared
 
+        Args:
+            df (pd.DataFrame): Historical price data for the assets.
+
         Returns:
-            DataFrame sorted by 'score' (descending).
+            pd.DataFrame: DataFrame containing test statistics, R-squared values,
+            and the final composite 'score', sorted by 'score' in descending order.
         """
         if self.coint_type == CointType.JOHANSEN:
             res = johansen_cointegration(df)
