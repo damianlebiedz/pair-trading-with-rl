@@ -7,29 +7,16 @@ x-base: &base_config
     - ./data:/app/data
     - ./data_rl/models:/app/models
     - ./data_rl/training_data:/app/training_data
-    - ./data_rl/tensorboard_logs:/app/tensorboard_logs
     - ./results:/app/results
   environment:
     - HYDRA_FULL_ERROR=1
     - PYTHONPATH=/app
 
 services:
+  run_backtest:
+    <<: *base_config
+    command: python runners/run_backtest.py
+
   train_agent:
     <<: *base_config
     command: python runners/train_agent.py
-
-  pair_selection:
-    <<: *base_config
-    command: python runners/pair_selection.py
-
-  test_single:
-    <<: *base_config
-    command: python runners/test_single.py
-
-  test_multi:
-    <<: *base_config
-    command: python runners/test_multi.py
-
-  opt_and_test_multi:
-    <<: *base_config
-    command: python runners/opt_and_test_multi.py

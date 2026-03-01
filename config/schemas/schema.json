@@ -208,7 +208,7 @@
           "title": "Model Name"
         },
         "iterations": {
-          "description": "Number of backtest iterations.",
+          "description": "Number of backtest iterations (monthly).",
           "exclusiveMinimum": 0,
           "title": "Iterations",
           "type": "integer"

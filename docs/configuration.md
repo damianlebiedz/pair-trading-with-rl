@@ -59,7 +59,7 @@ Below is an automatically generated list of all configuration parameters support
 ### ⚙️ Performance
 - **`use_rl`**: Use RL flag.
 - **`model_name`**: Name of the RL model file in data_rl/models.
-- **`iterations`**: Number of backtest iterations.
+- **`iterations`**: Number of backtest iterations (monthly).
 - **`beta_hedge`**: Hedge ratio mode. Options: ['no_hedge', 'static', 'rolling']
 - **`delayed_entry`**: Delayed entry flag.
 - **`sl_lock`**: SL lock until mean-reversal flag.
