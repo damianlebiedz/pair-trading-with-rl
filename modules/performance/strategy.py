@@ -307,19 +307,19 @@ class Strategy:
                 else:
                     beta = market_beta
 
+                mean = None
+                std = None
+                z_score = None
+                market_z_score = None
+                spread = None
+                market_std = None
+
                 if win is None or beta <= 0:
-                    z_score, market_z_score, spread, mean, std, market_std = (
-                        None,
-                        None,
-                        None,
-                        None,
-                        None,
-                        None,
-                    )
+                    pass
                 else:
                     slice_x_win = X_vals[i - win + 1 : i + 1]
                     slice_y_win = Y_vals[i - win + 1 : i + 1]
-                    spread, mean, market_std = calculate_spread_statistics(
+                    spread, market_mean, market_std = calculate_spread_statistics(
                         X_slice=slice_x_win,
                         Y_slice=slice_y_win,
                         beta=beta,
