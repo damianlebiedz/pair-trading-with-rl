@@ -1,6 +1,8 @@
 from pathlib import Path
 import pandas as pd
 
+from modules.core.enums import Interval
+
 
 def get_project_root() -> Path:
     """
@@ -11,7 +13,7 @@ def get_project_root() -> Path:
 
 
 def load_single_ticker(
-    ticker: str, start: str, end: str, interval: str, base_dir: Path
+    ticker: str, start: str, end: str, interval: Interval, base_dir: Path
 ) -> pd.DataFrame:
     """Load data for a single asset and return as a DataFrame."""
     ticker_dir = base_dir / ticker
@@ -39,7 +41,7 @@ def load_single_ticker(
 
 
 def load_data(
-    tickers: list[str], start: str, end: str, interval: str, data_dir: str = "data"
+    tickers: list[str], start: str, end: str, interval: Interval, data_dir: str = "data"
 ) -> pd.DataFrame:
     """Load data for a list of assets and return as DataFrame."""
     base_dir = get_project_root() / data_dir

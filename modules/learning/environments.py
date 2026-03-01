@@ -1,10 +1,10 @@
-from typing import Literal
 import gymnasium as gym
 import numpy as np
 import pandas as pd
 from gymnasium import spaces
 from stable_baselines3.common.monitor import Monitor
 
+from modules.core.enums import ObsSpaceType, RLRewards
 from modules.performance.models import (
     StrategyResult,
     PositionState,
@@ -18,7 +18,7 @@ from stable_baselines3.common.vec_env import DummyVecEnv
 def build_multi_env(
     results: list[StrategyResult],
     rl_reward: str,
-    obs_space_type: Literal["full", "standard", "minimal"],
+    obs_space_type: ObsSpaceType,
     fee_rate: float,
     seed: int = None,
 ) -> DummyVecEnv:
@@ -28,8 +28,8 @@ def build_multi_env(
 
         def make_env(result=res):
             reward_map = {
-                "pnl": PnLReward,
-                "pnl_signal": PnLSignalReward,
+                RLRewards.PNL: PnLReward,
+                RLRewards.PNL_SIGNAL: PnLSignalReward,
             }
             reward_schema = reward_map[rl_reward]()
             env = PairsTradingEnv(
@@ -50,12 +50,12 @@ def build_multi_env(
 
 
 class MockEnv(gym.Env):
-    def __init__(self, obs_space_type: Literal["full", "standard", "minimal"]):
+    def __init__(self, obs_space_type: ObsSpaceType):
         super().__init__()
 
-        if obs_space_type == "minimal":
+        if obs_space_type == ObsSpaceType.MINIMAL:
             obs_shape = (4,)
-        elif obs_space_type == "standard":
+        elif obs_space_type == ObsSpaceType.STANDARD:
             obs_shape = (7,)
         else:
             obs_shape = (10,)
@@ -82,7 +82,7 @@ class PairsTradingEnv(gym.Env):
         self,
         result: StrategyResult,
         reward_scheme: RewardScheme,
-        obs_space_type: Literal["full", "standard", "minimal"],
+        obs_space_type: ObsSpaceType,
         fee_rate: float,
     ):
         super(PairsTradingEnv, self).__init__()
@@ -93,9 +93,9 @@ class PairsTradingEnv(gym.Env):
         self.action_space = spaces.Discrete(3)
         self.fee_rate = fee_rate
 
-        if obs_space_type == "minimal":
+        if obs_space_type == ObsSpaceType.MINIMAL:
             obs_shape = (4,)
-        elif obs_space_type == "standard":
+        elif obs_space_type == ObsSpaceType.STANDARD:
             obs_shape = (7,)
         else:
             obs_shape = (10,)

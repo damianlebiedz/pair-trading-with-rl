@@ -163,7 +163,9 @@ def calculate_hurst(
     return np.polyfit(np.log(list(lags)), np.log(tau), 1)[0]
 
 
-def calculate_spread_statistics(X_slice: np.ndarray, Y_slice: np.ndarray, beta: float):
+def calculate_spread_statistics(
+    X_slice: np.ndarray, Y_slice: np.ndarray, beta: float
+) -> tuple[float, float, float]:
     """
     Calculates basic spread statistics for a pair of assets.
 

@@ -49,13 +49,44 @@ def run_backtest(cfg: DictConfig):
     config = {
         "pair_selection_start": cfg.pair_selection.start,
         "pair_selection_end": cfg.pair_selection.end,
-        "test_win_start": cfg.performance.test.win_start,
+        "beta_test_start": cfg.performance.test.beta_start,
+        "win_test_start": cfg.performance.test.win_start,
         "test_start": cfg.performance.test.start,
         "test_end": cfg.performance.test.end,
     }
 
     number_of_iterations = cfg.performance.iterations
     lists = generate_date_lists(config, number_of_iterations)
+
+    earliest_date = min(
+        pd.to_datetime(lists["pair_selection_start_list"][0]),
+        pd.to_datetime(lists["beta_test_start_list"][0]),
+        pd.to_datetime(lists["win_test_start_list"][0]),
+        pd.to_datetime(lists["test_start_list"][0]),
+    ).strftime("%Y-%m-%d")
+
+    latest_date = max(
+        pd.to_datetime(lists["pair_selection_end_list"][-1]),
+        pd.to_datetime(lists["test_end_list"][-1]),
+    ).strftime("%Y-%m-%d")
+
+    logger.debug(
+        f"Pre-validating data availability from {earliest_date} to {latest_date}..."
+    )
+    try:
+        _validation_df = load_data(
+            tickers=[cfg.tickers[0]],
+            start=earliest_date,
+            end=latest_date,
+            interval=cfg.market.interval,
+        )
+        del _validation_df
+    except ValueError as e:
+        logger.error("Not enough historical data for requested ranges!")
+        logger.error(str(e))
+        raise SystemExit(
+            "Backtest aborted due to missing data. Please fetch more data or adjust dates."
+        )
 
     logger.info(f"Saving results to: {root}")
 
@@ -72,7 +103,8 @@ def run_backtest(cfg: DictConfig):
             tickers=cfg.tickers,
             ps_start=lists["pair_selection_start_list"][i],
             ps_end=lists["pair_selection_end_list"][i],
-            test_win_start=lists["test_win_start_list"][i],
+            beta_test_start=lists["beta_test_start_list"][i],
+            win_test_start=lists["win_test_start_list"][i],
             interval=cfg.market.interval,
             top_n_factor=cfg.pair_selection.top_n_factor,
             output_dir=output_dir,
@@ -138,6 +170,11 @@ def run_backtest(cfg: DictConfig):
 
             continue
 
+        min_start_date = min(
+            pd.to_datetime(lists["beta_test_start_list"][i]),
+            pd.to_datetime(lists["win_test_start_list"][i]),
+        ).strftime("%Y-%m-%d")
+
         strategies = []
         strategies_map = {}
 
@@ -194,7 +231,7 @@ def run_backtest(cfg: DictConfig):
             bt = Strategy(
                 ticker_x=ticker_x,
                 ticker_y=ticker_y,
-                start=lists["test_win_start_list"][i],
+                start=min_start_date,
                 end=lists["test_end_list"][i],
                 interval=cfg.market.interval,
                 fee_rate=cfg.market.fee_rate,
@@ -237,7 +274,8 @@ def run_backtest(cfg: DictConfig):
                 ticker_x=ticker_x,
                 ticker_y=ticker_y,
                 output_dir=output_dir,
-                win_test_start=lists["test_win_start_list"][i],
+                beta_test_start=lists["beta_test_start_list"][i],
+                win_test_start=lists["win_test_start_list"][i],
                 test_start=lists["test_start_list"][i],
                 test_end=lists["test_end_list"][i],
                 subdir="test",

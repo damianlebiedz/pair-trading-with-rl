@@ -69,7 +69,7 @@ def load_btc_benchmark(test_start: str, test_end: str, interval: str) -> pd.Data
 
 
 def load_ewp_benchmark(
-    tickers: list[str], test_start: str, test_end: str, interval: str
+    tickers: list[str], test_start: str, test_end: str, interval: Interval
 ) -> pd.DataFrame:
     """
     Generates an Equally Weighted (EW) portfolio benchmark with continuous rebalancing.

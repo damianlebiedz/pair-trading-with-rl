@@ -1,8 +1,8 @@
-from typing import Literal
 import numpy as np
 from stable_baselines3.common.base_class import BaseAlgorithm
 from stable_baselines3.common.vec_env import VecNormalize
 
+from modules.core.enums import ObsSpaceType
 from modules.learning.models import AgentState
 
 
@@ -10,7 +10,7 @@ class RLAgentAdapter:
     def __init__(
         self,
         model: BaseAlgorithm,
-        obs_space_type: Literal["full", "standard", "minimal"],
+        obs_space_type: ObsSpaceType,
         vec_normalize: VecNormalize | None = None,
         training_mode: bool = False,
     ):

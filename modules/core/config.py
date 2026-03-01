@@ -1,5 +1,6 @@
 from typing import Annotated, Union, Literal, Any
 
+import pandas as pd
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -83,8 +84,14 @@ class PairSelection(BaseModel):
     start: str = Field(description="Start date for pair selection.")
     end: str = Field(description="End date for pair selection.")
 
+    @model_validator(mode="after")
+    def validate_dates(self) -> "PairSelection":
+        if pd.to_datetime(self.start) >= pd.to_datetime(self.end):
+            raise ValueError("PairSelection: 'start' date must be before 'end' date.")
+        return self
 
-class TestParams(BaseModel):
+
+class Test(BaseModel):
     beta_start: str = Field(
         description="Lookback window start date for beta calculation."
     )
@@ -93,6 +100,16 @@ class TestParams(BaseModel):
     )
     start: str = Field(description="Start date for test.")
     end: str = Field(description="End date for test.")
+
+    @model_validator(mode="after")
+    def validate_dates(self) -> "Test":
+        if pd.to_datetime(self.start) >= pd.to_datetime(self.end):
+            raise ValueError("Test: 'start' date must be before 'end' date.")
+        if pd.to_datetime(self.beta_start) >= pd.to_datetime(self.end):
+            raise ValueError("Test: 'beta_start' date must be before 'end' date.")
+        if pd.to_datetime(self.win_start) >= pd.to_datetime(self.end):
+            raise ValueError("Test: 'win_start' date must be before 'end' date.")
+        return self
 
 
 class Performance(BaseModel):
@@ -114,7 +131,7 @@ class Performance(BaseModel):
     sl_lock: bool = Field(description="SL lock until mean-reversal flag.")
     time_decay_sl: bool = Field(description="Time Decay SL flag.")
 
-    test: TestParams
+    test: Test
 
 
 class RunBacktest(BaseModel):

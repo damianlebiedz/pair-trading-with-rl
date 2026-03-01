@@ -1,6 +1,7 @@
 from dataclasses import dataclass
-from typing import Literal
 import numpy as np
+
+from modules.core.enums import ObsSpaceType
 
 
 @dataclass(slots=True)
@@ -38,7 +39,7 @@ class AgentState:
 
     def get_state_arr(
         self,
-        obs_space_type: Literal["full", "standard", "minimal"],
+        obs_space_type: ObsSpaceType,
     ) -> np.ndarray:
         """
         obs_space_type == "minimal":

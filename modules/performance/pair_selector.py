@@ -51,7 +51,8 @@ class PairSelector:
         tickers: list[str],
         ps_start: str,
         ps_end: str,
-        test_win_start: str,
+        beta_test_start: str,
+        win_test_start: str,
         interval: str,
         top_n: int,
         beta_hedge: BetaHedge,
@@ -109,13 +110,27 @@ class PairSelector:
             f"Pre-ranked {len(candidates)} pairs. Validating with Hurst, Beta & Window..."
         )
 
+        min_val_start = min(
+            pd.to_datetime(beta_test_start), pd.to_datetime(win_test_start)
+        ).strftime("%Y-%m-%d")
+
         df_val = load_data(
-            tickers=tickers, start=test_win_start, end=ps_end, interval=interval
+            tickers=tickers, start=min_val_start, end=ps_end, interval=interval
         )
 
         for col in df_val.columns and self.source == Source.LOG:
             if df_val[col].dtype in ["float64", "float32"]:
                 df_val[f"{col}_{Source.LOG}"] = np.log(df_val[col])
+
+        target_beta_date = pd.to_datetime(beta_test_start)
+        beta_start_pos = df_val.index.get_indexer([target_beta_date], method="bfill")[0]
+        if df_val.index[beta_start_pos] == target_beta_date:
+            beta_start_pos += 1
+
+        target_win_date = pd.to_datetime(win_test_start)
+        win_start_pos = df_val.index.get_indexer([target_win_date], method="bfill")[0]
+        if df_val.index[win_start_pos] == target_win_date:
+            win_start_pos += 1
 
         validated_pairs = []
 
@@ -127,11 +142,17 @@ class PairSelector:
                 source_x_col = f"{t_x}_{self.source}"
                 source_y_col = f"{t_y}_{self.source}"
 
-                X_vals = df_val[source_x_col].values
-                Y_vals = df_val[source_y_col].values
+                X_vals_full = df_val[source_x_col].values
+                Y_vals_full = df_val[source_y_col].values
+
+                X_vals_beta = X_vals_full[beta_start_pos:]
+                Y_vals_beta = Y_vals_full[beta_start_pos:]
+
+                X_vals_win = X_vals_full[win_start_pos:]
+                Y_vals_win = Y_vals_full[win_start_pos:]
 
                 if beta_hedge != BetaHedge.NO_HEDGE:
-                    beta = calculate_beta(X_slice=X_vals, Y_slice=Y_vals)
+                    beta = calculate_beta(X_slice=X_vals_beta, Y_slice=Y_vals_beta)
                 else:
                     beta = 1
 
@@ -140,8 +161,8 @@ class PairSelector:
                     continue
 
                 hurst = calculate_hurst(
-                    X_slice=X_vals,
-                    Y_slice=Y_vals,
+                    X_slice=X_vals_beta,
+                    Y_slice=Y_vals_beta,
                     beta=beta,
                 )
 
@@ -149,10 +170,7 @@ class PairSelector:
                     logger.debug(f"Pair {pair} rejected. Hurst {hurst:.3f} > 0.5")
                     continue
 
-                X_log_vals = df_val[f"{t_x}_{self.source}"].values
-                Y_log_vals = df_val[f"{t_y}_{self.source}"].values
-
-                if window_method == "fixed":
+                if window_method == WindowMethod.FIXED:
                     win = (
                         None
                         if valid_window[0] > fixed_window
@@ -161,8 +179,8 @@ class PairSelector:
                     )
                 else:
                     win = calculate_half_life_window(
-                        X_slice=X_log_vals,
-                        Y_slice=Y_log_vals,
+                        X_slice=X_vals_win,
+                        Y_slice=Y_vals_win,
                         beta=beta,
                         valid_window=self.valid_window,
                         window_param=fixed_window,
@@ -207,7 +225,7 @@ class PairSelector:
         Returns:
             DataFrame sorted by 'score' (descending).
         """
-        if self.coint_type == "johansen":
+        if self.coint_type == CointType.JOHANSEN:
             res = johansen_cointegration(df)
             scaler = MinMaxScaler()
             res["norm_coint"] = scaler.fit_transform(res[["trace_stat"]])

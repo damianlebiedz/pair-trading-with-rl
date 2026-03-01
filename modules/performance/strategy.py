@@ -85,6 +85,7 @@ class Strategy:
         test_start: str,
         test_end: str,
         fixed_window: int | float,
+        beta_test_start: str,
         win_test_start: str,
         stop_loss: float | None,
     ) -> pd.DataFrame:
@@ -121,39 +122,48 @@ class Strategy:
         test_start_pos = df.index.get_indexer(
             [pd.to_datetime(test_start)], method="bfill"
         )[0]
-        target_date = pd.to_datetime(win_test_start)
-        win_start_pos = df.index.get_indexer([target_date], method="bfill")[0]
-        if df.index[win_start_pos] == target_date:
+
+        target_beta_date = pd.to_datetime(beta_test_start)
+        beta_start_pos = df.index.get_indexer([target_beta_date], method="bfill")[0]
+        if df.index[beta_start_pos] == target_beta_date:
+            beta_start_pos += 1
+
+        target_win_date = pd.to_datetime(win_test_start)
+        win_start_pos = df.index.get_indexer([target_win_date], method="bfill")[0]
+        if df.index[win_start_pos] == target_win_date:
             win_start_pos += 1
+
         end_pos = df.index.get_indexer([pd.to_datetime(test_end)], method="bfill")[0]
 
-        if -1 in [test_start_pos, win_start_pos, end_pos]:
+        if -1 in [test_start_pos, beta_start_pos, win_start_pos, end_pos]:
             raise KeyError("Index not found in dataframe")
 
         X_vals = df[source_x_col].values
         Y_vals = df[source_y_col].values
         N = len(df)
-        lookback_len = test_start_pos - win_start_pos + 1
 
-        if lookback_len < 1:
-            raise ValueError(
-                f"'win_start_pos' cannot be bigger than 'test_start_pos': {win_start_pos} > {test_start_pos}"
-            )
+        beta_lookback_len = test_start_pos - beta_start_pos + 1
+        win_lookback_len = test_start_pos - win_start_pos + 1
+
+        if beta_lookback_len < 1:
+            raise ValueError("'beta_test_start' cannot be later than 'test_start'")
+        if win_lookback_len < 1:
+            raise ValueError("'win_test_start' cannot be later than 'test_start'")
 
         if self.beta_hedge == "no_hedge":
             market_beta = 1.0
         else:
-            slice_x_warmup = X_vals[win_start_pos : test_start_pos + 1]
-            slice_y_warmup = Y_vals[win_start_pos : test_start_pos + 1]
+            slice_x_warmup_beta = X_vals[beta_start_pos : test_start_pos + 1]
+            slice_y_warmup_beta = Y_vals[beta_start_pos : test_start_pos + 1]
             market_beta = calculate_beta(
-                X_slice=slice_x_warmup,
-                Y_slice=slice_y_warmup,
+                X_slice=slice_x_warmup_beta,
+                Y_slice=slice_y_warmup_beta,
             )
 
         precalc_ols_beta = np.zeros(N)
         if self.beta_hedge == "rolling":
-            cov = pd.Series(X_vals).rolling(lookback_len).cov(pd.Series(Y_vals))
-            var = pd.Series(Y_vals).rolling(lookback_len).var()
+            cov = pd.Series(X_vals).rolling(beta_lookback_len).cov(pd.Series(Y_vals))
+            var = pd.Series(Y_vals).rolling(beta_lookback_len).var()
             precalc_ols_beta = np.nan_to_num((cov / var).values, nan=0.0)
 
         if self.window_method == "fixed":
@@ -164,11 +174,11 @@ class Strategy:
                 else fixed_window
             )
         else:
-            slice_x_warmup = X_vals[win_start_pos : test_start_pos + 1]
-            slice_y_warmup = Y_vals[win_start_pos : test_start_pos + 1]
+            slice_x_warmup_win = X_vals[win_start_pos : test_start_pos + 1]
+            slice_y_warmup_win = Y_vals[win_start_pos : test_start_pos + 1]
             market_win = calculate_half_life_window(
-                X_slice=slice_x_warmup,
-                Y_slice=slice_y_warmup,
+                X_slice=slice_x_warmup_win,
+                Y_slice=slice_y_warmup_win,
                 beta=market_beta,
                 valid_window=self.valid_window,
                 window_param=fixed_window,
@@ -186,19 +196,22 @@ class Strategy:
 
         for i in range(test_start_pos, N):
             b = base_beta_arr[i]
-            slice_x = X_vals[i - lookback_len + 1 : i + 1]
-            slice_y = Y_vals[i - lookback_len + 1 : i + 1]
+            slice_x_win = X_vals[i - win_lookback_len + 1 : i + 1]
+            slice_y_win = Y_vals[i - win_lookback_len + 1 : i + 1]
+
+            slice_x_beta = X_vals[i - beta_lookback_len + 1 : i + 1]
+            slice_y_beta = Y_vals[i - beta_lookback_len + 1 : i + 1]
 
             if self.window_method == "rolling":
                 precalc_win_free[i] = calculate_half_life_window(
-                    X_slice=slice_x,
-                    Y_slice=slice_y,
+                    X_slice=slice_x_win,
+                    Y_slice=slice_y_win,
                     beta=b,
                     valid_window=self.valid_window,
                     window_param=fixed_window,
                 )
             precalc_hurst_free[i] = calculate_hurst(
-                X_slice=slice_x, Y_slice=slice_y, beta=b
+                X_slice=slice_x_beta, Y_slice=slice_y_beta, beta=b
             )
 
         df[f"ret_{self.ticker_x}"] = df[source_x_col].diff().fillna(0.0)
@@ -515,6 +528,7 @@ class Strategy:
         stop_loss: float | None,
         test_start: str,
         test_end: str,
+        beta_test_start: str,
         win_test_start: str,
     ) -> StrategyResult:
         """
@@ -532,6 +546,7 @@ class Strategy:
             test_start=test_start,
             test_end=test_end,
             fixed_window=fixed_window,
+            beta_test_start=beta_test_start,
             win_test_start=win_test_start,
             stop_loss=stop_loss,
         )
