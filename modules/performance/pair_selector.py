@@ -1,7 +1,6 @@
 import logging
 import numpy as np
 import pandas as pd
-from sklearn.preprocessing import MinMaxScaler
 
 from modules.core.enums import CointType, Source, WindowMethod, BetaHedge
 from modules.core.indicators import (
@@ -227,8 +226,7 @@ class PairSelector:
         """
         if self.coint_type == CointType.JOHANSEN:
             res = johansen_cointegration(df)
-            scaler = MinMaxScaler()
-            res["norm_coint"] = scaler.fit_transform(res[["trace_stat"]])
+            res["norm_coint"] = res["trace_stat"].rank(pct=True)
         else:
             res = engle_granger_cointegration(df)
             res["norm_coint"] = 1 - res["p_value"]
