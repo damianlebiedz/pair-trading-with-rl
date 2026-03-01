@@ -154,7 +154,6 @@ def generate_all_plots():
         plot_distribution(df, title=cat_dir.name, out_file=local_out)
 
     if all_dfs:
-        print("\n=============================================")
         print("Generating GLOBAL plot for all simulations...")
         global_df = pd.concat(all_dfs, ignore_index=True)
         global_out = results_dir / "plots_sortino_GLOBAL.html"
