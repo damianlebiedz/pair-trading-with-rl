@@ -54,7 +54,9 @@ def merge_by_pair(dfs: list[pd.DataFrame], keep_cols: list[list[str]]) -> pd.Dat
     return merged
 
 
-def load_btc_benchmark(test_start: str, test_end: str, interval: str) -> pd.DataFrame:
+def load_btc_benchmark(
+    test_start: str, test_end: str, interval: Interval
+) -> pd.DataFrame:
     btc_data = load_data(
         tickers=["BTCUSDT"],
         start=test_start,

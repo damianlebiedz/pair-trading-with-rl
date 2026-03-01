@@ -39,7 +39,13 @@ def stitch_strategy_results(
     merged_dfs = []
     exec_dfs = []
 
-    cumulative_cols = ["total_pnl", "total_net_pnl", "total_return", "total_net_return"]
+    cumulative_cols = [
+        "total_pnl",
+        "total_net_pnl",
+        "total_return",
+        "total_net_return",
+        "total_fees",
+    ]
 
     offsets = {col: 0.0 for col in cumulative_cols}
 
@@ -119,6 +125,7 @@ def aggregate_strategy_results(
     total_pnl_sum = pd.Series(0.0, index=base_index)
     net_pnl_sum = pd.Series(0.0, index=base_index)
     position_sum = pd.Series(0.0, index=base_index)
+    total_fees_sum = pd.Series(0.0, index=base_index)
 
     exec_dfs = []
 
@@ -129,6 +136,9 @@ def aggregate_strategy_results(
         net_pnl_sum += df["total_net_pnl"]
         position_sum += df["position"].abs()
 
+        if "total_fees" in df.columns:
+            total_fees_sum += df["total_fees"].fillna(0.0)
+
         if not res.exec_logger.empty:
             temp_exec_df = res.exec_logger.copy()
             exec_dfs.append(temp_exec_df)
@@ -136,6 +146,7 @@ def aggregate_strategy_results(
     merged_df = pd.DataFrame(index=base_index)
     merged_df["total_pnl"] = total_pnl_sum
     merged_df["total_net_pnl"] = net_pnl_sum
+    merged_df["total_fees"] = total_fees_sum
     merged_df["in_position"] = position_sum / len(results)
 
     merged_df["total_return"] = merged_df["total_pnl"] / initial_cash
