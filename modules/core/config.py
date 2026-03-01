@@ -103,7 +103,7 @@ class Performance(BaseModel):
     )
     iterations: int = Field(
         gt=0,
-        description="Number of backtest iterations.",
+        description="Number of backtest iterations (monthly).",
     )
     beta_hedge: BetaHedge = Field(
         description=f"Hedge ratio mode. Options: {[e.value for e in BetaHedge]}"
