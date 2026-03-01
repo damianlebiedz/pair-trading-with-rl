@@ -1,0 +1,186 @@
+{
+  "$defs": {
+    "A2CAlgo": {
+      "properties": {
+        "algo_name": {
+          "const": "a2c_baseline",
+          "title": "Algo Name",
+          "type": "string"
+        },
+        "policy_type": {
+          "const": "MlpPolicy",
+          "default": "MlpPolicy",
+          "description": "Fixed policy type for A2C algorithm.",
+          "title": "Policy Type",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/A2CBaseline"
+        }
+      },
+      "required": [
+        "algo_name",
+        "params"
+      ],
+      "title": "A2CAlgo",
+      "type": "object"
+    },
+    "A2CBaseline": {
+      "properties": {
+        "learning_rate": {
+          "description": "Learning rate for A2C algorithm.",
+          "title": "Learning Rate",
+          "type": "number"
+        },
+        "n_steps": {
+          "description": "Number of A2C steps.",
+          "title": "N Steps",
+          "type": "integer"
+        },
+        "gamma": {
+          "description": "Gamma value for A2C algorithm.",
+          "title": "Gamma",
+          "type": "number"
+        },
+        "ent_coef": {
+          "description": "Entropy coefficient for A2C algorithm.",
+          "title": "Ent Coef",
+          "type": "number"
+        }
+      },
+      "required": [
+        "learning_rate",
+        "n_steps",
+        "gamma",
+        "ent_coef"
+      ],
+      "title": "A2CBaseline",
+      "type": "object"
+    },
+    "PPOAlgo": {
+      "properties": {
+        "algo_name": {
+          "const": "recurrent_ppo",
+          "title": "Algo Name",
+          "type": "string"
+        },
+        "policy_type": {
+          "const": "MlpLstmPolicy",
+          "default": "MlpLstmPolicy",
+          "description": "Fixed policy type for Recurrent PPO.",
+          "title": "Policy Type",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/RecurrentPPO"
+        }
+      },
+      "required": [
+        "algo_name",
+        "params"
+      ],
+      "title": "PPOAlgo",
+      "type": "object"
+    },
+    "PolicyKwargs": {
+      "properties": {
+        "lstm_hidden_size": {
+          "description": "Size of the hidden state in the LSTM cell",
+          "title": "Lstm Hidden Size",
+          "type": "integer"
+        },
+        "n_lstm_layers": {
+          "description": "Number of stacked LSTM layers.",
+          "title": "N Lstm Layers",
+          "type": "integer"
+        },
+        "shared_lstm": {
+          "description": "Use a shared LSTM backbone for both Actor and Critic.",
+          "title": "Shared Lstm",
+          "type": "boolean"
+        },
+        "enable_critic_lstm": {
+          "title": "Enable Critic Lstm",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "lstm_hidden_size",
+        "n_lstm_layers",
+        "shared_lstm",
+        "enable_critic_lstm"
+      ],
+      "title": "PolicyKwargs",
+      "type": "object"
+    },
+    "RecurrentPPO": {
+      "properties": {
+        "learning_rate": {
+          "description": "Step size for the optimizer (smaller LR is usually better for PPO)",
+          "title": "Learning Rate",
+          "type": "number"
+        },
+        "n_steps": {
+          "description": "Steps to collect before updating (PPO works better with larger buffers)",
+          "title": "N Steps",
+          "type": "integer"
+        },
+        "batch_size": {
+          "description": "Number of samples used for each gradient update",
+          "title": "Batch Size",
+          "type": "integer"
+        },
+        "n_epochs": {
+          "description": "Number of optimization passes over the collected data",
+          "title": "N Epochs",
+          "type": "integer"
+        },
+        "gamma": {
+          "description": "Discount factor for future rewards",
+          "title": "Gamma",
+          "type": "number"
+        },
+        "ent_coef": {
+          "description": "Entropy coefficient to encourage exploration (higher = more random)",
+          "title": "Ent Coef",
+          "type": "number"
+        },
+        "clip_range": {
+          "description": "Range for clipping the surrogate objective (ensures stable updates)",
+          "title": "Clip Range",
+          "type": "number"
+        },
+        "policy_kwargs": {
+          "$ref": "#/$defs/PolicyKwargs"
+        }
+      },
+      "required": [
+        "learning_rate",
+        "n_steps",
+        "batch_size",
+        "n_epochs",
+        "gamma",
+        "ent_coef",
+        "clip_range",
+        "policy_kwargs"
+      ],
+      "title": "RecurrentPPO",
+      "type": "object"
+    }
+  },
+  "discriminator": {
+    "mapping": {
+      "a2c_baseline": "#/$defs/A2CAlgo",
+      "recurrent_ppo": "#/$defs/PPOAlgo"
+    },
+    "propertyName": "algo_name"
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/A2CAlgo"
+    },
+    {
+      "$ref": "#/$defs/PPOAlgo"
+    }
+  ]
+}
