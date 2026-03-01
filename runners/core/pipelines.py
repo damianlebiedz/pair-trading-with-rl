@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 import pandas as pd
 
-from modules.core.enums import CointType, WindowMethod, BetaHedge
+from modules.core.enums import CointType, BetaHedge
 from modules.performance.models import StrategyResult
 from modules.data_services.data_utils import (
     save_strategy_result,
@@ -86,7 +86,6 @@ def execute_testing(
     ticker_y: str,
     output_dir: str,
     beta_test_start: str,
-    win_test_start: str,
     test_start: str,
     test_end: str,
     interval: str,
@@ -98,20 +97,19 @@ def execute_testing(
     if subdir:
         output_dir = os.path.join(output_dir, subdir)
 
-    fixed_window = best_params["fixed_window"]
+    z_score_window = best_params["z_score_window"]
     entry_threshold = best_params["entry_threshold"]
     exit_threshold = best_params["exit_threshold"]
     stop_loss = best_params["stop_loss"]
 
     result = bt.run_strategy(
-        fixed_window=fixed_window,
+        z_score_window=z_score_window,
         entry_threshold=entry_threshold,
         exit_threshold=exit_threshold,
         stop_loss=stop_loss,
         test_start=test_start,
         test_end=test_end,
         beta_test_start=beta_test_start,
-        win_test_start=win_test_start,
     )
 
     save_strategy_result(
@@ -164,32 +162,24 @@ def execute_pair_selection(
     ps_start: str,
     ps_end: str,
     beta_test_start: str,
-    win_test_start: str,
     interval: str,
     top_n_factor: float,
     output_dir: str,
     coint_type: CointType,
     beta_hedge: BetaHedge,
-    window_method: WindowMethod,
-    fixed_window: int | float,
-    valid_window: tuple[int, int],
 ) -> pd.DataFrame:
     logger.info("Starting Pair Selection Pipeline.")
 
-    selector = PairSelector(coint_type=coint_type, valid_window=valid_window)
+    selector = PairSelector(coint_type=coint_type)
 
     final_df = selector.select_pairs(
         tickers=tickers,
         ps_start=ps_start,
         ps_end=ps_end,
         beta_test_start=beta_test_start,
-        win_test_start=win_test_start,
         interval=interval,
         top_n=top_n_factor,
         beta_hedge=beta_hedge,
-        window_method=window_method,
-        fixed_window=fixed_window,
-        valid_window=valid_window,
     )
 
     if final_df.empty:

@@ -36,7 +36,7 @@ def run_backtest(cfg: DictConfig):
     cfg = Config(**OmegaConf.to_container(cfg, resolve=True))
 
     best_params = {
-        "fixed_window": cfg.fixed_window,
+        "z_score_window": cfg.z_score_window,
         "entry_threshold": cfg.entry_threshold,
         "exit_threshold": cfg.exit_threshold,
         "stop_loss": cfg.stop_loss,
@@ -50,7 +50,6 @@ def run_backtest(cfg: DictConfig):
         "pair_selection_start": cfg.pair_selection.start,
         "pair_selection_end": cfg.pair_selection.end,
         "beta_test_start": cfg.performance.test.beta_start,
-        "win_test_start": cfg.performance.test.win_start,
         "test_start": cfg.performance.test.start,
         "test_end": cfg.performance.test.end,
     }
@@ -61,7 +60,6 @@ def run_backtest(cfg: DictConfig):
     earliest_date = min(
         pd.to_datetime(lists["pair_selection_start_list"][0]),
         pd.to_datetime(lists["beta_test_start_list"][0]),
-        pd.to_datetime(lists["win_test_start_list"][0]),
         pd.to_datetime(lists["test_start_list"][0]),
     ).strftime("%Y-%m-%d")
 
@@ -104,15 +102,11 @@ def run_backtest(cfg: DictConfig):
             ps_start=lists["pair_selection_start_list"][i],
             ps_end=lists["pair_selection_end_list"][i],
             beta_test_start=lists["beta_test_start_list"][i],
-            win_test_start=lists["win_test_start_list"][i],
             interval=cfg.market.interval,
             top_n_factor=cfg.pair_selection.top_n_factor,
             output_dir=output_dir,
             coint_type=cfg.pair_selection.coint_type,
             beta_hedge=cfg.performance.beta_hedge,
-            window_method=cfg.performance.window_method,
-            fixed_window=best_params["fixed_window"],
-            valid_window=(cfg.settings.window_min, cfg.settings.window_max),
         )
 
         logger.info("\n%s", ps_df.to_string())
@@ -170,11 +164,6 @@ def run_backtest(cfg: DictConfig):
 
             continue
 
-        min_start_date = min(
-            pd.to_datetime(lists["beta_test_start_list"][i]),
-            pd.to_datetime(lists["win_test_start_list"][i]),
-        ).strftime("%Y-%m-%d")
-
         strategies = []
         strategies_map = {}
 
@@ -231,14 +220,13 @@ def run_backtest(cfg: DictConfig):
             bt = Strategy(
                 ticker_x=ticker_x,
                 ticker_y=ticker_y,
-                start=min_start_date,
+                start=lists["beta_test_start_list"][i],
                 end=lists["test_end_list"][i],
                 interval=cfg.market.interval,
                 fee_rate=cfg.market.fee_rate,
                 initial_cash=cfg.market.initial_cash / cfg.pair_selection.top_n_factor,
                 risk_free_rate_annual=cfg.market.risk_free_rate_annual,
                 beta_hedge=cfg.performance.beta_hedge,
-                window_method=cfg.performance.window_method,
                 delayed_entry=cfg.performance.delayed_entry,
                 sl_lock=cfg.performance.sl_lock,
                 time_decay_sl=cfg.performance.time_decay_sl,
@@ -246,7 +234,6 @@ def run_backtest(cfg: DictConfig):
                     cfg.settings.time_decay_min,
                     cfg.settings.time_decay_max,
                 ),
-                valid_window=(cfg.settings.window_min, cfg.settings.window_max),
                 vol_window=cfg.settings.vol_window,
                 agent=agent,
             )
@@ -275,7 +262,6 @@ def run_backtest(cfg: DictConfig):
                 ticker_y=ticker_y,
                 output_dir=output_dir,
                 beta_test_start=lists["beta_test_start_list"][i],
-                win_test_start=lists["win_test_start_list"][i],
                 test_start=lists["test_start_list"][i],
                 test_end=lists["test_end_list"][i],
                 subdir="test",

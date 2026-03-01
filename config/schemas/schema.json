@@ -28,22 +28,22 @@
     "A2CBaseline": {
       "properties": {
         "learning_rate": {
-          "description": "Learning rate for A2C algorithm.",
+          "description": "Step size for the optimizer (learning rate for the A2C policy update).",
           "title": "Learning Rate",
           "type": "number"
         },
         "n_steps": {
-          "description": "Number of A2C steps.",
+          "description": "Number of forward steps to run for each environment before updating the network (typically small for A2C, e.g., 5).",
           "title": "N Steps",
           "type": "integer"
         },
         "gamma": {
-          "description": "Gamma value for A2C algorithm.",
+          "description": "Discount factor for future rewards (between 0 and 1).",
           "title": "Gamma",
           "type": "number"
         },
         "ent_coef": {
-          "description": "Entropy coefficient for A2C algorithm.",
+          "description": "Entropy coefficient for the loss calculation. Higher values encourage more exploration.",
           "title": "Ent Coef",
           "type": "number"
         }
@@ -217,10 +217,6 @@
           "$ref": "#/$defs/BetaHedge",
           "description": "Hedge ratio mode. Options: ['no_hedge', 'static', 'rolling']"
         },
-        "window_method": {
-          "$ref": "#/$defs/WindowMethod",
-          "description": "Z-Score Window mode. Options: ['fixed', 'static', 'rolling']"
-        },
         "delayed_entry": {
           "description": "Delayed entry flag.",
           "title": "Delayed Entry",
@@ -237,51 +233,19 @@
           "type": "boolean"
         },
         "test": {
-          "$ref": "#/$defs/TestParams"
+          "$ref": "#/$defs/Test"
         }
       },
       "required": [
         "use_rl",
         "iterations",
         "beta_hedge",
-        "window_method",
         "delayed_entry",
         "sl_lock",
         "time_decay_sl",
         "test"
       ],
       "title": "Performance",
-      "type": "object"
-    },
-    "PolicyKwargs": {
-      "properties": {
-        "lstm_hidden_size": {
-          "description": "Size of the hidden state in the LSTM cell",
-          "title": "Lstm Hidden Size",
-          "type": "integer"
-        },
-        "n_lstm_layers": {
-          "description": "Number of stacked LSTM layers.",
-          "title": "N Lstm Layers",
-          "type": "integer"
-        },
-        "shared_lstm": {
-          "description": "Use a shared LSTM backbone for both Actor and Critic.",
-          "title": "Shared Lstm",
-          "type": "boolean"
-        },
-        "enable_critic_lstm": {
-          "title": "Enable Critic Lstm",
-          "type": "boolean"
-        }
-      },
-      "required": [
-        "lstm_hidden_size",
-        "n_lstm_layers",
-        "shared_lstm",
-        "enable_critic_lstm"
-      ],
-      "title": "PolicyKwargs",
       "type": "object"
     },
     "RL": {
@@ -357,42 +321,39 @@
     "RecurrentPPO": {
       "properties": {
         "learning_rate": {
-          "description": "Step size for the optimizer (smaller LR is usually better for PPO)",
+          "description": "Step size for the optimizer (learning rate for the PPO policy update). Smaller values often yield more stable PPO training.",
           "title": "Learning Rate",
           "type": "number"
         },
         "n_steps": {
-          "description": "Steps to collect before updating (PPO works better with larger buffers)",
+          "description": "Number of steps to run for each environment per update (PPO usually requires larger buffers than A2C, e.g., 128 or 256).",
           "title": "N Steps",
           "type": "integer"
         },
         "batch_size": {
-          "description": "Number of samples used for each gradient update",
+          "description": "Minibatch size used for each gradient update during the optimization passes.",
           "title": "Batch Size",
           "type": "integer"
         },
         "n_epochs": {
-          "description": "Number of optimization passes over the collected data",
+          "description": "Number of optimization epochs (passes over the collected rollout data) when updating the network.",
           "title": "N Epochs",
           "type": "integer"
         },
         "gamma": {
-          "description": "Discount factor for future rewards",
+          "description": "Discount factor for future rewards (between 0 and 1).",
           "title": "Gamma",
           "type": "number"
         },
         "ent_coef": {
-          "description": "Entropy coefficient to encourage exploration (higher = more random)",
+          "description": "Entropy coefficient for the loss calculation. Higher values encourage more exploration.",
           "title": "Ent Coef",
           "type": "number"
         },
         "clip_range": {
-          "description": "Range for clipping the surrogate objective (ensures stable updates)",
+          "description": "Range for clipping the surrogate objective. Prevents overly large policy updates to ensure stability (typically 0.2).",
           "title": "Clip Range",
           "type": "number"
-        },
-        "policy_kwargs": {
-          "$ref": "#/$defs/PolicyKwargs"
         }
       },
       "required": [
@@ -402,8 +363,7 @@
         "n_epochs",
         "gamma",
         "ent_coef",
-        "clip_range",
-        "policy_kwargs"
+        "clip_range"
       ],
       "title": "RecurrentPPO",
       "type": "object"
@@ -420,14 +380,6 @@
           "title": "Test End",
           "type": "string"
         },
-        "win_test_start": {
-          "description": "Start date for Z-score OU (Half-Life)-based window calculation.",
-          "title": "Win Test Start",
-          "type": "string"
-        },
-        "rl": {
-          "$ref": "#/$defs/RL"
-        },
         "performance": {
           "$ref": "#/$defs/Performance"
         }
@@ -435,8 +387,6 @@
       "required": [
         "test_start",
         "test_end",
-        "win_test_start",
-        "rl",
         "performance"
       ],
       "title": "RunBacktest",
@@ -448,18 +398,6 @@
           "description": "Volatility window size (e.g. 24 = one day in '1h' interval).",
           "exclusiveMinimum": 0,
           "title": "Vol Window",
-          "type": "integer"
-        },
-        "window_min": {
-          "description": "Minimum size of Z-Score window.",
-          "exclusiveMinimum": 0,
-          "title": "Window Min",
-          "type": "integer"
-        },
-        "window_max": {
-          "description": "Maximum size of Z-Score window.",
-          "exclusiveMinimum": 0,
-          "title": "Window Max",
           "type": "integer"
         },
         "time_decay_min": {
@@ -477,24 +415,17 @@
       },
       "required": [
         "vol_window",
-        "window_min",
-        "window_max",
         "time_decay_min",
         "time_decay_max"
       ],
       "title": "Settings",
       "type": "object"
     },
-    "TestParams": {
+    "Test": {
       "properties": {
         "beta_start": {
           "description": "Lookback window start date for beta calculation.",
           "title": "Beta Start",
-          "type": "string"
-        },
-        "win_start": {
-          "description": "Lookback window start date for Z-Score window calculation.",
-          "title": "Win Start",
           "type": "string"
         },
         "start": {
@@ -510,11 +441,10 @@
       },
       "required": [
         "beta_start",
-        "win_start",
         "start",
         "end"
       ],
-      "title": "TestParams",
+      "title": "Test",
       "type": "object"
     },
     "Wandb": {
@@ -542,15 +472,6 @@
         "offline"
       ],
       "title": "WandbMode",
-      "type": "string"
-    },
-    "WindowMethod": {
-      "enum": [
-        "fixed",
-        "static",
-        "rolling"
-      ],
-      "title": "WindowMethod",
       "type": "string"
     }
   },
@@ -609,19 +530,11 @@
       "title": "Generate Plots",
       "type": "boolean"
     },
-    "fixed_window": {
-      "anyOf": [
-        {
-          "exclusiveMinimum": 0,
-          "type": "integer"
-        },
-        {
-          "exclusiveMinimum": 0,
-          "type": "number"
-        }
-      ],
-      "description": "Fixed lookback window size.",
-      "title": "Fixed Window"
+    "z_score_window": {
+      "description": "Z-Score lookback window size.",
+      "exclusiveMinimum": 0,
+      "title": "Z Score Window",
+      "type": "integer"
     },
     "entry_threshold": {
       "description": "Z-score threshold to open a position.",
@@ -652,10 +565,28 @@
       "$ref": "#/$defs/Performance"
     },
     "rl": {
-      "$ref": "#/$defs/RL"
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RL"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "RL config"
     },
     "run_backtest": {
-      "$ref": "#/$defs/RunBacktest"
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RunBacktest"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "RunBacktest config"
     },
     "rl_algo": {
       "anyOf": [

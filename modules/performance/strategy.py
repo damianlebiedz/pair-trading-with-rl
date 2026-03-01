@@ -1,12 +1,11 @@
 import numpy as np
 import pandas as pd
 
-from modules.core.enums import Interval, BetaHedge, WindowMethod, Source
+from modules.core.enums import Interval, BetaHedge, Source
 from modules.core.execution import TradeExecutor
 from modules.core.indicators import (
     calculate_z_score,
     calculate_beta,
-    calculate_half_life_window,
     generate_signal,
     calculate_spread_statistics,
     calculate_hurst,
@@ -37,11 +36,9 @@ class Strategy:
         initial_cash: float,
         risk_free_rate_annual: float,
         beta_hedge: BetaHedge,
-        window_method: WindowMethod,
         delayed_entry: bool,
         sl_lock: bool,
         vol_window: int,
-        valid_window: tuple[int, int],
         time_decay_sl: bool,
         time_decay_params: tuple[int, int],
         agent: RLAgentAdapter | None = None,
@@ -56,14 +53,12 @@ class Strategy:
         self.initial_cash = initial_cash
         self.risk_free_rate_annual = risk_free_rate_annual
         self.beta_hedge = beta_hedge
-        self.window_method = window_method
         self.delayed_entry = delayed_entry
         self.sl_lock = sl_lock
         self.time_decay_sl = time_decay_sl
         self.time_decay_params = time_decay_params
         self.agent = agent
         self.vol_window = vol_window
-        self.valid_window = valid_window
         self.source = source
 
         self.data = load_pair(
@@ -84,9 +79,8 @@ class Strategy:
         exit_threshold: float | None,
         test_start: str,
         test_end: str,
-        fixed_window: int | float,
+        z_score_window: int,
         beta_test_start: str,
-        win_test_start: str,
         stop_loss: float | None,
     ) -> pd.DataFrame:
         """
@@ -128,14 +122,9 @@ class Strategy:
         if df.index[beta_start_pos] == target_beta_date:
             beta_start_pos += 1
 
-        target_win_date = pd.to_datetime(win_test_start)
-        win_start_pos = df.index.get_indexer([target_win_date], method="bfill")[0]
-        if df.index[win_start_pos] == target_win_date:
-            win_start_pos += 1
-
         end_pos = df.index.get_indexer([pd.to_datetime(test_end)], method="bfill")[0]
 
-        if -1 in [test_start_pos, beta_start_pos, win_start_pos, end_pos]:
+        if -1 in [test_start_pos, beta_start_pos, end_pos]:
             raise KeyError("Index not found in dataframe")
 
         X_vals = df[source_x_col].values
@@ -143,12 +132,11 @@ class Strategy:
         N = len(df)
 
         beta_lookback_len = test_start_pos - beta_start_pos + 1
-        win_lookback_len = test_start_pos - win_start_pos + 1
 
         if beta_lookback_len < 1:
             raise ValueError("'beta_test_start' cannot be later than 'test_start'")
-        if win_lookback_len < 1:
-            raise ValueError("'win_test_start' cannot be later than 'test_start'")
+        if test_start_pos - z_score_window + 1 < 1:
+            raise ValueError("'z_score_window' cannot be later than 'test_start'")
 
         if self.beta_hedge == "no_hedge":
             market_beta = 1.0
@@ -166,25 +154,6 @@ class Strategy:
             var = pd.Series(Y_vals).rolling(beta_lookback_len).var()
             precalc_ols_beta = np.nan_to_num((cov / var).values, nan=0.0)
 
-        if self.window_method == "fixed":
-            market_win = (
-                None
-                if self.valid_window[0] > fixed_window
-                or self.valid_window[1] < fixed_window
-                else fixed_window
-            )
-        else:
-            slice_x_warmup_win = X_vals[win_start_pos : test_start_pos + 1]
-            slice_y_warmup_win = Y_vals[win_start_pos : test_start_pos + 1]
-            market_win = calculate_half_life_window(
-                X_slice=slice_x_warmup_win,
-                Y_slice=slice_y_warmup_win,
-                beta=market_beta,
-                valid_window=self.valid_window,
-                window_param=fixed_window,
-            )
-
-        precalc_win_free = np.full(N, None, dtype=object)
         precalc_hurst_free = np.full(N, 0.5)
 
         if self.beta_hedge == "no_hedge":
@@ -196,20 +165,10 @@ class Strategy:
 
         for i in range(test_start_pos, N):
             b = base_beta_arr[i]
-            slice_x_win = X_vals[i - win_lookback_len + 1 : i + 1]
-            slice_y_win = Y_vals[i - win_lookback_len + 1 : i + 1]
 
             slice_x_beta = X_vals[i - beta_lookback_len + 1 : i + 1]
             slice_y_beta = Y_vals[i - beta_lookback_len + 1 : i + 1]
 
-            if self.window_method == "rolling":
-                precalc_win_free[i] = calculate_half_life_window(
-                    X_slice=slice_x_win,
-                    Y_slice=slice_y_win,
-                    beta=b,
-                    valid_window=self.valid_window,
-                    window_param=fixed_window,
-                )
             precalc_hurst_free[i] = calculate_hurst(
                 X_slice=slice_x_beta, Y_slice=slice_y_beta, beta=b
             )
@@ -271,26 +230,13 @@ class Strategy:
                 if self.beta_hedge == "rolling":
                     market_beta = base_beta_arr[i]
 
-                if self.window_method == "rolling":
-                    market_win = precalc_win_free[i]
-
-                if (
-                    position_state.position != 0
-                    and position_state.entry_win is not None
-                ):
-                    win = position_state.entry_win
-                else:
-                    win = market_win
-
-                if (
-                    self.time_decay_sl
-                    and win is not None
-                    and exit_threshold is not None
-                ):
+                if self.time_decay_sl and exit_threshold is not None:
                     time_decay_start = self.time_decay_params[0]
                     time_decay_end = self.time_decay_params[1]
 
-                    hl_diff = (time_decay_end * win) - (time_decay_start * win)
+                    hl_diff = (time_decay_end * z_score_window) - (
+                        time_decay_start * z_score_window
+                    )
                     sl_exit_diff = stop_loss_thr - exit_threshold
                     decay_per_iter = (
                         sl_exit_diff / hl_diff if hl_diff != 0.0 else sl_exit_diff
@@ -314,11 +260,11 @@ class Strategy:
                 spread = None
                 market_std = None
 
-                if win is None or beta <= 0:
+                if beta <= 0:
                     pass
                 else:
-                    slice_x_win = X_vals[i - win + 1 : i + 1]
-                    slice_y_win = Y_vals[i - win + 1 : i + 1]
+                    slice_x_win = X_vals[i - z_score_window + 1 : i + 1]
+                    slice_y_win = Y_vals[i - z_score_window + 1 : i + 1]
                     spread, market_mean, market_std = calculate_spread_statistics(
                         X_slice=slice_x_win,
                         Y_slice=slice_y_win,
@@ -351,7 +297,7 @@ class Strategy:
                     position_state.sl_thr = stop_loss_thr
                 elif (
                     self.time_decay_sl
-                    and position_state.time_in_pos >= time_decay_start * win
+                    and position_state.time_in_pos >= time_decay_start * z_score_window
                 ):
                     position_state.sl_thr -= decay_per_iter
 
@@ -391,10 +337,10 @@ class Strategy:
                         std=market_std,
                         beta=market_beta,
                         hurst=market_hurst,
-                        window=market_win,
+                        window=z_score_window,
                         position=position_state.position,
                         signal=action,
-                        norm_time_in_pos=position_state.time_in_pos / win if win else 0,
+                        norm_time_in_pos=position_state.time_in_pos / z_score_window,
                         drawdown_pct=drawdown_pct,
                         current_market_vol=df["market_vol"].iloc[i],
                     )
@@ -410,7 +356,6 @@ class Strategy:
                     price_x=price_x,
                     price_y=price_y,
                     beta=beta,
-                    win=win,
                     equity=equity,
                     exec_logger=exec_logger,
                     std=std,
@@ -443,8 +388,7 @@ class Strategy:
                     "mean": mean,
                     "std": position_state.entry_std or market_std,
                     "market_std": market_std,
-                    "window": position_state.entry_win or market_win,
-                    "market_win": market_win,
+                    "window": z_score_window,
                     "beta": position_state.entry_beta or market_beta,
                     "market_beta": market_beta,
                     "hurst": market_hurst,
@@ -522,14 +466,13 @@ class Strategy:
 
     def run_strategy(
         self,
-        fixed_window: int,
+        z_score_window: int,
         entry_threshold: float | None,
         exit_threshold: float | None,
         stop_loss: float | None,
         test_start: str,
         test_end: str,
         beta_test_start: str,
-        win_test_start: str,
     ) -> StrategyResult:
         """
         Executes the strategy backtest with specific parameters.
@@ -545,9 +488,8 @@ class Strategy:
             exit_threshold=exit_threshold,
             test_start=test_start,
             test_end=test_end,
-            fixed_window=fixed_window,
+            z_score_window=z_score_window,
             beta_test_start=beta_test_start,
-            win_test_start=win_test_start,
             stop_loss=stop_loss,
         )
 

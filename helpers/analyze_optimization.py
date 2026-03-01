@@ -36,7 +36,7 @@ def parse_iterations(content: str) -> list:
     pattern = r"INFO\s+-\s+\((\{.*?\})\s*,\s*[\d\.-]+\)"
 
     for line in content.split("\n"):
-        if "fixed_window" in line:
+        if "z_score_window" in line:
             match = re.search(pattern, line)
             if match:
                 params = ast.literal_eval(match.group(1))
@@ -48,10 +48,10 @@ def create_optimization_dashboard(
     df: pd.DataFrame, bounds: dict, title: str, out_file: Path
 ):
     param_config = {
-        "fixed_window": {
+        "z_score_window": {
             "min": "window_min",
             "max": "window_max",
-            "title": "Fixed Window",
+            "title": "Z-Score Window",
         },
         "entry_threshold": {
             "min": "entry_threshold_min",

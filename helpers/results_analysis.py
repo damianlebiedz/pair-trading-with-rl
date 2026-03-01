@@ -79,10 +79,9 @@ def parse_results():
                 entry = config.get("entry_threshold", "N/A")
                 exit_t = config.get("exit_threshold", "N/A")
                 stop_loss = config.get("stop_loss", "N/A")
-                fixed_window = config.get("fixed_window", "N/A")
+                z_score_window = config.get("z_score_window", "N/A")
 
                 beta_hedge = perf.get("beta_hedge", "N/A")
-                window_method = perf.get("window_method", "N/A")
 
                 stats_df = pd.read_parquet(stats_file)
 
@@ -96,8 +95,7 @@ def parse_results():
                     {
                         "Run_ID": run_dir.name,
                         "Beta Hedge": beta_hedge,
-                        "Window Method": window_method,
-                        "Fixed Window": fixed_window,
+                        "Z-Score Window": z_score_window,
                         "Entry": entry,
                         "Exit": exit_t,
                         "SL": stop_loss,

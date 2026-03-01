@@ -86,56 +86,6 @@ def calculate_z_score(spread: float, mean: float, std: float) -> float | None:
     return (spread - mean) / std
 
 
-def calculate_half_life_window(
-    X_slice: np.ndarray,
-    Y_slice: np.ndarray,
-    beta: float,
-    valid_window: tuple[int, int],
-    window_param: float,
-) -> int | None:
-    """
-    Estimates the mean-reversion Half-Life via the Ornstein-Uhlenbeck (OU) process
-    to derive a dynamic lookback window.
-
-    Methodology:
-    1. Construct the spread series using the provided beta: spread = x - beta * y.
-    2. Discretize the OU process as: Δspread_t = λ * spread_{t-1} + ε_t.
-    3. Regress the daily change in spread (Δspread) against the lagged spread to estimate
-        the mean reversion speed (λ).
-    4. Validate λ: If λ >= 0, the process is not mean-reverting (explosive or random walk),
-        and the function returns None.
-    5. Calculate Half-Life: -ln(2) / λ.
-    6. Calculate lookback window size: window_param * half-life
-    """
-    if beta <= 0:
-        return None
-
-    series = X_slice - beta * Y_slice
-
-    lag = series[:-1]
-    diff = series[1:] - series[:-1]
-
-    cov_matrix = np.cov(lag, diff, ddof=1)
-    var_lag = cov_matrix[0, 0]
-    cov_lag_diff = cov_matrix[0, 1]
-
-    if var_lag == 0:
-        return None
-
-    lam = cov_lag_diff / var_lag
-
-    if lam >= 0:
-        return None
-
-    half_life = -np.log(2) / lam
-
-    window = int(half_life * window_param)
-    if window < valid_window[0] or window > valid_window[1]:
-        return None
-
-    return window
-
-
 def calculate_hurst(
     X_slice: np.ndarray, Y_slice: np.ndarray, beta: float, max_lags: int = 20
 ) -> float:

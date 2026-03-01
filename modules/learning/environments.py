@@ -143,11 +143,11 @@ class PairsTradingEnv(gym.Env):
         ):
             exec_beta = self.position_state.entry_beta
             exec_std = self.position_state.entry_std
-            exec_win = self.position_state.entry_win
         else:
             exec_beta = row["market_beta"]
             exec_std = row["market_std"]
-            exec_win = row["market_win"]
+
+        exec_win = row["window"]
 
         step_pnl, step_fees = TradeExecutor.execute(
             fee_rate=self.result.fee_rate,
@@ -157,7 +157,6 @@ class PairsTradingEnv(gym.Env):
             price_x=price_x,
             price_y=price_y,
             beta=exec_beta,
-            win=exec_win,
             equity=self.equity,
             exec_logger=None,
             std=exec_std,
@@ -196,7 +195,7 @@ class PairsTradingEnv(gym.Env):
             step_fees=step_fees,
             is_bankrupt=is_bankrupt,
             fee_rate=self.fee_rate,
-            market_win=exec_win,
+            win=exec_win,
         )
 
         return self._get_observation(), reward, terminated, truncated, info

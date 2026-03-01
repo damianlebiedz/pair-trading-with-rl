@@ -28,9 +28,5 @@ market:
 
 settings:
   vol_window: 24
-
-  window_min: 48
-  window_max: 336
-
   time_decay_min: 0.5
   time_decay_max: 1.0

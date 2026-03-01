@@ -5,14 +5,11 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
-    PositiveInt,
-    PositiveFloat,
     model_validator,
 )
 from modules.core.enums import (
     Interval,
     BetaHedge,
-    WindowMethod,
     CointType,
     RLModelName,
     ObsSpaceType,
@@ -39,16 +36,8 @@ class Settings(BaseModel):
     vol_window: int = Field(
         gt=0, description="Volatility window size (e.g. 24 = one day in '1h' interval)."
     )
-    window_min: int = Field(gt=0, description="Minimum size of Z-Score window.")
-    window_max: int = Field(gt=0, description="Maximum size of Z-Score window.")
     time_decay_min: float = Field(ge=0, description="Start of Time Decay SL.")
     time_decay_max: float = Field(gt=0, description="End of Time Decay SL.")
-
-    @model_validator(mode="after")
-    def validate_window(self) -> "Settings":
-        if self.window_min > self.window_max:
-            raise ValueError("window_min cannot be greater than window_max")
-        return self
 
     @model_validator(mode="after")
     def validate_time_decay_params(self) -> "Settings":
@@ -95,9 +84,6 @@ class Test(BaseModel):
     beta_start: str = Field(
         description="Lookback window start date for beta calculation."
     )
-    win_start: str = Field(
-        description="Lookback window start date for Z-Score window calculation."
-    )
     start: str = Field(description="Start date for test.")
     end: str = Field(description="End date for test.")
 
@@ -107,8 +93,6 @@ class Test(BaseModel):
             raise ValueError("Test: 'start' date must be before 'end' date.")
         if pd.to_datetime(self.beta_start) >= pd.to_datetime(self.start):
             raise ValueError("Test: 'beta_start' date must be before 'start' date.")
-        if pd.to_datetime(self.win_start) >= pd.to_datetime(self.start):
-            raise ValueError("Test: 'win_start' date must be before 'start' date.")
         return self
 
 
@@ -124,9 +108,6 @@ class Performance(BaseModel):
     beta_hedge: BetaHedge = Field(
         description=f"Hedge ratio mode. Options: {[e.value for e in BetaHedge]}"
     )
-    window_method: WindowMethod = Field(
-        description=f"Z-Score Window mode. Options: {[e.value for e in WindowMethod]}"
-    )
     delayed_entry: bool = Field(description="Delayed entry flag.")
     sl_lock: bool = Field(description="SL lock until mean-reversal flag.")
     time_decay_sl: bool = Field(description="Time Decay SL flag.")
@@ -137,9 +118,6 @@ class Performance(BaseModel):
 class RunBacktest(BaseModel):
     test_start: str = Field(description="Start date for the backtest loop.")
     test_end: str = Field(description="End date for the backtest loop.")
-    win_test_start: str = Field(
-        description="Start date for Z-score OU (Half-Life)-based window calculation."
-    )
 
     performance: Performance
 
@@ -244,8 +222,9 @@ class Config(BaseModel):
 
     tickers: list[str] = Field(description="List of asset tickers.")
     generate_plots: bool = Field(description="Generate plots if true.")
-    fixed_window: PositiveInt | PositiveFloat = Field(
-        description="Fixed lookback window size."
+    z_score_window: int = Field(
+        gt=0,
+        description="Z-Score lookback window size.",
     )
     entry_threshold: float = Field(description="Z-score threshold to open a position.")
     exit_threshold: float = Field(description="Z-score threshold to close a position.")

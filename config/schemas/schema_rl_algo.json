@@ -28,22 +28,22 @@
     "A2CBaseline": {
       "properties": {
         "learning_rate": {
-          "description": "Learning rate for A2C algorithm.",
+          "description": "Step size for the optimizer (learning rate for the A2C policy update).",
           "title": "Learning Rate",
           "type": "number"
         },
         "n_steps": {
-          "description": "Number of A2C steps.",
+          "description": "Number of forward steps to run for each environment before updating the network (typically small for A2C, e.g., 5).",
           "title": "N Steps",
           "type": "integer"
         },
         "gamma": {
-          "description": "Gamma value for A2C algorithm.",
+          "description": "Discount factor for future rewards (between 0 and 1).",
           "title": "Gamma",
           "type": "number"
         },
         "ent_coef": {
-          "description": "Entropy coefficient for A2C algorithm.",
+          "description": "Entropy coefficient for the loss calculation. Higher values encourage more exploration.",
           "title": "Ent Coef",
           "type": "number"
         }
@@ -82,76 +82,42 @@
       "title": "PPOAlgo",
       "type": "object"
     },
-    "PolicyKwargs": {
-      "properties": {
-        "lstm_hidden_size": {
-          "description": "Size of the hidden state in the LSTM cell",
-          "title": "Lstm Hidden Size",
-          "type": "integer"
-        },
-        "n_lstm_layers": {
-          "description": "Number of stacked LSTM layers.",
-          "title": "N Lstm Layers",
-          "type": "integer"
-        },
-        "shared_lstm": {
-          "description": "Use a shared LSTM backbone for both Actor and Critic.",
-          "title": "Shared Lstm",
-          "type": "boolean"
-        },
-        "enable_critic_lstm": {
-          "title": "Enable Critic Lstm",
-          "type": "boolean"
-        }
-      },
-      "required": [
-        "lstm_hidden_size",
-        "n_lstm_layers",
-        "shared_lstm",
-        "enable_critic_lstm"
-      ],
-      "title": "PolicyKwargs",
-      "type": "object"
-    },
     "RecurrentPPO": {
       "properties": {
         "learning_rate": {
-          "description": "Step size for the optimizer (smaller LR is usually better for PPO)",
+          "description": "Step size for the optimizer (learning rate for the PPO policy update). Smaller values often yield more stable PPO training.",
           "title": "Learning Rate",
           "type": "number"
         },
         "n_steps": {
-          "description": "Steps to collect before updating (PPO works better with larger buffers)",
+          "description": "Number of steps to run for each environment per update (PPO usually requires larger buffers than A2C, e.g., 128 or 256).",
           "title": "N Steps",
           "type": "integer"
         },
         "batch_size": {
-          "description": "Number of samples used for each gradient update",
+          "description": "Minibatch size used for each gradient update during the optimization passes.",
           "title": "Batch Size",
           "type": "integer"
         },
         "n_epochs": {
-          "description": "Number of optimization passes over the collected data",
+          "description": "Number of optimization epochs (passes over the collected rollout data) when updating the network.",
           "title": "N Epochs",
           "type": "integer"
         },
         "gamma": {
-          "description": "Discount factor for future rewards",
+          "description": "Discount factor for future rewards (between 0 and 1).",
           "title": "Gamma",
           "type": "number"
         },
         "ent_coef": {
-          "description": "Entropy coefficient to encourage exploration (higher = more random)",
+          "description": "Entropy coefficient for the loss calculation. Higher values encourage more exploration.",
           "title": "Ent Coef",
           "type": "number"
         },
         "clip_range": {
-          "description": "Range for clipping the surrogate objective (ensures stable updates)",
+          "description": "Range for clipping the surrogate objective. Prevents overly large policy updates to ensure stability (typically 0.2).",
           "title": "Clip Range",
           "type": "number"
-        },
-        "policy_kwargs": {
-          "$ref": "#/$defs/PolicyKwargs"
         }
       },
       "required": [
@@ -161,8 +127,7 @@
         "n_epochs",
         "gamma",
         "ent_coef",
-        "clip_range",
-        "policy_kwargs"
+        "clip_range"
       ],
       "title": "RecurrentPPO",
       "type": "object"

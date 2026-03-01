@@ -6,7 +6,7 @@ Below is an automatically generated list of all configuration parameters support
 
 - **`tickers`**: List of asset tickers.
 - **`generate_plots`**: Generate plots if true.
-- **`fixed_window`**: Fixed lookback window size.
+- **`z_score_window`**: Z-Score lookback window size.
 - **`entry_threshold`**: Z-score threshold to open a position.
 - **`exit_threshold`**: Z-score threshold to close a position.
 - **`stop_loss`**: Stop loss multiplier (e.g., 1.05 for 5% from entry_threshold), None if trade without SL.
@@ -14,8 +14,8 @@ Below is an automatically generated list of all configuration parameters support
 - **`settings`**: *No description provided*
 - **`pair_selection`**: *No description provided*
 - **`performance`**: *No description provided*
-- **`rl`**: *No description provided*
-- **`run_backtest`**: *No description provided*
+- **`rl`**: RL config
+- **`run_backtest`**: RunBacktest config
 - **`rl_algo`**: *No description provided*
 - **`wandb`**: *No description provided*
 
@@ -61,7 +61,6 @@ Below is an automatically generated list of all configuration parameters support
 - **`model_name`**: Name of the RL model file in data_rl/models.
 - **`iterations`**: Number of backtest iterations.
 - **`beta_hedge`**: Hedge ratio mode. Options: ['no_hedge', 'static', 'rolling']
-- **`window_method`**: Z-Score Window mode. Options: ['fixed', 'static', 'rolling']
 - **`delayed_entry`**: Delayed entry flag.
 - **`sl_lock`**: SL lock until mean-reversal flag.
 - **`time_decay_sl`**: Time Decay SL flag.
@@ -94,22 +93,17 @@ Below is an automatically generated list of all configuration parameters support
 ### ⚙️ RunBacktest
 - **`test_start`**: Start date for the backtest loop.
 - **`test_end`**: End date for the backtest loop.
-- **`win_test_start`**: Start date for Z-score OU (Half-Life)-based window calculation.
-- **`rl`**: *No description provided*
 - **`performance`**: *No description provided*
 
 
 ### ⚙️ Settings
 - **`vol_window`**: Volatility window size (e.g. 24 = one day in '1h' interval).
-- **`window_min`**: Minimum size of Z-Score window.
-- **`window_max`**: Maximum size of Z-Score window.
 - **`time_decay_min`**: Start of Time Decay SL.
 - **`time_decay_max`**: End of Time Decay SL.
 
 
-### ⚙️ TestParams
+### ⚙️ Test
 - **`beta_start`**: Lookback window start date for beta calculation.
-- **`win_start`**: Lookback window start date for Z-Score window calculation.
 - **`start`**: Start date for test.
 - **`end`**: End date for test.
 

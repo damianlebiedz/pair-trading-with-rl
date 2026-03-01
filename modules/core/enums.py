@@ -7,12 +7,6 @@ class BetaHedge(str, Enum):
     ROLLING = "rolling"
 
 
-class WindowMethod(str, Enum):
-    FIXED = "fixed"
-    STATIC = "static"
-    ROLLING = "rolling"
-
-
 class Interval(str, Enum):
     D1 = "1d"
     H4 = "4h"

@@ -2,10 +2,9 @@ import logging
 import numpy as np
 import pandas as pd
 
-from modules.core.enums import CointType, Source, WindowMethod, BetaHedge
+from modules.core.enums import CointType, Source, BetaHedge
 from modules.core.indicators import (
     calculate_beta,
-    calculate_half_life_window,
     calculate_hurst,
 )
 from modules.core.statistical_tests import (
@@ -21,7 +20,6 @@ class PairSelector:
     def __init__(
         self,
         coint_type: CointType,
-        valid_window: tuple[int, int],
         source: Source = Source.LOG,
     ):
         """
@@ -35,14 +33,12 @@ class PairSelector:
             coint_type: The statistical test used for the cointegration component of the score.
                 - 'eg': Engle-Granger two-step method.
                 - 'johansen': Johansen test.
-            valid_window (tuple(int, int)): Min and max Z-Score window.
             source: Data transformation applied before analysis (default: 'log').
 
         Raises:
             ValueError: If `coint_type` or `beta_method` are not supported.
         """
         self.coint_type = coint_type
-        self.valid_window = valid_window
         self.source = source
 
     def select_pairs(
@@ -51,13 +47,9 @@ class PairSelector:
         ps_start: str,
         ps_end: str,
         beta_test_start: str,
-        win_test_start: str,
         interval: str,
         top_n: int,
         beta_hedge: BetaHedge,
-        window_method: WindowMethod,
-        fixed_window: float,
-        valid_window: tuple[int, int],
     ) -> pd.DataFrame:
         """
         Executes the Pair Selection pipeline using a Composite Score (Ranking & Validation) approach.
@@ -85,8 +77,6 @@ class PairSelector:
         4. **Iterative Validation**:
            Iterates through the top-scored candidates and checks on Validation Data:
            - **Beta Check**: Rejects if Beta <= 0.
-           - **Hurst Check**: Calculates Hurst Exponent on the spread formed by the current Beta.
-             Rejects if Hurst > 0.5 (indicating trending/random walk behavior).
         5. **Final Selection**: Picks the first `top_n` pairs that pass all validation filters.
 
         Returns:
@@ -109,12 +99,8 @@ class PairSelector:
             f"Pre-ranked {len(candidates)} pairs. Validating with Hurst, Beta & Window..."
         )
 
-        min_val_start = min(
-            pd.to_datetime(beta_test_start), pd.to_datetime(win_test_start)
-        ).strftime("%Y-%m-%d")
-
         df_val = load_data(
-            tickers=tickers, start=min_val_start, end=ps_end, interval=interval
+            tickers=tickers, start=beta_test_start, end=ps_end, interval=interval
         )
 
         for col in df_val.columns:
@@ -125,11 +111,6 @@ class PairSelector:
         beta_start_pos = df_val.index.get_indexer([target_beta_date], method="bfill")[0]
         if df_val.index[beta_start_pos] == target_beta_date:
             beta_start_pos += 1
-
-        target_win_date = pd.to_datetime(win_test_start)
-        win_start_pos = df_val.index.get_indexer([target_win_date], method="bfill")[0]
-        if df_val.index[win_start_pos] == target_win_date:
-            win_start_pos += 1
 
         validated_pairs = []
 
@@ -146,9 +127,6 @@ class PairSelector:
 
                 X_vals_beta = X_vals_full[beta_start_pos:]
                 Y_vals_beta = Y_vals_full[beta_start_pos:]
-
-                X_vals_win = X_vals_full[win_start_pos:]
-                Y_vals_win = Y_vals_full[win_start_pos:]
 
                 if beta_hedge != BetaHedge.NO_HEDGE:
                     beta = calculate_beta(X_slice=X_vals_beta, Y_slice=Y_vals_beta)
@@ -169,32 +147,11 @@ class PairSelector:
                     logger.debug(f"Pair {pair} rejected. Hurst {hurst:.3f} > 0.5")
                     continue
 
-                if window_method == WindowMethod.FIXED:
-                    win = (
-                        None
-                        if valid_window[0] > fixed_window
-                        or valid_window[1] < fixed_window
-                        else fixed_window
-                    )
-                else:
-                    win = calculate_half_life_window(
-                        X_slice=X_vals_win,
-                        Y_slice=Y_vals_win,
-                        beta=beta,
-                        valid_window=self.valid_window,
-                        window_param=fixed_window,
-                    )
-
-                if win is None:
-                    logger.debug(f"Pair {pair} rejected. Window = None")
-                    continue
-
                 res_row = row.to_dict()
                 res_row.update(
                     {
                         "validation_beta": beta,
                         "validation_hurst": hurst,
-                        "validation_window": win,
                     }
                 )
                 validated_pairs.append(res_row)

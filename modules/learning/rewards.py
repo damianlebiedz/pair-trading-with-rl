@@ -12,7 +12,7 @@ class RewardScheme(ABC):
         step_fees: float,
         is_bankrupt: bool,
         fee_rate: float,
-        market_win: int,
+        win: int,
     ) -> float:
         pass
 
