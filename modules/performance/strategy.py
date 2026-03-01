@@ -265,7 +265,7 @@ class Strategy:
                 else:
                     slice_x_win = X_vals[i - z_score_window + 1 : i + 1]
                     slice_y_win = Y_vals[i - z_score_window + 1 : i + 1]
-                    spread, market_mean, market_std = calculate_spread_statistics(
+                    spread, mean, market_std = calculate_spread_statistics(
                         X_slice=slice_x_win,
                         Y_slice=slice_y_win,
                         beta=beta,
