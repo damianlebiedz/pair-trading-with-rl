@@ -283,7 +283,8 @@ def generate_comparison_report(strategies_input: dict | list) -> None:
 
                 w_main = 2.0 if current_lev > 1.0 else 1.0
                 w_sub = 1.5 if current_lev > 1.0 else 0.8
-                opac = 1.0
+
+                default_visibility = True if current_lev > 1.0 else "legendonly"
 
                 fig.add_trace(
                     go.Scatter(
@@ -298,9 +299,9 @@ def generate_comparison_report(strategies_input: dict | list) -> None:
                             else None
                         ),
                         line=dict(color=color, width=w_sub, dash="dot"),
-                        opacity=opac,
+                        opacity=1.0,
                         hovertemplate=f"<b>{name} {label_gross}</b>: %{{y:.2%}}<extra></extra>",
-                        visible="legendonly",
+                        visible=default_visibility,
                     )
                 )
                 is_first_trace_for_group = False
@@ -313,9 +314,9 @@ def generate_comparison_report(strategies_input: dict | list) -> None:
                         name=f"{name} - Net ({0.01 * FEE_MULTIPLIER:g}%)",
                         legendgroup=group_name,
                         line=dict(color=color, width=w_sub, dash="dash"),
-                        opacity=opac,
+                        opacity=1.0,
                         hovertemplate=f"<b>{name} {label_net_custom}</b>: %{{y:.2%}}<extra></extra>",
-                        visible="legendonly",
+                        visible=default_visibility,
                     )
                 )
 
@@ -327,9 +328,9 @@ def generate_comparison_report(strategies_input: dict | list) -> None:
                         name=f"{name} - Net (0.01%)",
                         legendgroup=group_name,
                         line=dict(color=color, width=w_main),
-                        opacity=opac,
+                        opacity=1.0,
                         hovertemplate=f"<b>{name} {label_net_base}</b>: %{{y:.2%}}<extra></extra>",
-                        visible=True if current_lev > 1.0 else "legendonly",
+                        visible=default_visibility,
                     )
                 )
 
