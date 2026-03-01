@@ -105,10 +105,10 @@ class Test(BaseModel):
     def validate_dates(self) -> "Test":
         if pd.to_datetime(self.start) >= pd.to_datetime(self.end):
             raise ValueError("Test: 'start' date must be before 'end' date.")
-        if pd.to_datetime(self.beta_start) >= pd.to_datetime(self.end):
-            raise ValueError("Test: 'beta_start' date must be before 'end' date.")
-        if pd.to_datetime(self.win_start) >= pd.to_datetime(self.end):
-            raise ValueError("Test: 'win_start' date must be before 'end' date.")
+        if pd.to_datetime(self.beta_start) >= pd.to_datetime(self.start):
+            raise ValueError("Test: 'beta_start' date must be before 'start' date.")
+        if pd.to_datetime(self.win_start) >= pd.to_datetime(self.start):
+            raise ValueError("Test: 'win_start' date must be before 'start' date.")
         return self
 
 
@@ -141,7 +141,6 @@ class RunBacktest(BaseModel):
         description="Start date for Z-score OU (Half-Life)-based window calculation."
     )
 
-    rl: RL
     performance: Performance
 
 
