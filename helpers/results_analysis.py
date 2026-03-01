@@ -92,32 +92,43 @@ def parse_results():
                         return row[col_type].iloc[0]
                     return None
 
-                categories[category_name].append({
-                    "Run_ID": run_dir.name,
-                    "Beta Hedge": beta_hedge,
-                    "Window Method": window_method,
-                    "Fixed Window": fixed_window,
-                    "Entry": entry,
-                    "Exit": exit_t,
-                    "SL": stop_loss,
-                    "Total Trades": int((get_metric("win_count", "net") or 0) + (get_metric("lose_count", "net") or 0)),
-                    "Sortino Annual Net": get_metric("sortino_ratio_annual", "net"),
-                    "Sortino Annual Gross": get_metric("sortino_ratio_annual", "gross"),
-                    "CAGR Net": get_metric("cagr", "net"),
-                    "CAGR Gross": get_metric("cagr", "gross"),
-                    "Vol Annual Net": get_metric("volatility_annual", "net"),
-                    "Max DD Net": get_metric("max_drawdown", "net"),
-                })
+                categories[category_name].append(
+                    {
+                        "Run_ID": run_dir.name,
+                        "Beta Hedge": beta_hedge,
+                        "Window Method": window_method,
+                        "Fixed Window": fixed_window,
+                        "Entry": entry,
+                        "Exit": exit_t,
+                        "SL": stop_loss,
+                        "Total Trades": int(
+                            (get_metric("win_count", "net") or 0)
+                            + (get_metric("lose_count", "net") or 0)
+                        ),
+                        "Sortino Annual Net": get_metric("sortino_ratio_annual", "net"),
+                        "Sortino Annual Gross": get_metric(
+                            "sortino_ratio_annual", "gross"
+                        ),
+                        "CAGR Net": get_metric("cagr", "net"),
+                        "CAGR Gross": get_metric("cagr", "gross"),
+                        "Vol Annual Net": get_metric("volatility_annual", "net"),
+                        "Max DD Net": get_metric("max_drawdown", "net"),
+                    }
+                )
 
             except Exception as e:
-                print(f"Error processing stats for {run_dir.name} in {category_name}: {e}")
+                print(
+                    f"Error processing stats for {run_dir.name} in {category_name}: {e}"
+                )
 
     summary_dfs = {}
     for category_name, results_list in categories.items():
         if not results_list:
             continue
         df_summary = pd.DataFrame(results_list)
-        df_summary = df_summary.sort_values(by="Sortino Annual Net", ascending=False).reset_index(drop=True)
+        df_summary = df_summary.sort_values(
+            by="Sortino Annual Net", ascending=False
+        ).reset_index(drop=True)
         summary_dfs[category_name] = df_summary
 
     return summary_dfs, results_dir
