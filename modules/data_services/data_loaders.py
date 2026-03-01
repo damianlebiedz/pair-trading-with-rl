@@ -57,21 +57,6 @@ def load_data(
     return data
 
 
-def load_pair(
-    x: str, y: str, start: str, end: str, interval: str, data_dir: str = "data"
-) -> pd.DataFrame:
+def load_pair(x: str, y: str, *args, **kwargs) -> pd.DataFrame:
     """Load data for a single pair and return as DataFrame."""
-    base_dir = get_project_root() / data_dir
-
-    df_x = load_single_ticker(x, start, end, interval, base_dir)
-    df_y = load_single_ticker(y, start, end, interval, base_dir)
-
-    data = pd.concat([df_x, df_y], axis=1)
-    data = data[(data.index > start) & (data.index <= end)]
-
-    if data.empty:
-        raise ValueError(
-            f"No data available for tickers {[x, y]} in range {start} to {end}"
-        )
-
-    return data
+    return load_data([x, y], *args, **kwargs)

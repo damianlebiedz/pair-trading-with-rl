@@ -1,3 +1,5 @@
+# yaml-language-server: $schema=schemas/schema.json
+
 defaults:
   - override hydra/job_logging: none
 
@@ -11,7 +13,7 @@ hydra:
 
 wandb:
   project: "research-paper"
-  mode: "online"
+  mode: online
 
 tickers: [ "BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT", "ADAUSDT", "AVAXUSDT", "DOGEUSDT", "TRXUSDT",
            "DOTUSDT", "LINKUSDT", "SHIBUSDT", "LTCUSDT", "BCHUSDT", "UNIUSDT", "XLMUSDT", "ATOMUSDT", "ICPUSDT",
@@ -22,4 +24,13 @@ market:
   initial_cash: 100000
   fee_rate: 0.001
   risk_free_rate_annual: 0.00
-  interval: "1h"
+  interval: 1h
+
+settings:
+  vol_window: 24
+
+  window_min: 48
+  window_max: 336
+
+  time_decay_min: 0.5
+  time_decay_max: 1.0

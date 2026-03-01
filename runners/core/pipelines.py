@@ -4,9 +4,10 @@ import sys
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 import pandas as pd
 
+from modules.core.enums import CointType, WindowMethod, BetaHedge
 from modules.performance.models import StrategyResult
 from modules.data_services.data_utils import (
     save_strategy_result,
@@ -15,12 +16,10 @@ from modules.data_services.data_utils import (
     load_strategy_result,
     load_ewp_benchmark,
 )
-from modules.performance.multi_pair_optimizer import MultiPairOptimizer
 from modules.data_services.merge_utils import (
     aggregate_strategy_results,
     stitch_strategy_results,
 )
-from modules.performance.objectives import SortinoWithPenalty
 from modules.performance.pair_selector import PairSelector
 from modules.performance.stats import calculate_stats
 from modules.performance.strategy import Strategy
@@ -166,15 +165,15 @@ def execute_pair_selection(
     interval: str,
     top_n_factor: float,
     output_dir: str,
-    coint_type: Literal["eg", "johansen"],
-    beta_method: Literal["ols", "kalman"],
+    coint_type: CointType,
+    beta_hedge: BetaHedge,
+    window_method: WindowMethod,
+    fixed_window: int | float,
     valid_window: tuple[int, int],
 ) -> pd.DataFrame:
     logger.info("Starting Pair Selection Pipeline.")
 
-    selector = PairSelector(
-        coint_type=coint_type, beta_method=beta_method, valid_window=valid_window
-    )
+    selector = PairSelector(coint_type=coint_type, valid_window=valid_window)
 
     final_df = selector.select_pairs(
         tickers=tickers,
@@ -183,6 +182,10 @@ def execute_pair_selection(
         test_win_start=test_win_start,
         interval=interval,
         top_n=top_n_factor,
+        beta_hedge=beta_hedge,
+        window_method=window_method,
+        fixed_window=fixed_window,
+        valid_window=valid_window,
     )
 
     if final_df.empty:
@@ -198,61 +201,6 @@ def execute_pair_selection(
     logger.info(f"Pair Selection completed. Saved {len(final_df)} pairs.")
 
     return final_df
-
-
-def execute_multi_pair_optimization(
-    strategies: list[Strategy],
-    static_params: dict[str, Any],
-    param_space: list[Any],
-    metric_type: Literal["gross", "net"],
-    objective_func: Literal["sortino"],
-    opt_start: str,
-    opt_end: str,
-    opt_win_start: str,
-    penalty_bad: float,
-    n_iter: int,
-    interval: str,
-    risk_free_rate_annual: float,
-    min_trades_per_pair: int,
-    initial_cash: float,
-) -> dict[str, Any]:
-    logger.info(f"Starting Multi-Pair Optimization on {len(strategies)} pairs...")
-
-    if objective_func not in ["sortino"]:
-        raise ValueError("objective_func should be 'sortino'")
-
-    if objective_func == "sortino":
-        objective_func = SortinoWithPenalty(
-            min_trades_per_pair=min_trades_per_pair,
-            penalty_bad=penalty_bad,
-        )
-
-    optimizer = MultiPairOptimizer(
-        strategies=strategies,
-        opt_start=opt_start,
-        opt_end=opt_end,
-        opt_win_start=opt_win_start,
-        penalty_bad=penalty_bad,
-        n_iter=n_iter,
-        interval=interval,
-        risk_free_rate_annual=risk_free_rate_annual,
-        min_trades_per_pair=min_trades_per_pair,
-        initial_cash=initial_cash,
-        number_of_pairs=len(strategies),
-    )
-
-    best_params, best_score = optimizer.run(
-        static_params=static_params,
-        param_space=param_space,
-        metric_type=metric_type,
-        objective_func=objective_func,
-    )
-
-    best_params.update(static_params)
-    log = (best_params, best_score)
-    logger.info(log)
-
-    return best_params
 
 
 def merge_multi_pair_results(

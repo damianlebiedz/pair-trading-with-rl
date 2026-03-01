@@ -1,7 +1,6 @@
 import logging
 import os
 from datetime import datetime
-from typing import Literal
 
 from dateutil.relativedelta import relativedelta
 from sb3_contrib import RecurrentPPO
@@ -11,6 +10,7 @@ from omegaconf import DictConfig, OmegaConf
 from hydra.core.hydra_config import HydraConfig
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 
+from modules.core.enums import ObsSpaceType, RLModelName
 from modules.learning.environments import MockEnv
 
 logger = logging.getLogger(__name__)
@@ -33,7 +33,7 @@ def save_hydra_config_snapshot(cfg: DictConfig, root_dir: str) -> None:
         logger.warning("HydraConfig not initialized")
 
 
-def generate_date_lists(initial_config, n):
+def generate_date_lists(initial_config: dict, n: int) -> dict:
     generated_lists = {}
 
     for name, start_date_str in initial_config.items():
@@ -53,7 +53,7 @@ def generate_date_lists(initial_config, n):
 def load_model(
     model_path: str,
     vec_normalize_path: str,
-    obs_space_type: Literal["full", "standard", "minimal"],
+    obs_space_type: ObsSpaceType,
     device: str = "cpu",
 ) -> tuple[BaseAlgorithm, VecNormalize | None]:
     filename = os.path.basename(model_path).lower()
@@ -68,9 +68,9 @@ def load_model(
     else:
         logger.warning("VecNormalize file not found")
 
-    if "recurrent_ppo" in filename:
+    if RLModelName.RECURRENT_PPO in filename:
         model = RecurrentPPO.load(model_path, device=device)
-    elif "a2c_baseline" in filename:
+    elif RLModelName.A2C_BASELINE in filename:
         model = A2C.load(model_path, device=device)
     else:
         raise ValueError(f"Unsupported model: {model_path}")

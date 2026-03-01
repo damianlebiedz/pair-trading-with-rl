@@ -2,9 +2,11 @@ import logging
 import os
 import hydra
 import pandas as pd
-from omegaconf import DictConfig
-from skopt.space import Real, Integer
+from omegaconf import DictConfig, OmegaConf
 
+from modules.core.enums import ObsSpaceType
+from modules.core.config import Config
+from modules.learning.agents import RLAgentAdapter
 from modules.performance.models import StrategyResult
 from modules.data_services.data_loaders import load_data
 from modules.data_services.data_utils import save_dataframe, save_strategy_result
@@ -14,29 +16,39 @@ from runners.core.pipelines import (
     execute_testing,
     setup_run_environment,
     merge_multi_pair_results,
-    execute_multi_pair_optimization,
     merge_multi_period_results,
+    setup_rl_run_environment,
 )
-from runners.core.utils import generate_date_lists, save_hydra_config_snapshot
+from runners.core.utils import (
+    generate_date_lists,
+    load_model,
+    save_hydra_config_snapshot,
+)
 
 logger = logging.getLogger(__name__)
 
 
-@hydra.main(
-    version_base=None, config_path="../config", config_name="opt_and_test_multi"
-)
-def opt_and_test_multi(cfg: DictConfig):
+@hydra.main(version_base=None, config_path="../config", config_name="backtest")
+def run_backtest(cfg: DictConfig):
+    cfg = Config(**OmegaConf.to_container(cfg, resolve=True))
+
     root = setup_run_environment(__file__)
     save_hydra_config_snapshot(cfg=cfg, root_dir=root)
 
-    static_params = {}
+    best_params = {
+        "fixed_window": cfg.fixed_window,
+        "entry_threshold": cfg.entry_threshold,
+        "exit_threshold": cfg.exit_threshold,
+        "stop_loss": cfg.stop_loss,
+    }
+
+    rl_output_dir = None
+    if cfg.performance.use_rl:
+        rl_output_dir = setup_rl_run_environment(__file__)
 
     config = {
         "pair_selection_start": cfg.pair_selection.start,
         "pair_selection_end": cfg.pair_selection.end,
-        "opt_win_start": cfg.performance.optimization.win_start,
-        "opt_start": cfg.performance.optimization.start,
-        "opt_end": cfg.performance.optimization.end,
         "test_win_start": cfg.performance.test.win_start,
         "test_start": cfg.performance.test.start,
         "test_end": cfg.performance.test.end,
@@ -56,35 +68,6 @@ def opt_and_test_multi(cfg: DictConfig):
 
         logger.info(f"--- Running Iteration {i+1} ---")
 
-        param_space = [
-            Real(
-                cfg.performance.optimization.entry_threshold_min,
-                cfg.performance.optimization.entry_threshold_max,
-                name="entry_threshold",
-            ),
-            Real(
-                cfg.performance.optimization.exit_threshold_min,
-                cfg.performance.optimization.exit_threshold_max,
-                name="exit_threshold",
-            ),
-            Real(
-                cfg.performance.optimization.stop_loss_min,
-                cfg.performance.optimization.stop_loss_max,
-                name="stop_loss",
-            ),
-        ]
-
-        if cfg.performance.window_method == "fixed":
-            param_space.append(
-                Integer(
-                    cfg.performance.window_min,
-                    cfg.performance.window_max,
-                    name="fixed_window",
-                ),
-            )
-        else:
-            static_params["fixed_window"] = None
-
         ps_df = execute_pair_selection(
             tickers=cfg.tickers,
             ps_start=lists["pair_selection_start_list"][i],
@@ -94,8 +77,10 @@ def opt_and_test_multi(cfg: DictConfig):
             top_n_factor=cfg.pair_selection.top_n_factor,
             output_dir=output_dir,
             coint_type=cfg.pair_selection.coint_type,
-            beta_method=cfg.performance.beta_method,
-            valid_window=(cfg.performance.window_min, cfg.performance.window_max),
+            beta_hedge=cfg.performance.beta_hedge,
+            window_method=cfg.performance.window_method,
+            fixed_window=best_params["fixed_window"],
+            valid_window=(cfg.settings.window_min, cfg.settings.window_max),
         )
 
         logger.info("\n%s", ps_df.to_string())
@@ -156,75 +141,96 @@ def opt_and_test_multi(cfg: DictConfig):
         strategies = []
         strategies_map = {}
 
+        agent = None
+        if cfg.performance.use_rl:
+            valid_spaces = ObsSpaceType
+            obs_space_type = next(
+                (
+                    space
+                    for space in valid_spaces
+                    if f"_{space}_" in cfg.performance.model_name
+                ),
+                None,
+            )
+
+            if not obs_space_type:
+                raise ValueError(
+                    f"Error: wrong obs_space_type in model_name: '{cfg.performance.model_name}'. "
+                    f"Must be one of: {valid_spaces}"
+                )
+
+            base_model_path = os.path.join(
+                rl_output_dir, "models", cfg.performance.model_name
+            )
+            model_zip_path = f"{base_model_path}.zip"
+            vec_normalize_path = f"{base_model_path}_normalize.pkl"
+
+            if not os.path.exists(model_zip_path):
+                raise FileNotFoundError(f"Model file not found: {model_zip_path}")
+            if not os.path.exists(vec_normalize_path):
+                raise FileNotFoundError(
+                    f"Vec-Normalize file not found: {vec_normalize_path}"
+                )
+
+            try:
+                model, vec_normalize = load_model(
+                    model_path=base_model_path,
+                    vec_normalize_path=vec_normalize_path,
+                    obs_space_type=obs_space_type,
+                )
+                agent = RLAgentAdapter(
+                    model=model,
+                    vec_normalize=vec_normalize,
+                    training_mode=False,
+                    obs_space_type=obs_space_type,
+                )
+                logger.info("RL Agent loaded successfully.")
+            except Exception as e:
+                logger.error(f"Failed to load RL model: {e}")
+
         for pair_name in selected_pairs_names:
             ticker_x, ticker_y = pair_name.split("-")
 
             bt = Strategy(
                 ticker_x=ticker_x,
                 ticker_y=ticker_y,
-                start=lists["opt_win_start_list"][i],
+                start=lists["test_win_start_list"][i],
                 end=lists["test_end_list"][i],
                 interval=cfg.market.interval,
                 fee_rate=cfg.market.fee_rate,
                 initial_cash=cfg.market.initial_cash / cfg.pair_selection.top_n_factor,
                 risk_free_rate_annual=cfg.market.risk_free_rate_annual,
                 beta_hedge=cfg.performance.beta_hedge,
-                beta_method=cfg.performance.beta_method,
                 window_method=cfg.performance.window_method,
                 delayed_entry=cfg.performance.delayed_entry,
                 sl_lock=cfg.performance.sl_lock,
                 time_decay_sl=cfg.performance.time_decay_sl,
-                valid_window=(cfg.performance.window_min, cfg.performance.window_max),
-                vol_window=cfg.performance.vol_window,
+                time_decay_params=(
+                    cfg.settings.time_decay_min,
+                    cfg.settings.time_decay_max,
+                ),
+                valid_window=(cfg.settings.window_min, cfg.settings.window_max),
+                vol_window=cfg.settings.vol_window,
+                agent=agent,
             )
+
             strategies.append(bt)
             strategies_map[pair_name] = bt
 
-        best_params = execute_multi_pair_optimization(
-            strategies=strategies,
-            static_params=static_params,
-            param_space=param_space,
-            metric_type=cfg.performance.optimization.metric_type,
-            objective_func=cfg.performance.optimization.objective_func,
-            opt_start=lists["opt_start_list"][i],
-            opt_end=lists["opt_end_list"][i],
-            opt_win_start=lists["opt_win_start_list"][i],
-            penalty_bad=cfg.performance.optimization.penalty_bad,
-            n_iter=cfg.performance.optimization.n_iter,
-            interval=cfg.market.interval,
-            risk_free_rate_annual=cfg.market.risk_free_rate_annual,
-            min_trades_per_pair=cfg.performance.min_trades_per_pair,
-            initial_cash=cfg.market.initial_cash,
-        )
-
         test_results = []
-        opt_results = []
 
-        logger.info("--- Running Tests with Optimized Parameters ---")
+        logger.info(f"--- Testing {len(selected_pairs_names)} Pairs ---")
 
         for pair_name in selected_pairs_names:
             ticker_x, ticker_y = pair_name.split("-")
             bt = strategies_map[pair_name]
 
-            logger.info(f"Testing pair: {pair_name}")
+            if bt.agent is not None:
+                bt.agent.reset_agent()
+                logger.debug(f"Agent memory reset for pair {pair_name}")
 
-            logger.debug("--- Starting Test of Optimization ---")
-            result_opt = execute_testing(
-                bt=bt,
-                best_params=best_params,
-                ticker_x=ticker_x,
-                ticker_y=ticker_y,
-                output_dir=output_dir,
-                win_test_start=lists["opt_win_start_list"][i],
-                test_start=lists["opt_start_list"][i],
-                test_end=lists["opt_end_list"][i],
-                subdir="opt",
-                interval=cfg.market.interval,
-                plot=cfg.generate_plots,
-                tickers=tickers,
-            )
+            logger.debug(f"--- Testing pair: {pair_name} ---")
 
-            logger.debug("--- Starting Test ---")
             result_test = execute_testing(
                 bt=bt,
                 best_params=best_params,
@@ -240,22 +246,9 @@ def opt_and_test_multi(cfg: DictConfig):
                 tickers=tickers,
             )
 
-            opt_results.append(result_opt)
             test_results.append(result_test)
 
-        if len(opt_results) > 1 and len(test_results) > 1:
-            merge_multi_pair_results(
-                output_dir=output_dir,
-                results=opt_results,
-                initial_cash=cfg.market.initial_cash,
-                risk_free_rate_annual=cfg.market.risk_free_rate_annual,
-                test_start=lists["test_start_list"][i],
-                test_end=lists["test_end_list"][i],
-                prefix="opt_",
-                interval=cfg.market.interval,
-                plot=cfg.generate_plots,
-                tickers=tickers,
-            )
+        if len(test_results) > 1:
             merge_multi_pair_results(
                 output_dir=output_dir,
                 results=test_results,
@@ -263,7 +256,6 @@ def opt_and_test_multi(cfg: DictConfig):
                 risk_free_rate_annual=cfg.market.risk_free_rate_annual,
                 test_start=lists["test_start_list"][i],
                 test_end=lists["test_end_list"][i],
-                prefix="test_",
                 interval=cfg.market.interval,
                 plot=cfg.generate_plots,
                 tickers=tickers,
@@ -276,18 +268,6 @@ def opt_and_test_multi(cfg: DictConfig):
             ticker_y="pair",
             initial_cash=cfg.market.initial_cash,
             risk_free_rate_annual=cfg.market.risk_free_rate_annual,
-            prefix="opt_",
-            interval=cfg.market.interval,
-            plot=cfg.generate_plots,
-            tickers=tickers,
-        )
-        merge_multi_period_results(
-            output_dir=root,
-            ticker_x="multi",
-            ticker_y="pair",
-            initial_cash=cfg.market.initial_cash,
-            risk_free_rate_annual=cfg.market.risk_free_rate_annual,
-            prefix="test_",
             interval=cfg.market.interval,
             plot=cfg.generate_plots,
             tickers=tickers,
@@ -297,4 +277,4 @@ def opt_and_test_multi(cfg: DictConfig):
 
 
 if __name__ == "__main__":
-    opt_and_test_multi()
+    run_backtest()

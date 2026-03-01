@@ -1,51 +1,30 @@
-from typing import Literal
 import numpy as np
 import pandas as pd
 
+from modules.core.enums import Interval, BetaHedge, WindowMethod, Source
 from modules.core.execution import TradeExecutor
 from modules.core.indicators import (
     calculate_z_score,
     calculate_beta,
     calculate_half_life_window,
     generate_signal,
-    KalmanState,
     calculate_spread_statistics,
     calculate_hurst,
 )
 from modules.data_services.data_loaders import load_pair
 from modules.data_services.data_utils import add_log_prices
+from modules.learning.agents import RLAgentAdapter
 from modules.performance.models import (
     PositionState,
     StrategyResult,
     ExecLogger,
 )
-from modules.learning.agents import RLAgentAdapter
 from modules.performance.stats import calculate_stats
 from modules.learning.models import AgentState
 
 
 class Strategy:
-    """
-    Main class for Strategy execution.
-
-    Args:
-        ticker_x (str): Ticker for asset X.
-        ticker_y (str): Ticker for asset Y.
-        start (str): Data start date.
-        end (str): Data end date.
-        interval (str): Data timeframe.
-        fee_rate (float): Transaction fee rate (e.g., 0.001 for 0.1%).
-        initial_cash (float): Starting capital (the same for every trade).
-        risk_free_rate_annual (float): Annual risk-free rate.
-        beta_hedge (str): Hedge ratio mode: "static", "rolling", or "no_hedge".
-        beta_method (str): Beta calculation method: "ols" or "kalman".
-        delayed_entry (bool): Delayed execution or standard one.
-        time_decay_sl (bool): Time Decay SL: if true, SL decay will start from 0.5 * window and be equal to exit threshold at window size.
-        agent (RLAgentAdapter): RL Agent, if None - trade without agent, otherwise - use agent's actions.
-        vol_window (int): Volatility window size. Default = 24 (one day in '1h' interval).
-        valid_window (tuple(int, int)): Min and max Z-Score window.
-        source (str): Type of prices. Default = "log".
-    """
+    """Main class for Strategy execution."""
 
     def __init__(
         self,
@@ -53,20 +32,20 @@ class Strategy:
         ticker_y: str,
         start: str,
         end: str,
-        interval: Literal["1d", "4h", "1h", "30m", "15m", "5m", "3m", "1m"],
+        interval: Interval,
         fee_rate: float,
         initial_cash: float,
         risk_free_rate_annual: float,
-        beta_hedge: Literal["static", "rolling", "no_hedge"],
-        beta_method: Literal["ols", "kalman"],
-        window_method: Literal["fixed", "static", "rolling"],
+        beta_hedge: BetaHedge,
+        window_method: WindowMethod,
         delayed_entry: bool,
         sl_lock: bool,
         vol_window: int,
         valid_window: tuple[int, int],
         time_decay_sl: bool,
+        time_decay_params: tuple[int, int],
         agent: RLAgentAdapter | None = None,
-        source: str = "log",
+        source: Source = Source.LOG,
     ):
         self.ticker_x = ticker_x
         self.ticker_y = ticker_y
@@ -77,34 +56,22 @@ class Strategy:
         self.initial_cash = initial_cash
         self.risk_free_rate_annual = risk_free_rate_annual
         self.beta_hedge = beta_hedge
-        self.beta_method = beta_method
         self.window_method = window_method
         self.delayed_entry = delayed_entry
         self.sl_lock = sl_lock
         self.time_decay_sl = time_decay_sl
+        self.time_decay_params = time_decay_params
         self.agent = agent
         self.vol_window = vol_window
         self.valid_window = valid_window
         self.source = source
 
-        if beta_hedge not in ["static", "rolling", "no_hedge"]:
-            raise ValueError(
-                "Invalid beta_hedge: should be 'static', 'rolling', or 'no_hedge'"
-            )
-
-        if beta_method not in ["ols", "kalman"]:
-            raise ValueError("Invalid beta_method: should be 'ols' or 'kalman'")
-
-        if window_method not in ["fixed", "static", "rolling"]:
-            raise ValueError(
-                "Invalid window_method: should be 'fixed' or 'static' or 'rolling'"
-            )
-
-        if valid_window[0] > valid_window[1]:
-            raise ValueError(f"'valid_window' should be (min, max): {valid_window}")
-
         self.data = load_pair(
-            x=ticker_x, y=ticker_y, start=start, end=end, interval=interval
+            x=self.ticker_x,
+            y=self.ticker_y,
+            start=self.start,
+            end=self.end,
+            interval=self.interval,
         )
 
         add_log_prices(self.data, self.ticker_x, self.ticker_y)
@@ -117,7 +84,7 @@ class Strategy:
         exit_threshold: float | None,
         test_start: str,
         test_end: str,
-        fixed_window: int | None,
+        fixed_window: int | float,
         win_test_start: str,
         stop_loss: float | None,
     ) -> pd.DataFrame:
@@ -137,17 +104,6 @@ class Strategy:
         Note:
             - Z-Score window is calculated with the current close included. More in research paper.
 
-        Args:
-            df (pd.DataFrame): DataFrame containing price data (columns must match ticker names).
-            initial_cash (float): Starting capital for the simulation.
-            entry_threshold (float | None): Z-score threshold for entering positions (long/short spread).
-            exit_threshold (float | None): Z-score threshold for exiting positions (reversion to mean).
-            test_start (str): Start date string (YYYY-MM-DD) for the backtest loop.
-            test_end (str): End date string (YYYY-MM-DD) for the backtest loop.
-            fixed_window (int | None): Parameter determining the lookback window size for 'fixed' window method.
-            win_test_start (str): Start date for data used to calculate the initial window/beta.
-            stop_loss (float | None): Stop-loss distance from entry threshold. None to disable.
-
         Returns:
             tuple[pd.DataFrame, pd.DataFrame]:
                 1. Strategy DataFrame: Time-series data containing price, equity curve,
@@ -155,19 +111,12 @@ class Strategy:
                 2. Execution Logger DataFrame: Detailed record of individual trades (entries/exits),
                    fees and execution prices.
         """
-        if self.window_method == "fixed" and fixed_window is None:
-            raise ValueError(
-                "'fixed_window' should be integer when 'window_method' is 'fixed'"
-            )
-
         df = df.copy()
 
         x_col = self.ticker_x
         y_col = self.ticker_y
         source_x_col = f"{x_col}_{self.source}"
         source_y_col = f"{y_col}_{self.source}"
-
-        beta_method = self.beta_method
 
         test_start_pos = df.index.get_indexer(
             [pd.to_datetime(test_start)], method="bfill"
@@ -186,50 +135,44 @@ class Strategy:
         N = len(df)
         lookback_len = test_start_pos - win_start_pos + 1
 
+        if lookback_len < 1:
+            raise ValueError(
+                f"'win_start_pos' cannot be bigger than 'test_start_pos': {win_start_pos} > {test_start_pos}"
+            )
+
         if self.beta_hedge == "no_hedge":
             market_beta = 1.0
         else:
             slice_x_warmup = X_vals[win_start_pos : test_start_pos + 1]
             slice_y_warmup = Y_vals[win_start_pos : test_start_pos + 1]
-
             market_beta = calculate_beta(
                 X_slice=slice_x_warmup,
                 Y_slice=slice_y_warmup,
-                beta_method=beta_method,
-            )
-
-        kf_state = None
-        if self.beta_method == "kalman" and self.beta_hedge == "rolling":
-            kf_state = KalmanState()
-            warmup_data = df.iloc[win_start_pos : test_start_pos + 1]
-            for i in range(len(warmup_data)):
-                obs_x = warmup_data[source_y_col].iloc[i]
-                obs_y = warmup_data[source_x_col].iloc[i]
-                kf_state.update(obs_x, obs_y)
-
-        if self.window_method == "fixed":
-            market_win = fixed_window
-        else:
-            slice_x_warmup = X_vals[win_start_pos : test_start_pos + 1]
-            slice_y_warmup = Y_vals[win_start_pos : test_start_pos + 1]
-            market_win = calculate_half_life_window(
-                slice_x_warmup, slice_y_warmup, market_beta, self.valid_window
             )
 
         precalc_ols_beta = np.zeros(N)
-        if self.beta_method == "ols" and self.beta_hedge == "rolling":
+        if self.beta_hedge == "rolling":
             cov = pd.Series(X_vals).rolling(lookback_len).cov(pd.Series(Y_vals))
             var = pd.Series(Y_vals).rolling(lookback_len).var()
             precalc_ols_beta = np.nan_to_num((cov / var).values, nan=0.0)
 
-        precalc_kalman_beta = np.zeros(N)
-        if self.beta_method == "kalman" and self.beta_hedge == "rolling":
-            temp_kf = KalmanState()
-            temp_kf.state_mean = np.copy(kf_state.state_mean)
-            temp_kf.state_cov = np.copy(kf_state.state_cov)
-            precalc_kalman_beta[test_start_pos] = market_beta
-            for i in range(test_start_pos + 1, N):
-                precalc_kalman_beta[i] = temp_kf.update(Y_vals[i], X_vals[i])
+        if self.window_method == "fixed":
+            market_win = (
+                None
+                if self.valid_window[0] > fixed_window
+                or self.valid_window[1] < fixed_window
+                else fixed_window
+            )
+        else:
+            slice_x_warmup = X_vals[win_start_pos : test_start_pos + 1]
+            slice_y_warmup = Y_vals[win_start_pos : test_start_pos + 1]
+            market_win = calculate_half_life_window(
+                X_slice=slice_x_warmup,
+                Y_slice=slice_y_warmup,
+                beta=market_beta,
+                valid_window=self.valid_window,
+                window_param=fixed_window,
+            )
 
         precalc_win_free = np.full(N, None, dtype=object)
         precalc_hurst_free = np.full(N, 0.5)
@@ -239,11 +182,7 @@ class Strategy:
         elif self.beta_hedge == "static":
             base_beta_arr = np.full(N, market_beta)
         else:
-            base_beta_arr = (
-                precalc_kalman_beta
-                if self.beta_method == "kalman"
-                else precalc_ols_beta
-            )
+            base_beta_arr = precalc_ols_beta
 
         for i in range(test_start_pos, N):
             b = base_beta_arr[i]
@@ -252,9 +191,15 @@ class Strategy:
 
             if self.window_method == "rolling":
                 precalc_win_free[i] = calculate_half_life_window(
-                    slice_x, slice_y, b, self.valid_window
+                    X_slice=slice_x,
+                    Y_slice=slice_y,
+                    beta=b,
+                    valid_window=self.valid_window,
+                    window_param=fixed_window,
                 )
-            precalc_hurst_free[i] = calculate_hurst(slice_x, slice_y, b)
+            precalc_hurst_free[i] = calculate_hurst(
+                X_slice=slice_x, Y_slice=slice_y, beta=b
+            )
 
         df[f"ret_{self.ticker_x}"] = df[source_x_col].diff().fillna(0.0)
         df[f"ret_{self.ticker_y}"] = df[source_y_col].diff().fillna(0.0)
@@ -310,21 +255,11 @@ class Strategy:
                 drawdown_pct = -1.0
                 signal = 0
             else:
-                if self.beta_hedge == "rolling" and i != test_start_pos:
-                    if self.beta_method == "kalman":
-                        market_beta = precalc_kalman_beta[i]
-                    elif self.beta_method == "ols":
-                        market_beta = precalc_ols_beta[i]
+                if self.beta_hedge == "rolling":
+                    market_beta = base_beta_arr[i]
 
-                if self.window_method == "rolling" and i != test_start_pos:
-                    if self.beta_method in ["kalman", "ols"]:
-                        market_win = precalc_win_free[i]
-                    else:
-                        slice_x = X_vals[i - lookback_len + 1 : i + 1]
-                        slice_y = Y_vals[i - lookback_len + 1 : i + 1]
-                        market_win = calculate_half_life_window(
-                            slice_x, slice_y, market_beta, self.valid_window
-                        )
+                if self.window_method == "rolling":
+                    market_win = precalc_win_free[i]
 
                 if (
                     position_state.position != 0
@@ -339,8 +274,8 @@ class Strategy:
                     and win is not None
                     and exit_threshold is not None
                 ):
-                    time_decay_start = 0.5  # TODO: wynieść do cfg
-                    time_decay_end = 1.0
+                    time_decay_start = self.time_decay_params[0]
+                    time_decay_end = self.time_decay_params[1]
 
                     hl_diff = (time_decay_end * win) - (time_decay_start * win)
                     sl_exit_diff = stop_loss_thr - exit_threshold
@@ -574,7 +509,7 @@ class Strategy:
 
     def run_strategy(
         self,
-        fixed_window: int | None,
+        fixed_window: int,
         entry_threshold: float | None,
         exit_threshold: float | None,
         stop_loss: float | None,
@@ -584,15 +519,6 @@ class Strategy:
     ) -> StrategyResult:
         """
         Executes the strategy backtest with specific parameters.
-
-        Args:
-            fixed_window (int | None): Fixed lookback window size.
-            entry_threshold (float | None): Z-score threshold to open a position.
-            exit_threshold (float | None): Z-score threshold to close a position.
-            stop_loss (float | None): Stop loss multiplier (e.g., 1.05 for 5% from entry_threshold), None if trade without SL.
-            test_start (str): Start date for the backtest loop.
-            test_end (str): End date for the backtest loop.
-            win_test_start (str): Start date for Z-score OU (Half-Life)-based window calculation.
 
         Returns:
             StrategyResult: Object containing backtest data, performance statistics and execution logger.

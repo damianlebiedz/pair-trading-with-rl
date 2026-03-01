@@ -1,8 +1,8 @@
 import calendar
-from typing import Literal
 import numpy as np
 import pandas as pd
 
+from modules.core.enums import Interval
 from modules.data_services.data_utils import get_steps
 
 
@@ -10,7 +10,7 @@ def calculate_stats(
     df: pd.DataFrame,
     exec_log_df: pd.DataFrame,
     initial_cash: float,
-    interval: Literal["1d", "4h", "1h", "30m", "15m", "5m", "3m", "1m"],
+    interval: Interval,
     risk_free_rate_annual: float,
 ) -> pd.DataFrame:
     """

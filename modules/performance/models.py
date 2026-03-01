@@ -1,8 +1,6 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
-
 import pandas as pd
-from pydantic import BaseModel, ConfigDict
 
 
 @dataclass(slots=True)
@@ -67,9 +65,9 @@ class PositionState:
         self.entry_std = None
 
 
+@dataclass(slots=True)
 class ExecLogger:
-    def __init__(self):
-        self._logs: list[dict[str, Any]] = []
+    _logs: list[dict[str, Any]] = field(default_factory=list)
 
     def log(
         self,
@@ -105,9 +103,8 @@ class ExecLogger:
         return pd.DataFrame(self._logs)
 
 
-class StrategyResult(BaseModel):
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-
+@dataclass(slots=True)
+class StrategyResult:
     data: pd.DataFrame
     ticker_x: str
     ticker_y: str

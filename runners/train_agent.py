@@ -14,6 +14,8 @@ from stable_baselines3.common.vec_env import VecNormalize
 import os
 from wandb.integration.sb3 import WandbCallback
 
+from modules.core.config import Config
+from modules.core.enums import RLModelName
 from modules.data_services.data_utils import load_strategy_result
 from modules.learning.environments import build_multi_env
 from runners.core.pipelines import setup_rl_run_environment, setup_run_environment
@@ -22,7 +24,7 @@ from runners.core.utils import save_hydra_config_snapshot
 logger = logging.getLogger(__name__)
 load_dotenv()
 
-ALGO_MAP = {"a2c_baseline": A2C, "recurrent_ppo": RecurrentPPO}
+ALGO_MAP = {RLModelName.A2C_BASELINE: A2C, RLModelName.RECURRENT_PPO: RecurrentPPO}
 
 
 class LogEquityCallback(BaseCallback):
@@ -52,6 +54,8 @@ class LogEquityCallback(BaseCallback):
 
 @hydra.main(version_base=None, config_path="../config", config_name="train_agent")
 def train_agent(cfg: DictConfig):
+    cfg = Config(**OmegaConf.to_container(cfg, resolve=True))
+
     root = setup_run_environment(__file__)
     rl_root = setup_rl_run_environment(__file__)
     save_hydra_config_snapshot(cfg=cfg, root_dir=root)
