@@ -50,7 +50,7 @@ def stitch_strategy_results(
     offsets = {col: 0.0 for col in cumulative_cols}
 
     for res in results:
-        df = res.data.copy()
+        df = res.data.dropna(subset=["equity"]).copy()
 
         if "open_time" in df.columns:
             df = df.set_index("open_time")
@@ -119,7 +119,7 @@ def aggregate_strategy_results(
     if not results:
         raise ValueError("No results to aggregate")
 
-    base_df = results[0].data
+    base_df = results[0].data.dropna(subset=["equity"])
     base_index = base_df.index
 
     total_pnl_sum = pd.Series(0.0, index=base_index)
@@ -144,8 +144,10 @@ def aggregate_strategy_results(
             exec_dfs.append(temp_exec_df)
 
     merged_df = pd.DataFrame(index=base_index)
+
     merged_df["total_pnl"] = total_pnl_sum
     merged_df["total_net_pnl"] = net_pnl_sum
+    merged_df["equity"] = initial_cash + merged_df["total_net_pnl"]
     merged_df["total_fees"] = total_fees_sum
     merged_df["in_position"] = position_sum / len(results)
 

@@ -4,7 +4,8 @@ import pandas as pd
 from gymnasium import spaces
 from stable_baselines3.common.monitor import Monitor
 
-from modules.core.enums import ObsSpaceType, RLRewards
+from modules.core.enums import ObsSpaceType, RLRewards, Source
+from modules.core.indicators import calculate_z_score, calculate_spread_statistics
 from modules.performance.models import (
     StrategyResult,
     PositionState,
@@ -53,12 +54,7 @@ class MockEnv(gym.Env):
     def __init__(self, obs_space_type: ObsSpaceType):
         super().__init__()
 
-        if obs_space_type == ObsSpaceType.MINIMAL:
-            obs_shape = (4,)
-        elif obs_space_type == ObsSpaceType.STANDARD:
-            obs_shape = (7,)
-        else:
-            obs_shape = (10,)
+        obs_shape = AgentState.get_obs_shape(obs_space_type)
 
         self.observation_space = spaces.Box(
             low=-np.inf, high=np.inf, shape=obs_shape, dtype=np.float32
@@ -93,12 +89,7 @@ class PairsTradingEnv(gym.Env):
         self.action_space = spaces.Discrete(3)
         self.fee_rate = fee_rate
 
-        if obs_space_type == ObsSpaceType.MINIMAL:
-            obs_shape = (4,)
-        elif obs_space_type == ObsSpaceType.STANDARD:
-            obs_shape = (7,)
-        else:
-            obs_shape = (10,)
+        obs_shape = AgentState.get_obs_shape(obs_space_type)
 
         self.observation_space = spaces.Box(
             low=-np.inf, high=np.inf, shape=obs_shape, dtype=np.float32
@@ -124,7 +115,11 @@ class PairsTradingEnv(gym.Env):
         self._update_state_object()
         self.reward_scheme.reset()
 
-        return self._get_observation(), {}
+        window = int(self.df["window"].dropna().iloc[0])
+        self.current_step = window - 1
+
+        self._update_state_object()
+        return self.state.get_state_arr(self.obs_space_type), {}
 
     def step(self, action):
         self.position_state.prev_position = self.position_state.position
@@ -210,31 +205,59 @@ class PairsTradingEnv(gym.Env):
     def _update_state_object(self):
         row = self.df.iloc[self.current_step]
 
-        market_win = row.get("market_win")
+        window = row.get("window")
         market_z_score = row.get("market_z_score")
-        market_std = row.get("market_std")
         market_beta = row.get("market_beta")
-        market_hurst = row.get("hurst")
+        market_std = row.get("market_std")
+        hurst = row.get("hurst")
         market_vol = row.get("market_vol")
-        position = row.get("position")
+        signal = row.get("position")
+
+        if (
+            self.position_state.position != 0
+            and self.position_state.entry_beta is not None
+        ):
+            start_idx = max(0, self.current_step - window + 1)
+
+            source_x_col = f"{self.result.ticker_x}_{Source.LOG}"
+            source_y_col = f"{self.result.ticker_y}_{Source.LOG}"
+
+            slice_x = (
+                self.df[source_x_col].iloc[start_idx : self.current_step + 1].values
+            )
+            slice_y = (
+                self.df[source_y_col].iloc[start_idx : self.current_step + 1].values
+            )
+
+            spread, mean, current_std = calculate_spread_statistics(
+                X_slice=slice_x, Y_slice=slice_y, beta=self.position_state.entry_beta
+            )
+
+            freeze_std = False  # TODO
+            std = self.position_state.entry_std if freeze_std else current_std
+
+            z_score = calculate_z_score(spread=spread, mean=mean, std=std)
+        else:
+            z_score = market_z_score
 
         time_in_pos = self.position_state.time_in_pos
         norm_time = 0.0
-        if pd.notna(market_win) and market_win > 0:
-            norm_time = time_in_pos / market_win
+        if pd.notna(window) and window > 0:
+            norm_time = time_in_pos / window
 
         drawdown_pct = 0.0
         if self.peak_equity > 0:
             drawdown_pct = (self.peak_equity - self.equity) / self.peak_equity
 
         self.state = AgentState(
-            z_score=float(market_z_score),
-            std=float(market_std),
-            beta=float(market_beta),
-            hurst=float(market_hurst),
-            window=int(market_win),
+            market_z_score=float(market_z_score),
+            z_score=float(z_score),
+            market_beta=market_beta,
+            market_std=float(market_std),
+            hurst=float(hurst),
+            window=int(window),
             position=float(self.position_state.position),
-            signal=float(position),
+            signal=float(signal),
             norm_time_in_pos=float(norm_time),
             drawdown_pct=float(drawdown_pct),
             current_market_vol=float(market_vol),

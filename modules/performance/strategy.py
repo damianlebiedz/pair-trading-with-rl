@@ -41,6 +41,7 @@ class Strategy:
         vol_window: int,
         time_decay_sl: bool,
         time_decay_params: tuple[int, int],
+        freeze_std: bool,
         agent: RLAgentAdapter | None = None,
         source: Source = Source.LOG,
     ):
@@ -59,6 +60,7 @@ class Strategy:
         self.time_decay_params = time_decay_params
         self.agent = agent
         self.vol_window = vol_window
+        self.freeze_std = freeze_std
         self.source = source
 
         self.data = load_pair(
@@ -212,16 +214,11 @@ class Strategy:
             price_y = df[y_col].iloc[i]
             idx = df.index[i]
 
+            z_score = spread = mean = std = None
+            market_z_score = market_spread = market_mean = market_std = None
+            market_hurst = None
+
             if is_bankrupt:
-                z_score, market_z_score, spread, mean, std, market_std, market_hurst = (
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                )
                 total_net_pnl = -initial_cash
                 equity = 0.0
                 drawdown_pct = -1.0
@@ -253,37 +250,48 @@ class Strategy:
                 else:
                     beta = market_beta
 
-                mean = None
-                std = None
-                z_score = None
-                market_z_score = None
-                spread = None
-                market_std = None
-
                 if beta <= 0:
                     pass
                 else:
                     slice_x_win = X_vals[i - z_score_window + 1 : i + 1]
                     slice_y_win = Y_vals[i - z_score_window + 1 : i + 1]
-                    spread, mean, market_std = calculate_spread_statistics(
-                        X_slice=slice_x_win,
-                        Y_slice=slice_y_win,
-                        beta=beta,
+
+                    market_spread, market_mean, market_std = (
+                        calculate_spread_statistics(
+                            X_slice=slice_x_win,
+                            Y_slice=slice_y_win,
+                            beta=market_beta,
+                        )
+                    )
+                    market_z_score = calculate_z_score(
+                        spread=market_spread, mean=market_mean, std=market_std
                     )
 
                     if (
                         position_state.position != 0
-                        and position_state.entry_std is not None
+                        and position_state.entry_beta is not None
                     ):
-                        std = position_state.entry_std
-                        market_z_score = calculate_z_score(
-                            spread=spread, mean=mean, std=market_std
+                        current_spread, current_mean, current_std = (
+                            calculate_spread_statistics(
+                                X_slice=slice_x_win,
+                                Y_slice=slice_y_win,
+                                beta=position_state.entry_beta,
+                            )
                         )
-                    else:
-                        std = market_std
-                        market_z_score = None
 
-                    z_score = calculate_z_score(spread=spread, mean=mean, std=std)
+                        std = position_state.entry_std if self.freeze_std else current_std
+
+                        z_score = calculate_z_score(
+                            spread=current_spread, mean=current_mean, std=std
+                        )
+                        spread = current_spread
+                        mean = current_mean
+
+                    else:
+                        z_score = market_z_score
+                        spread = market_spread
+                        mean = market_mean
+                        std = market_std
 
                 signal = generate_signal(
                     z_score=z_score,
@@ -333,9 +341,10 @@ class Strategy:
 
                 if self.agent:
                     current_state = AgentState(
-                        z_score=market_z_score,
-                        std=market_std,
-                        beta=market_beta,
+                        market_z_score=market_z_score,
+                        z_score=z_score,
+                        market_std=market_std,
+                        market_beta=market_beta,
                         hurst=market_hurst,
                         window=z_score_window,
                         position=position_state.position,
@@ -383,15 +392,17 @@ class Strategy:
                 {
                     "index": idx,
                     "z_score": z_score,
-                    "market_z_score": market_z_score or z_score,
                     "spread": spread,
                     "mean": mean,
-                    "std": position_state.entry_std or market_std,
-                    "market_std": market_std,
-                    "window": z_score_window,
+                    "std": std,
                     "beta": position_state.entry_beta or market_beta,
+                    "market_z_score": market_z_score,
+                    "market_spread": market_spread,
+                    "market_mean": market_mean,
+                    "market_std": market_std,
                     "market_beta": market_beta,
                     "hurst": market_hurst,
+                    "window": z_score_window,
                     "entry_thr": entry_threshold,
                     "exit_thr": exit_threshold,
                     "sl_thr": position_state.sl_thr,
@@ -442,9 +453,12 @@ class Strategy:
             last_processed_idx = results_buffer[-1]["index"]
             last_pos_loc = df.index.get_loc(last_processed_idx)
             final_slice_end = min(last_pos_loc, end_pos)
-            df = df.iloc[test_start_pos : final_slice_end + 1].copy()
+
+            warmup_start = test_start_pos - z_score_window + 1
+            df = df.iloc[warmup_start: final_slice_end + 1].copy()
         else:
-            df = df.iloc[test_start_pos : end_pos + 1].copy()
+            warmup_start = test_start_pos - z_score_window + 1
+            df = df.iloc[warmup_start: end_pos + 1].copy()
 
         exec_log_df = exec_logger.to_df()
         exec_log_df["ticker"] = self.ticker_x + "-" + self.ticker_y
@@ -452,8 +466,6 @@ class Strategy:
         return (
             df.drop(
                 columns=[
-                    source_x_col,
-                    source_y_col,
                     f"ret_{self.ticker_x}",
                     f"ret_{self.ticker_y}",
                     f"vol_{self.ticker_x}",

@@ -18,6 +18,7 @@ def calculate_stats(
     1. Time-series analysis (Sharpe, CAGR, Drawdown etc.) based on the equity curve.
     2. Trade execution analysis (Win Rate, Avg Trade etc.) based on the execution logger.
     """
+    df = df.dropna(subset=["equity"]).copy()
     steps_per_day = get_steps(interval)
 
     if not df.empty:

@@ -111,6 +111,7 @@ class Performance(BaseModel):
     delayed_entry: bool = Field(description="Delayed entry flag.")
     sl_lock: bool = Field(description="SL lock until mean-reversal flag.")
     time_decay_sl: bool = Field(description="Time Decay SL flag.")
+    freeze_std: bool = Field(description="Flag to freeze standard deviation while in-position.")
 
     test: Test
 

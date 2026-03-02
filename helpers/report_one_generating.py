@@ -11,7 +11,7 @@ from modules.core.enums import Interval
 
 # ==========================================
 STRATEGY = {
-    "run_backtest_2026-03-01_19-25-51_c78f35": "Rolling Beta-Hedge",
+    "run_backtest_2026-03-01_21-34-07_caa873": "Rolling Beta-Hedge",
 }
 
 LEVERAGE = 5.0

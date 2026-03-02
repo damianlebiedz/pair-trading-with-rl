@@ -1,14 +1,14 @@
 # yaml-language-server: $schema=schemas/schema.json
 
-z_score_window: 168
-entry_threshold: 3.0
-exit_threshold: 0.0
-stop_loss: 2.0
+z_score_window: 504
+entry_threshold: 3.5
+exit_threshold: 0.5
+stop_loss: 1.5
 
 generate_plots: false
 
 pair_selection:
-  top_n_factor: 20
+  top_n_factor: 10
   coint_type: eg
 
   start: "2023-11-01"
@@ -20,11 +20,13 @@ performance:
 
   iterations: 12
 
-  beta_hedge: rolling
+  beta_hedge: static
 
   delayed_entry: true
   sl_lock: true
   time_decay_sl: true
+
+  freeze_std: true
 
   test:
     beta_start: "2023-12-01"

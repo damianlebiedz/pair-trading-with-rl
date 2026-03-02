@@ -64,6 +64,7 @@ Below is an automatically generated list of all configuration parameters support
 - **`delayed_entry`**: Delayed entry flag.
 - **`sl_lock`**: SL lock until mean-reversal flag.
 - **`time_decay_sl`**: Time Decay SL flag.
+- **`freeze_std`**: Flag to freeze standard deviation while in-position.
 - **`test`**: *No description provided*
 
 
