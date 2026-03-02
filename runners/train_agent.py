@@ -34,16 +34,20 @@ class LogEquityCallback(BaseCallback):
     def _on_step(self) -> bool:
         infos = self.locals.get("infos", [])
         if infos:
-            current_positions = [1 if abs(i.get("position", 0)) > 0.1 else 0 for i in infos]
+            current_positions = [
+                1 if abs(i.get("position", 0)) > 0.1 else 0 for i in infos
+            ]
             portfolio_exposure = np.mean(current_positions)
             avg_equity = np.mean([info.get("equity", 0.0) for info in infos])
 
             if wandb.run is not None:
-                wandb.log({
-                    "portfolio/exposure_pct": portfolio_exposure,
-                    "portfolio/avg_equity": avg_equity,
-                    "global_step": self.num_timesteps,
-                })
+                wandb.log(
+                    {
+                        "portfolio/exposure_pct": portfolio_exposure,
+                        "portfolio/avg_equity": avg_equity,
+                        "global_step": self.num_timesteps,
+                    }
+                )
 
 
 @hydra.main(version_base=None, config_path="../config", config_name="train_agent")

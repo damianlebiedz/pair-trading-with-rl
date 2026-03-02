@@ -279,7 +279,9 @@ class Strategy:
                             )
                         )
 
-                        std = position_state.entry_std if self.freeze_std else current_std
+                        std = (
+                            position_state.entry_std if self.freeze_std else current_std
+                        )
 
                         z_score = calculate_z_score(
                             spread=current_spread, mean=current_mean, std=std
@@ -455,10 +457,10 @@ class Strategy:
             final_slice_end = min(last_pos_loc, end_pos)
 
             warmup_start = test_start_pos - z_score_window + 1
-            df = df.iloc[warmup_start: final_slice_end + 1].copy()
+            df = df.iloc[warmup_start : final_slice_end + 1].copy()
         else:
             warmup_start = test_start_pos - z_score_window + 1
-            df = df.iloc[warmup_start: end_pos + 1].copy()
+            df = df.iloc[warmup_start : end_pos + 1].copy()
 
         exec_log_df = exec_logger.to_df()
         exec_log_df["ticker"] = self.ticker_x + "-" + self.ticker_y
