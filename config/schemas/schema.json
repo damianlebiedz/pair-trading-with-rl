@@ -547,10 +547,17 @@
       "type": "number"
     },
     "stop_loss": {
-      "description": "Stop loss multiplier (e.g., 1.05 for 5% from entry_threshold), None if trade without SL.",
-      "exclusiveMinimum": 1,
-      "title": "Stop Loss",
-      "type": "number"
+      "anyOf": [
+        {
+          "exclusiveMinimum": 1,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Stop loss multiplier (e.g., 1.05 for 5% from entry_threshold), null if trade without SL.",
+      "title": "Stop Loss"
     },
     "market": {
       "$ref": "#/$defs/Market"

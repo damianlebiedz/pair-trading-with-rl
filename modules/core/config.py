@@ -228,9 +228,9 @@ class Config(BaseModel):
     )
     entry_threshold: float = Field(description="Z-score threshold to open a position.")
     exit_threshold: float = Field(description="Z-score threshold to close a position.")
-    stop_loss: float = Field(
+    stop_loss: float | None = Field(
         gt=1,
-        description="Stop loss multiplier (e.g., 1.05 for 5% from entry_threshold), None if trade without SL.",
+        description="Stop loss multiplier (e.g., 1.05 for 5% from entry_threshold), null if trade without SL.",
     )
 
     market: Market

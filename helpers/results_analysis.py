@@ -75,12 +75,13 @@ def parse_results():
                     config = yaml.safe_load(f)
 
                 perf = config.get("performance", {})
+                ps = config.get("pair_selection", {})
 
                 entry = config.get("entry_threshold", "N/A")
                 exit_t = config.get("exit_threshold", "N/A")
                 stop_loss = config.get("stop_loss", "N/A")
                 z_score_window = config.get("z_score_window", "N/A")
-
+                top_n_factor = ps.get("top_n_factor", "N/A")
                 beta_hedge = perf.get("beta_hedge", "N/A")
 
                 stats_df = pd.read_parquet(stats_file)
@@ -94,6 +95,7 @@ def parse_results():
                 categories[category_name].append(
                     {
                         "Run_ID": run_dir.name,
+                        "Pairs": top_n_factor,
                         "Beta Hedge": beta_hedge,
                         "Z-Score Window": z_score_window,
                         "Entry": entry,
