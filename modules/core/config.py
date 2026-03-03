@@ -60,6 +60,9 @@ class RL(BaseModel):
         description="Number of passes per pair during training."
     )
     seed: int = Field(description="Seed for random number generator.")
+    freeze_std: bool = Field(
+        description="Flag to freeze standard deviation while in-position during RL training."
+    )
     verbose: int = Field(description="Verbosity level in training.")
 
 
@@ -112,7 +115,7 @@ class Performance(BaseModel):
     sl_lock: bool = Field(description="SL lock until mean-reversal flag.")
     time_decay_sl: bool = Field(description="Time Decay SL flag.")
     freeze_std: bool = Field(
-        description="Flag to freeze standard deviation while in-position."
+        description="Flag to freeze standard deviation while in-position during backtest."
     )
 
     test: Test
@@ -236,13 +239,31 @@ class Config(BaseModel):
         description="Stop loss multiplier (e.g., 1.05 for 5% from entry_threshold), null if trade without SL.",
     )
 
-    market: Market
-    settings: Settings
-    pair_selection: PairSelection
-    performance: Performance
-    rl: RL | None = Field(default=None, description="RL config")
-    run_backtest: RunBacktest | None = Field(
-        default=None, description="RunBacktest config"
+    market: Market = Field(
+        description="Market simulation parameters including capital, fees, and timeframe."
     )
-    rl_algo: RLAlgoConfig | None = None
-    wandb: Wandb | None = None
+    settings: Settings = Field(
+        description="General strategy parameters, including volatility and time decay bounds."
+    )
+    pair_selection: PairSelection = Field(
+        description="Configuration for statistical tests and top pair filtering."
+    )
+    performance: Performance = Field(
+        description="Trading logic flags, SL types, and backtest execution parameters."
+    )
+    rl: RL | None = Field(
+        default=None,
+        description="Reinforcement Learning environment parameters and training settings."
+    )
+    run_backtest: RunBacktest | None = Field(
+        default=None,
+        description="Execution timeline and explicit settings for the backtest runner."
+    )
+    rl_algo: RLAlgoConfig | None = Field(
+        default=None,
+        description="RL algorithm selection (e.g., A2C, PPO) and its specific hyperparameters."
+    )
+    wandb: Wandb | None = Field(
+        default=None,
+        description="Weights & Biases configuration for experiment tracking and logging."
+    )
