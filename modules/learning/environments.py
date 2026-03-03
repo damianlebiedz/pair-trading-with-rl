@@ -21,6 +21,7 @@ def build_multi_env(
     rl_reward: str,
     obs_space_type: ObsSpaceType,
     fee_rate: float,
+    freeze_std: bool,
     seed: int = None,
 ) -> DummyVecEnv:
     env_fns = []
@@ -38,6 +39,7 @@ def build_multi_env(
                 reward_scheme=reward_schema,
                 obs_space_type=obs_space_type,
                 fee_rate=fee_rate,
+                freeze_std=freeze_std,
             )
             return Monitor(env)
 
@@ -80,6 +82,7 @@ class PairsTradingEnv(gym.Env):
         reward_scheme: RewardScheme,
         obs_space_type: ObsSpaceType,
         fee_rate: float,
+        freeze_std: bool,
     ):
         super(PairsTradingEnv, self).__init__()
 
@@ -88,6 +91,7 @@ class PairsTradingEnv(gym.Env):
         self.position_state = PositionState()
         self.action_space = spaces.Discrete(3)
         self.fee_rate = fee_rate
+        self.freeze_std = freeze_std
 
         obs_shape = AgentState.get_obs_shape(obs_space_type)
 
@@ -105,6 +109,14 @@ class PairsTradingEnv(gym.Env):
         self.reward_scheme = reward_scheme
         self.obs_space_type = obs_space_type
 
+        self.ep_trades = 0
+        self.ep_wins = 0
+        self.ep_total_hold_time = 0
+        self.ep_total_fees = 0.0
+
+        self.current_trade_net_pnl = 0.0
+        self.current_trade_duration = 0
+
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
 
@@ -115,10 +127,18 @@ class PairsTradingEnv(gym.Env):
         self._update_state_object()
         self.reward_scheme.reset()
 
+        self.ep_trades = 0
+        self.ep_wins = 0
+        self.ep_total_hold_time = 0
+        self.ep_total_fees = 0.0
+        self.current_trade_net_pnl = 0.0
+        self.current_trade_duration = 0
+
         window = int(self.df["window"].dropna().iloc[0])
         self.current_step = window - 1
 
         self._update_state_object()
+
         return self.state.get_state_arr(self.obs_space_type), {}
 
     def step(self, action):
@@ -137,7 +157,21 @@ class PairsTradingEnv(gym.Env):
             and self.position_state.entry_beta is not None
         ):
             exec_beta = self.position_state.entry_beta
-            exec_std = self.position_state.entry_std
+
+            exec_win = int(row["window"])
+            start_idx = max(0, self.current_step - exec_win + 1)
+
+            source_x_col = f"{self.result.ticker_x}_{Source.LOG}"
+            source_y_col = f"{self.result.ticker_y}_{Source.LOG}"
+
+            slice_x = self.df[source_x_col].iloc[start_idx: self.current_step + 1].values
+            slice_y = self.df[source_y_col].iloc[start_idx: self.current_step + 1].values
+
+            _, _, current_std = calculate_spread_statistics(
+                X_slice=slice_x, Y_slice=slice_y, beta=exec_beta
+            )
+
+            exec_std = self.position_state.entry_std if self.freeze_std else current_std
         else:
             exec_beta = row["market_beta"]
             exec_std = row["market_std"]
@@ -161,6 +195,28 @@ class PairsTradingEnv(gym.Env):
         self.equity += step_pnl - step_fees
         self.peak_equity = max(self.peak_equity, self.equity)
 
+        prev_pos = self.position_state.prev_position
+        curr_pos = self.position_state.position
+
+        self.ep_total_fees += step_fees
+
+        if prev_pos != 0 or curr_pos != 0:
+            self.current_trade_net_pnl += step_pnl - step_fees
+
+        if prev_pos != 0:
+            self.current_trade_duration += 1
+
+        trade_ended = (prev_pos != 0) and (curr_pos != prev_pos)
+
+        if trade_ended:
+            self.ep_trades += 1
+            if self.current_trade_net_pnl > 0:
+                self.ep_wins += 1
+            self.ep_total_hold_time += self.current_trade_duration
+
+            self.current_trade_net_pnl = 0.0
+            self.current_trade_duration = 0
+
         self.current_step += 1
 
         is_bankrupt = self.equity <= 0.0
@@ -180,7 +236,15 @@ class PairsTradingEnv(gym.Env):
             "action": target_position,
             "step_fees": step_fees,
             "is_bankrupt": is_bankrupt,
+            "ep_total_fees": self.ep_total_fees,
         }
+
+        if self.ep_trades > 0:
+            info["win_rate"] = self.ep_wins / self.ep_trades
+            info["avg_hold_time"] = self.ep_total_hold_time / self.ep_trades
+        else:
+            info["win_rate"] = 0.0
+            info["avg_hold_time"] = 0.0
 
         reward = self.reward_scheme.calculate(
             step_pnl=step_pnl,
@@ -233,8 +297,7 @@ class PairsTradingEnv(gym.Env):
                 X_slice=slice_x, Y_slice=slice_y, beta=self.position_state.entry_beta
             )
 
-            freeze_std = False  # TODO
-            std = self.position_state.entry_std if freeze_std else current_std
+            std = self.position_state.entry_std if self.freeze_std else current_std
 
             z_score = calculate_z_score(spread=spread, mean=mean, std=std)
         else:

@@ -28,26 +28,50 @@ ALGO_MAP = {RLModelName.A2C_BASELINE: A2C, RLModelName.RECURRENT_PPO: RecurrentP
 
 
 class LogEquityCallback(BaseCallback):
+    """
+    Custom callback for Stable Baselines3 that logs aggregated portfolio statistics to Weights & Biases.
+    Logged metrics (visible in the WandB dashboard):
+
+    - portfolio/avg_equity: Average equity across all environments. The primary indicator of whether the overall strategy is profitable.
+    - portfolio/exposure_pct: Market exposure (from 0.0 to 1.0). Shows what percentage of pairs have an open position at a given step. Values close to 0 indicate the agent is overly cautious (e.g., due to fees), while values close to 1 suggest overtrading.
+    - portfolio/avg_win_rate: Win rate of closed trades. Helps assess whether the agent correctly predicts mean reversion, independent of net profitability.
+    - portfolio/avg_hold_time: Average position holding time (in steps/periods). If extremely low (e.g., 1–2 steps), it indicates the agent is panic-closing positions due to negative PnL immediately after entry (spread/fees).
+    - portfolio/total_fees_paid: Cumulative total fees paid across the entire portfolio. A critical metric for diagnosing “fee drag” — when exchange fees erode strategy profits.
+    """
+
     def __init__(self, verbose=0):
         super(LogEquityCallback, self).__init__(verbose)
 
     def _on_step(self) -> bool:
         infos = self.locals.get("infos", [])
+
         if infos:
+            avg_equity = np.mean([info.get("equity", 0.0) for info in infos])
+
             current_positions = [
                 1 if abs(i.get("position", 0)) > 0.1 else 0 for i in infos
             ]
             portfolio_exposure = np.mean(current_positions)
-            avg_equity = np.mean([info.get("equity", 0.0) for info in infos])
+
+            avg_win_rate = np.mean([info.get("win_rate", 0.0) for info in infos])
+            avg_hold_time = np.mean([info.get("avg_hold_time", 0.0) for info in infos])
+            total_portfolio_fees = np.sum(
+                [info.get("ep_total_fees", 0.0) for info in infos]
+            )
 
             if wandb.run is not None:
                 wandb.log(
                     {
-                        "portfolio/exposure_pct": portfolio_exposure,
                         "portfolio/avg_equity": avg_equity,
+                        "portfolio/exposure_pct": portfolio_exposure,
+                        "portfolio/avg_win_rate": avg_win_rate,
+                        "portfolio/avg_hold_time": avg_hold_time,
+                        "portfolio/total_fees_paid": total_portfolio_fees,
                         "global_step": self.num_timesteps,
                     }
                 )
+
+        return True
 
 
 @hydra.main(version_base=None, config_path="../config", config_name="train_agent")
@@ -166,6 +190,7 @@ def train_agent(cfg: DictConfig):
         rl_reward=cfg.rl.reward,
         obs_space_type=cfg.rl.obs_space_type,
         fee_rate=cfg.market.fee_rate,
+        freeze_std=cfg.rl.freeze_std,
         seed=seed,
     )
     vec_env = VecNormalize(vec_env, norm_obs=True, norm_reward=True, clip_obs=10.0)
