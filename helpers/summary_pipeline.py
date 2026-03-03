@@ -145,7 +145,11 @@ def process_all_results():
 
     print("Categorizing results...")
     for run_dir in list(results_dir.iterdir()):
-        if not run_dir.is_dir() or run_dir.name in categories.keys() or run_dir.name == "report":
+        if (
+            not run_dir.is_dir()
+            or run_dir.name in categories.keys()
+            or run_dir.name == "report"
+        ):
             continue
 
         config_path = run_dir / ".hydra" / "config.yaml"
@@ -244,7 +248,9 @@ def process_all_results():
                 all_results_list.append(row_data)
 
             except Exception as e:
-                print(f"Error processing stats for {run_dir.name} in {category_name}: {e}")
+                print(
+                    f"Error processing stats for {run_dir.name} in {category_name}: {e}"
+                )
 
     print("\nSaving results and generating plots...")
     for category_name, results_list in categories.items():
@@ -252,7 +258,9 @@ def process_all_results():
             continue
 
         df_summary = pd.DataFrame(results_list)
-        df_summary = df_summary.sort_values(by="Sortino Annual Net", ascending=False).reset_index(drop=True)
+        df_summary = df_summary.sort_values(
+            by="Sortino Annual Net", ascending=False
+        ).reset_index(drop=True)
 
         cat_dir = results_dir / category_name
 
@@ -266,7 +274,9 @@ def process_all_results():
     if all_results_list:
         print("\n--- Generating GLOBAL DataFrame ---")
         global_df = pd.DataFrame(all_results_list)
-        global_df = global_df.sort_values(by="Sortino Annual Net", ascending=False).reset_index(drop=True)
+        global_df = global_df.sort_values(
+            by="Sortino Annual Net", ascending=False
+        ).reset_index(drop=True)
 
         global_parquet = results_dir / "summary_GLOBAL.parquet"
         global_df.to_parquet(global_parquet, engine="pyarrow", index=False)
