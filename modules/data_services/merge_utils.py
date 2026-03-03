@@ -59,10 +59,17 @@ def stitch_strategy_results(
             if col in df.columns:
                 df[col] += offsets[col]
 
+        if "equity" in df.columns:
+            df["equity"] += offsets.get("total_net_pnl", 0.0)
+
         merged_dfs.append(df)
 
         if not res.exec_logger.empty:
             temp_exec_df = res.exec_logger.copy()
+
+            if "entry_equity" in temp_exec_df.columns:
+                temp_exec_df["entry_equity"] += offsets.get("total_net_pnl", 0.0)
+
             exec_dfs.append(temp_exec_df)
 
         if not df.empty:

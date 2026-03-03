@@ -11,7 +11,7 @@ from modules.core.enums import Interval
 
 # ==========================================
 STRATEGY = {
-    "run_backtest_2026-03-01_21-34-07_caa873": "Rolling Beta-Hedge",
+    "run_backtest_2026-03-03_20-23-19_d27989": "Rolling Beta-Hedge",
 }
 
 LEVERAGE = 5.0
@@ -377,6 +377,8 @@ def generate_comparison_report(strategies_input: dict | list) -> None:
                     df_btc["total_pnl"] = btc_ret * INITIAL_CASH
                     df_btc["total_net_pnl"] = df_btc["total_pnl"]
 
+                    df_btc["equity"] = INITIAL_CASH + df_btc["total_net_pnl"]
+
                     btc_stats = calculate_stats(
                         df_btc,
                         empty_exec_df,
@@ -418,6 +420,8 @@ def generate_comparison_report(strategies_input: dict | list) -> None:
             df_ewp = pd.DataFrame(index=ewp_data.index)
             df_ewp["total_pnl"] = ewp_ret * INITIAL_CASH
             df_ewp["total_net_pnl"] = df_ewp["total_pnl"]
+
+            df_ewp["equity"] = INITIAL_CASH + df_ewp["total_net_pnl"]
 
             ewp_stats = calculate_stats(
                 df_ewp, empty_exec_df, INITIAL_CASH, Interval.H1, RISK_FREE_RATE_ANNUAL
