@@ -21,7 +21,6 @@ performance:
   delayed_entry: true
   sl_lock: true
   time_decay_sl: true
-  freeze_std: true
 
   test:
     beta_start: "2023-12-01"

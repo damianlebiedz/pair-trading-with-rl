@@ -190,7 +190,6 @@ def train_agent(cfg: DictConfig):
         rl_reward=cfg.rl.reward,
         obs_space_type=cfg.rl.obs_space_type,
         fee_rate=cfg.market.fee_rate,
-        freeze_std=cfg.rl.freeze_std,
         seed=seed,
     )
     vec_env = VecNormalize(vec_env, norm_obs=True, norm_reward=True, clip_obs=10.0)

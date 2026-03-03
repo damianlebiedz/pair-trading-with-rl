@@ -11,5 +11,4 @@ rl:
   obs_space_type: minimal
   passes_per_pair: 10
   seed: 42
-  freeze_std: true
   verbose: 1

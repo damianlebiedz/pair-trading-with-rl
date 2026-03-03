@@ -14,11 +14,10 @@ def plot_distribution(df: pd.DataFrame, title: str, out_file: Path):
         "Z-Score Window",
         "Beta Hedge",
         "Pairs",
-        "Freeze Std",
     ]
 
     valid_params = [
-        p for p in params_to_plot if p in df.columns and df[p].nunique() > 1
+        p for p in params_to_plot if p in df.columns and df[p].nunique(dropna=False) > 1
     ]
 
     if not valid_params:
@@ -41,8 +40,9 @@ def plot_distribution(df: pd.DataFrame, title: str, out_file: Path):
         c = (i % cols) + 1
 
         df[f"{param}_str"] = df[param].astype(str)
+        df[f"{param}_str"] = df[f"{param}_str"].replace({"nan": "None", "NaN": "None", "<NA>": "None"})
         unique_vals = sorted(
-            df[f"{param}_str"].unique(), key=lambda x: (x.lower() == "null", x)
+            df[f"{param}_str"].unique(), key=lambda x: (x.lower() == "none", x)
         )
 
         fig.add_trace(
@@ -69,18 +69,24 @@ def plot_distribution(df: pd.DataFrame, title: str, out_file: Path):
             col=c,
         )
 
-        means = (
-            df.groupby(f"{param}_str")["Sortino Annual Net"].mean().reindex(unique_vals)
-        )
+        medians = df.groupby(f"{param}_str")["Sortino Annual Net"].median().reindex(unique_vals)
+
+        show_legend_flag = True if i == 0 else False
 
         fig.add_trace(
             go.Scatter(
                 x=unique_vals,
-                y=means.values,
+                y=medians.values,
                 mode="markers",
-                marker=dict(symbol="line-ew", size=40, color="red", line_width=4),
-                hoverinfo="skip",
-                showlegend=False,
+                marker=dict(
+                    symbol="line-ew",
+                    size=40,
+                    line=dict(color="red", width=3)
+                ),
+                hoverinfo="y+name",
+                name="Median",
+                legendgroup="median_group",
+                showlegend=show_legend_flag,
             ),
             row=r,
             col=c,
@@ -107,6 +113,13 @@ def plot_distribution(df: pd.DataFrame, title: str, out_file: Path):
         plot_bgcolor="white",
         paper_bgcolor="white",
         hovermode="closest",
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1
+        )
     )
 
     fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor="#E5E5E5")

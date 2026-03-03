@@ -232,11 +232,6 @@
           "title": "Time Decay Sl",
           "type": "boolean"
         },
-        "freeze_std": {
-          "description": "Flag to freeze standard deviation while in-position during backtest.",
-          "title": "Freeze Std",
-          "type": "boolean"
-        },
         "test": {
           "$ref": "#/$defs/Test"
         }
@@ -248,7 +243,6 @@
         "delayed_entry",
         "sl_lock",
         "time_decay_sl",
-        "freeze_std",
         "test"
       ],
       "title": "Performance",
@@ -279,11 +273,6 @@
           "title": "Seed",
           "type": "integer"
         },
-        "freeze_std": {
-          "description": "Flag to freeze standard deviation while in-position during RL training.",
-          "title": "Freeze Std",
-          "type": "boolean"
-        },
         "verbose": {
           "description": "Verbosity level in training.",
           "title": "Verbose",
@@ -296,7 +285,6 @@
         "obs_space_type",
         "passes_per_pair",
         "seed",
-        "freeze_std",
         "verbose"
       ],
       "title": "RL",

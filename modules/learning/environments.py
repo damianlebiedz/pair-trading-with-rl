@@ -21,7 +21,6 @@ def build_multi_env(
     rl_reward: str,
     obs_space_type: ObsSpaceType,
     fee_rate: float,
-    freeze_std: bool,
     seed: int = None,
 ) -> DummyVecEnv:
     env_fns = []
@@ -39,7 +38,6 @@ def build_multi_env(
                 reward_scheme=reward_schema,
                 obs_space_type=obs_space_type,
                 fee_rate=fee_rate,
-                freeze_std=freeze_std,
             )
             return Monitor(env)
 
@@ -82,7 +80,6 @@ class PairsTradingEnv(gym.Env):
         reward_scheme: RewardScheme,
         obs_space_type: ObsSpaceType,
         fee_rate: float,
-        freeze_std: bool,
     ):
         super(PairsTradingEnv, self).__init__()
 
@@ -91,7 +88,6 @@ class PairsTradingEnv(gym.Env):
         self.position_state = PositionState()
         self.action_space = spaces.Discrete(3)
         self.fee_rate = fee_rate
-        self.freeze_std = freeze_std
 
         obs_shape = AgentState.get_obs_shape(obs_space_type)
 
@@ -175,7 +171,7 @@ class PairsTradingEnv(gym.Env):
                 X_slice=slice_x, Y_slice=slice_y, beta=exec_beta
             )
 
-            exec_std = self.position_state.entry_std if self.freeze_std else current_std
+            exec_std = self.position_state.entry_std
         else:
             exec_beta = row["market_beta"]
             exec_std = row["market_std"]
@@ -301,7 +297,7 @@ class PairsTradingEnv(gym.Env):
                 X_slice=slice_x, Y_slice=slice_y, beta=self.position_state.entry_beta
             )
 
-            std = self.position_state.entry_std if self.freeze_std else current_std
+            std = self.position_state.entry_std
 
             z_score = calculate_z_score(spread=spread, mean=mean, std=std)
         else:

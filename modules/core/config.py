@@ -60,9 +60,6 @@ class RL(BaseModel):
         description="Number of passes per pair during training."
     )
     seed: int = Field(description="Seed for random number generator.")
-    freeze_std: bool = Field(
-        description="Flag to freeze standard deviation while in-position during RL training."
-    )
     verbose: int = Field(description="Verbosity level in training.")
 
 
@@ -114,9 +111,6 @@ class Performance(BaseModel):
     delayed_entry: bool = Field(description="Delayed entry flag.")
     sl_lock: bool = Field(description="SL lock until mean-reversal flag.")
     time_decay_sl: bool = Field(description="Time Decay SL flag.")
-    freeze_std: bool = Field(
-        description="Flag to freeze standard deviation while in-position during backtest."
-    )
 
     test: Test
 

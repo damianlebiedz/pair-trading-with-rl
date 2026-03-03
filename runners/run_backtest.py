@@ -235,7 +235,6 @@ def run_backtest(cfg: DictConfig):
                     cfg.settings.time_decay_max,
                 ),
                 vol_window=cfg.settings.vol_window,
-                freeze_std=cfg.performance.freeze_std,
                 agent=agent,
             )
 

@@ -41,7 +41,6 @@ class Strategy:
         vol_window: int,
         time_decay_sl: bool,
         time_decay_params: tuple[int, int],
-        freeze_std: bool,
         agent: RLAgentAdapter | None = None,
         source: Source = Source.LOG,
     ):
@@ -60,7 +59,6 @@ class Strategy:
         self.time_decay_params = time_decay_params
         self.agent = agent
         self.vol_window = vol_window
-        self.freeze_std = freeze_std
         self.source = source
 
         self.data = load_pair(
@@ -227,7 +225,7 @@ class Strategy:
                 if self.beta_hedge == "rolling":
                     market_beta = base_beta_arr[i]
 
-                if self.time_decay_sl and exit_threshold is not None:
+                if self.time_decay_sl and stop_loss_thr is not None:
                     time_decay_start = self.time_decay_params[0]
                     time_decay_end = self.time_decay_params[1]
 
@@ -279,9 +277,7 @@ class Strategy:
                             )
                         )
 
-                        std = (
-                            position_state.entry_std if self.freeze_std else current_std
-                        )
+                        std = position_state.entry_std
 
                         z_score = calculate_z_score(
                             spread=current_spread, mean=current_mean, std=std
@@ -307,6 +303,7 @@ class Strategy:
                     position_state.sl_thr = stop_loss_thr
                 elif (
                     self.time_decay_sl
+                    and stop_loss_thr is not None
                     and position_state.time_in_pos >= time_decay_start * z_score_window
                 ):
                     position_state.sl_thr -= decay_per_iter
