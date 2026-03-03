@@ -25,7 +25,7 @@ def generate_docs():
     defs = schema.get("$defs", {})
     for def_name, def_info in defs.items():
         if "properties" in def_info:
-            md_lines.append(f"### ⚙️ {def_name}")
+            md_lines.append(f"### {def_name}")
 
             if "description" in def_info:
                 md_lines.append(f"_{def_info['description']}_\n")

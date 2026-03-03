@@ -233,7 +233,7 @@
           "type": "boolean"
         },
         "freeze_std": {
-          "description": "Flag to freeze standard deviation while in-position.",
+          "description": "Flag to freeze standard deviation while in-position during backtest.",
           "title": "Freeze Std",
           "type": "boolean"
         },
@@ -279,6 +279,11 @@
           "title": "Seed",
           "type": "integer"
         },
+        "freeze_std": {
+          "description": "Flag to freeze standard deviation while in-position during RL training.",
+          "title": "Freeze Std",
+          "type": "boolean"
+        },
         "verbose": {
           "description": "Verbosity level in training.",
           "title": "Verbose",
@@ -291,6 +296,7 @@
         "obs_space_type",
         "passes_per_pair",
         "seed",
+        "freeze_std",
         "verbose"
       ],
       "title": "RL",
@@ -566,16 +572,20 @@
       "title": "Stop Loss"
     },
     "market": {
-      "$ref": "#/$defs/Market"
+      "$ref": "#/$defs/Market",
+      "description": "Market simulation parameters including capital, fees, and timeframe."
     },
     "settings": {
-      "$ref": "#/$defs/Settings"
+      "$ref": "#/$defs/Settings",
+      "description": "General strategy parameters, including volatility and time decay bounds."
     },
     "pair_selection": {
-      "$ref": "#/$defs/PairSelection"
+      "$ref": "#/$defs/PairSelection",
+      "description": "Configuration for statistical tests and top pair filtering."
     },
     "performance": {
-      "$ref": "#/$defs/Performance"
+      "$ref": "#/$defs/Performance",
+      "description": "Trading logic flags, SL types, and backtest execution parameters."
     },
     "rl": {
       "anyOf": [
@@ -587,7 +597,7 @@
         }
       ],
       "default": null,
-      "description": "RL config"
+      "description": "Reinforcement Learning environment parameters and training settings."
     },
     "run_backtest": {
       "anyOf": [
@@ -599,7 +609,7 @@
         }
       ],
       "default": null,
-      "description": "RunBacktest config"
+      "description": "Execution timeline and explicit settings for the backtest runner."
     },
     "rl_algo": {
       "anyOf": [
@@ -625,6 +635,7 @@
         }
       ],
       "default": null,
+      "description": "RL algorithm selection (e.g., A2C, PPO) and its specific hyperparameters.",
       "title": "Rl Algo"
     },
     "wandb": {
@@ -636,7 +647,8 @@
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "description": "Weights & Biases configuration for experiment tracking and logging."
     }
   },
   "title": "Config",

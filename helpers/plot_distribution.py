@@ -14,6 +14,7 @@ def plot_distribution(df: pd.DataFrame, title: str, out_file: Path):
         "Z-Score Window",
         "Beta Hedge",
         "Pairs",
+        "Freeze Std",
     ]
 
     valid_params = [
