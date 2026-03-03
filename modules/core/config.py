@@ -253,17 +253,17 @@ class Config(BaseModel):
     )
     rl: RL | None = Field(
         default=None,
-        description="Reinforcement Learning environment parameters and training settings."
+        description="Reinforcement Learning environment parameters and training settings.",
     )
     run_backtest: RunBacktest | None = Field(
         default=None,
-        description="Execution timeline and explicit settings for the backtest runner."
+        description="Execution timeline and explicit settings for the backtest runner.",
     )
     rl_algo: RLAlgoConfig | None = Field(
         default=None,
-        description="RL algorithm selection (e.g., A2C, PPO) and its specific hyperparameters."
+        description="RL algorithm selection (e.g., A2C, PPO) and its specific hyperparameters.",
     )
     wandb: Wandb | None = Field(
         default=None,
-        description="Weights & Biases configuration for experiment tracking and logging."
+        description="Weights & Biases configuration for experiment tracking and logging.",
     )

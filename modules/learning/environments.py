@@ -164,8 +164,12 @@ class PairsTradingEnv(gym.Env):
             source_x_col = f"{self.result.ticker_x}_{Source.LOG}"
             source_y_col = f"{self.result.ticker_y}_{Source.LOG}"
 
-            slice_x = self.df[source_x_col].iloc[start_idx: self.current_step + 1].values
-            slice_y = self.df[source_y_col].iloc[start_idx: self.current_step + 1].values
+            slice_x = (
+                self.df[source_x_col].iloc[start_idx : self.current_step + 1].values
+            )
+            slice_y = (
+                self.df[source_y_col].iloc[start_idx : self.current_step + 1].values
+            )
 
             _, _, current_std = calculate_spread_statistics(
                 X_slice=slice_x, Y_slice=slice_y, beta=exec_beta
