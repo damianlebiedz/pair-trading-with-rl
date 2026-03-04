@@ -75,7 +75,7 @@ class Strategy:
         self,
         df: pd.DataFrame,
         initial_cash: float,
-        entry_threshold: float | None,
+        entry_threshold: float,
         exit_threshold: float | None,
         test_start: str,
         test_end: str,
@@ -199,7 +199,7 @@ class Strategy:
 
         prev_z_score = None
 
-        if stop_loss is not None and entry_threshold is not None:
+        if stop_loss is not None:
             stop_loss_thr = entry_threshold * stop_loss
         else:
             stop_loss_thr = None
@@ -478,7 +478,7 @@ class Strategy:
     def run_strategy(
         self,
         z_score_window: int,
-        entry_threshold: float | None,
+        entry_threshold: float,
         exit_threshold: float | None,
         stop_loss: float | None,
         test_start: str,
