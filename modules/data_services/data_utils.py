@@ -38,8 +38,8 @@ def get_steps(
 
 def add_log_prices(df: pd.DataFrame, ticker_x: str, ticker_y: str) -> None:
     """Add log prices to DataFrame."""
-    df[f"{ticker_x}_{Source.LOG}"] = np.log(df[ticker_x])
-    df[f"{ticker_y}_{Source.LOG}"] = np.log(df[ticker_y])
+    df[f"{ticker_x}_{Source.LOG.value}"] = np.log(df[ticker_x])
+    df[f"{ticker_y}_{Source.LOG.value}"] = np.log(df[ticker_y])
 
 
 def merge_by_pair(dfs: list[pd.DataFrame], keep_cols: list[list[str]]) -> pd.DataFrame:

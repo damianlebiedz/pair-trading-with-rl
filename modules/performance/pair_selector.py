@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 class PairSelector:
     def __init__(
         self,
-        source: Source = Source.LOG,
+        source: Source = Source.LOG.value,
     ):
         """
         Initializes the PairSelector module.
@@ -97,7 +97,7 @@ class PairSelector:
 
         for col in df_val.columns:
             if df_val[col].dtype in ["float64", "float32"]:
-                df_val[f"{col}_{Source.LOG}"] = np.log(df_val[col])
+                df_val[f"{col}_{Source.LOG.value}"] = np.log(df_val[col])
 
         target_beta_date = pd.to_datetime(beta_test_start)
         beta_start_pos = df_val.index.get_indexer([target_beta_date], method="bfill")[0]
@@ -192,7 +192,7 @@ class PairSelector:
         res["norm_coint"] = 1 - res["p_value"]
 
         df_corr = df.copy()
-        if self.source == Source.LOG:
+        if self.source == Source.LOG.value:
             for col in df_corr.columns:
                 if df_corr[col].min() > 0:
                     df_corr[col] = np.log(df_corr[col] + 1e-8)

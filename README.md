@@ -1,4 +1,4 @@
-# Pairs Trading Framework
+# Pair Trading Framework
 ### Repository for a research paper currently in progress.
 This project implements an advanced pairs trading framework comparing two distinct approaches: **Statistical Arbitrage** and **Reinforcement Learning**.
 

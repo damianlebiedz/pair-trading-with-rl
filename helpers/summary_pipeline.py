@@ -258,6 +258,12 @@ def process_all_results():
             continue
 
         df_summary = pd.DataFrame(results_list)
+
+        df_summary = df_summary[df_summary["Sortino Annual Net"] >= 0]
+        if df_summary.empty:
+            print(f"--> All strategies in {category_name} with Sortino Net Annual < 0. Skipping.")
+            continue
+
         df_summary = df_summary.sort_values(
             by="Sortino Annual Net", ascending=False
         ).reset_index(drop=True)
@@ -274,16 +280,22 @@ def process_all_results():
     if all_results_list:
         print("\n--- Generating GLOBAL DataFrame ---")
         global_df = pd.DataFrame(all_results_list)
-        global_df = global_df.sort_values(
-            by="Sortino Annual Net", ascending=False
-        ).reset_index(drop=True)
 
-        global_parquet = results_dir / "summary_GLOBAL.parquet"
-        global_df.to_parquet(global_parquet, engine="pyarrow", index=False)
-        print(f"--> Saved GLOBAL summary: {global_parquet}")
+        global_df = global_df[global_df["Sortino Annual Net"] >= 0]
 
-        global_html = results_dir / "plots_sortino_GLOBAL.html"
-        plot_distribution(global_df, title="ALL STRATEGIES", out_file=global_html)
+        if not global_df.empty:
+            global_df = global_df.sort_values(
+                by="Sortino Annual Net", ascending=False
+            ).reset_index(drop=True)
+
+            global_parquet = results_dir / "summary_GLOBAL.parquet"
+            global_df.to_parquet(global_parquet, engine="pyarrow", index=False)
+            print(f"--> Saved GLOBAL summary: {global_parquet}")
+
+            global_html = results_dir / "plots_sortino_GLOBAL.html"
+            plot_distribution(global_df, title="ALL STRATEGIES", out_file=global_html)
+        else:
+            print("\nStrategies with > 0 Sortino Net Annual not found.")
     else:
         print("\nNo data available to generate global plot.")
 

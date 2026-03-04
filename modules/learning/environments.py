@@ -157,8 +157,8 @@ class PairsTradingEnv(gym.Env):
             exec_win = int(row["window"])
             start_idx = max(0, self.current_step - exec_win + 1)
 
-            source_x_col = f"{self.result.ticker_x}_{Source.LOG}"
-            source_y_col = f"{self.result.ticker_y}_{Source.LOG}"
+            source_x_col = f"{self.result.ticker_x}_{Source.LOG.value}"
+            source_y_col = f"{self.result.ticker_y}_{Source.LOG.value}"
 
             slice_x = (
                 self.df[source_x_col].iloc[start_idx : self.current_step + 1].values
@@ -283,8 +283,8 @@ class PairsTradingEnv(gym.Env):
         ):
             start_idx = max(0, self.current_step - window + 1)
 
-            source_x_col = f"{self.result.ticker_x}_{Source.LOG}"
-            source_y_col = f"{self.result.ticker_y}_{Source.LOG}"
+            source_x_col = f"{self.result.ticker_x}_{Source.LOG.value}"
+            source_y_col = f"{self.result.ticker_y}_{Source.LOG.value}"
 
             slice_x = (
                 self.df[source_x_col].iloc[start_idx : self.current_step + 1].values

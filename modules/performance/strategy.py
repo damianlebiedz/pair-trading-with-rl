@@ -42,7 +42,7 @@ class Strategy:
         time_decay_sl: bool,
         time_decay_params: tuple[int, int],
         agent: RLAgentAdapter | None = None,
-        source: Source = Source.LOG,
+        source: Source = Source.LOG.value,
     ):
         self.ticker_x = ticker_x
         self.ticker_y = ticker_y
