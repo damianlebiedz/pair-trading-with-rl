@@ -261,7 +261,9 @@ def process_all_results():
 
         df_summary = df_summary[df_summary["Sortino Annual Net"] >= 0]
         if df_summary.empty:
-            print(f"--> All strategies in {category_name} with Sortino Net Annual < 0. Skipping.")
+            print(
+                f"--> All strategies in {category_name} with Sortino Net Annual < 0. Skipping."
+            )
             continue
 
         df_summary = df_summary.sort_values(
