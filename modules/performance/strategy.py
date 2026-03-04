@@ -385,7 +385,7 @@ class Strategy:
                     drawdown_pct = -1.0
                     total_net_pnl = -initial_cash
                     if total_pnl < -initial_cash:
-                        total_pnl = 0.0
+                        total_pnl = -initial_cash
 
             results_buffer.append(
                 {
