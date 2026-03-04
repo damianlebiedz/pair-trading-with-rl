@@ -523,9 +523,17 @@
       "type": "number"
     },
     "exit_threshold": {
-      "description": "Z-score threshold to close a position.",
-      "title": "Exit Threshold",
-      "type": "number"
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "const": "-entry_threshold",
+          "type": "string"
+        }
+      ],
+      "description": "Z-score threshold to close a position. Can be positive or negative (also equals to -entry_threshold).",
+      "title": "Exit Threshold"
     },
     "stop_loss": {
       "anyOf": [

@@ -140,6 +140,7 @@ def calculate_stats(
                 "win_count": 0,
                 "lose_count": 0,
                 "win_rate": None,
+                "avg_trade_duration": None,
                 "max_win": None,
                 "max_lose": None,
                 "avg_win_return": None,
@@ -154,6 +155,7 @@ def calculate_stats(
                 "win_count": 0,
                 "lose_count": 0,
                 "win_rate": None,
+                "avg_trade_duration": None,
                 "max_win": None,
                 "max_lose": None,
                 "avg_win_return": None,
@@ -180,6 +182,10 @@ def calculate_stats(
 
         win_rate = win_count / total_trades if total_trades > 0 else None
 
+        avg_trade_duration = (
+            close_positions["time_in_pos"].mean() if total_trades > 0 else None
+        )
+
         max_win = trade_returns.max() if not trade_returns.empty else None
         max_lose = trade_returns.min() if not trade_returns.empty else None
 
@@ -191,6 +197,7 @@ def calculate_stats(
             "win_count": win_count,
             "lose_count": lose_count,
             "win_rate": win_rate,
+            "avg_trade_duration": avg_trade_duration,
             "max_win": max_win,
             "max_lose": max_lose,
             "avg_win_return": avg_win_ret,
@@ -216,6 +223,7 @@ def calculate_stats(
         "win_count",
         "lose_count",
         "win_rate",
+        "avg_trade_duration",
         "max_win",
         "max_lose",
         "avg_win_return",

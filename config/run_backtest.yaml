@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=schemas/schema.json
 
-generate_plots: true
+generate_plots: false
 
 z_score_window: 672
 entry_threshold: 2.5

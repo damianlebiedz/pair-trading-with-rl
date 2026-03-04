@@ -223,7 +223,9 @@ class Config(BaseModel):
         description="Z-Score lookback window size.",
     )
     entry_threshold: float = Field(description="Z-score threshold to open a position.")
-    exit_threshold: float = Field(description="Z-score threshold to close a position.")
+    exit_threshold: float | Literal["-entry_threshold"] = Field(
+        description="Z-score threshold to close a position. Can be positive or negative (also equals to -entry_threshold)."
+    )
     stop_loss: float | None = Field(
         gt=1,
         description="Stop loss multiplier (e.g., 1.05 for 5% from entry_threshold), null if trade without SL.",

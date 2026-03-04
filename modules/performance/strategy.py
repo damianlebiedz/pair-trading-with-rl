@@ -76,7 +76,7 @@ class Strategy:
         df: pd.DataFrame,
         initial_cash: float,
         entry_threshold: float,
-        exit_threshold: float | None,
+        exit_threshold: float,
         test_start: str,
         test_end: str,
         z_score_window: int,
@@ -269,21 +269,15 @@ class Strategy:
                         position_state.position != 0
                         and position_state.entry_beta is not None
                     ):
-                        current_spread, current_mean, current_std = (
-                            calculate_spread_statistics(
-                                X_slice=slice_x_win,
-                                Y_slice=slice_y_win,
-                                beta=position_state.entry_beta,
-                            )
+                        spread, mean, _ = calculate_spread_statistics(
+                            X_slice=slice_x_win,
+                            Y_slice=slice_y_win,
+                            beta=position_state.entry_beta,
                         )
 
                         std = position_state.entry_std
 
-                        z_score = calculate_z_score(
-                            spread=current_spread, mean=current_mean, std=std
-                        )
-                        spread = current_spread
-                        mean = current_mean
+                        z_score = calculate_z_score(spread=spread, mean=mean, std=std)
 
                     else:
                         z_score = market_z_score

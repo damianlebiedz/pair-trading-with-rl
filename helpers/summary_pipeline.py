@@ -236,6 +236,7 @@ def process_all_results():
                         (get_metric("win_count", "net") or 0)
                         + (get_metric("lose_count", "net") or 0)
                     ),
+                    "Avg Trade Duration": get_metric("avg_trade_duration", "net"),
                     "Sortino Annual Net": get_metric("sortino_ratio_annual", "net"),
                     "Sortino Annual Gross": get_metric("sortino_ratio_annual", "gross"),
                     "CAGR Net": get_metric("cagr", "net"),

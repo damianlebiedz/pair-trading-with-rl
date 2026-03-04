@@ -8,7 +8,7 @@ Below is an automatically generated list of all configuration parameters support
 - **`generate_plots`**: Generate plots if true.
 - **`z_score_window`**: Z-Score lookback window size.
 - **`entry_threshold`**: Z-score threshold to open a position.
-- **`exit_threshold`**: Z-score threshold to close a position.
+- **`exit_threshold`**: Z-score threshold to close a position. Can be positive or negative (also equals to -entry_threshold).
 - **`stop_loss`**: Stop loss multiplier (e.g., 1.05 for 5% from entry_threshold), null if trade without SL.
 - **`market`**: Market simulation parameters including capital, fees, and timeframe.
 - **`settings`**: General strategy parameters, including volatility and time decay bounds.

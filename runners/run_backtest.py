@@ -35,10 +35,15 @@ def run_backtest(cfg: DictConfig):
 
     cfg = Config(**OmegaConf.to_container(cfg, resolve=True))
 
+    if cfg.exit_threshold == "-entry_threshold":
+        exit_threshold = -cfg.entry_threshold
+    else:
+        exit_threshold = cfg.exit_threshold
+
     best_params = {
         "z_score_window": cfg.z_score_window,
         "entry_threshold": cfg.entry_threshold,
-        "exit_threshold": cfg.exit_threshold,
+        "exit_threshold": exit_threshold,
         "stop_loss": cfg.stop_loss,
     }
 

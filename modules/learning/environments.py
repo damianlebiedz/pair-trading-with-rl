@@ -293,7 +293,7 @@ class PairsTradingEnv(gym.Env):
                 self.df[source_y_col].iloc[start_idx : self.current_step + 1].values
             )
 
-            spread, mean, current_std = calculate_spread_statistics(
+            spread, mean, _ = calculate_spread_statistics(
                 X_slice=slice_x, Y_slice=slice_y, beta=self.position_state.entry_beta
             )
 
