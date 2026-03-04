@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 import pandas as pd
 
-from modules.core.enums import CointType, BetaHedge
+from modules.core.enums import BetaHedge
 from modules.performance.models import StrategyResult
 from modules.data_services.data_utils import (
     save_strategy_result,
@@ -165,12 +165,11 @@ def execute_pair_selection(
     interval: str,
     top_n_factor: float,
     output_dir: str,
-    coint_type: CointType,
     beta_hedge: BetaHedge,
 ) -> pd.DataFrame:
     logger.info("Starting Pair Selection Pipeline.")
 
-    selector = PairSelector(coint_type=coint_type)
+    selector = PairSelector()
 
     final_df = selector.select_pairs(
         tickers=tickers,
@@ -188,7 +187,7 @@ def execute_pair_selection(
 
     save_dataframe(
         df=final_df,
-        file_name=f"pair_selection_{coint_type.value}_{ps_start}_{ps_end}",
+        file_name=f"pair_selection_{ps_start}_{ps_end}",
         directory=output_dir,
     )
 

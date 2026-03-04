@@ -10,7 +10,6 @@ from pydantic import (
 from modules.core.enums import (
     Interval,
     BetaHedge,
-    CointType,
     RLModelName,
     ObsSpaceType,
     RLRewards,
@@ -67,9 +66,6 @@ class PairSelection(BaseModel):
     top_n_factor: int = Field(
         gt=0, description="Factor determining how many top pairs to select."
     )
-    coint_type: CointType = Field(
-        description=f"Statistical test used for cointegration. Options: {[e.value for e in CointType]}"
-    )
     start: str = Field(description="Start date for pair selection.")
     end: str = Field(description="End date for pair selection.")
 
@@ -97,9 +93,9 @@ class Test(BaseModel):
 
 
 class Performance(BaseModel):
-    use_rl: bool = Field(description="Use RL flag.")
-    model_name: str | None = Field(
-        default=None, description="Name of the RL model file in data_rl/models."
+    rl_model_subfolder: str | None = Field(
+        default=None,
+        description="Name of the folder with RL model, null if running without RL.",
     )
     iterations: int = Field(
         gt=0,

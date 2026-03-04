@@ -51,14 +51,12 @@ Below is an automatically generated list of all configuration parameters support
 
 ### PairSelection
 - **`top_n_factor`**: Factor determining how many top pairs to select.
-- **`coint_type`**: Statistical test used for cointegration. Options: ['eg', 'johansen']
 - **`start`**: Start date for pair selection.
 - **`end`**: End date for pair selection.
 
 
 ### Performance
-- **`use_rl`**: Use RL flag.
-- **`model_name`**: Name of the RL model file in data_rl/models.
+- **`rl_model_subfolder`**: Name of the folder with RL model, null if running without RL.
 - **`iterations`**: Number of backtest iterations (monthly).
 - **`beta_hedge`**: Hedge ratio mode. Options: ['no_hedge', 'static', 'rolling']
 - **`delayed_entry`**: Delayed entry flag.

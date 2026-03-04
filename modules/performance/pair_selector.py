@@ -2,15 +2,12 @@ import logging
 import numpy as np
 import pandas as pd
 
-from modules.core.enums import CointType, Source, BetaHedge
+from modules.core.enums import Source, BetaHedge
 from modules.core.indicators import (
     calculate_beta,
     calculate_hurst,
 )
-from modules.core.statistical_tests import (
-    johansen_cointegration,
-    engle_granger_cointegration,
-)
+from modules.core.statistical_tests import engle_granger_cointegration
 from modules.data_services.data_loaders import load_data
 
 logger = logging.getLogger(__name__)
@@ -19,7 +16,6 @@ logger = logging.getLogger(__name__)
 class PairSelector:
     def __init__(
         self,
-        coint_type: CointType,
         source: Source = Source.LOG,
     ):
         """
@@ -30,15 +26,11 @@ class PairSelector:
         2. **Validation**: Based on Mean Reversion characteristics (Hurst Exponent) and Beta stability.
 
         Args:
-            coint_type: The statistical test used for the cointegration component of the score.
-                - 'eg': Engle-Granger two-step method.
-                - 'johansen': Johansen test.
             source: Data transformation applied before analysis (default: 'log').
 
         Raises:
             ValueError: If `coint_type` or `beta_method` are not supported.
         """
-        self.coint_type = coint_type
         self.source = source
 
     def select_pairs(
@@ -67,7 +59,7 @@ class PairSelector:
         -----------------
         1. **Data Loading (Selection)**: Loads price data for the `ps_start` - `ps_end` period.
         2. **Composite Scoring**:
-           - Runs Cointegration Test (Johansen/EG) -> Normalizes result to 0-1 scale.
+           - Runs Cointegration Test (EG) -> Normalizes result to 0-1 scale.
            - Calculates Correlation ($R^2$) -> Already 0-1 scale.
            - Computes `Score = (0.5 * Norm_Coint) + (0.5 * R_Squared)`.
            - Sorts pairs by `Score` in descending order. This filters out pairs with high cointegration
@@ -196,12 +188,8 @@ class PairSelector:
             pd.DataFrame: DataFrame containing test statistics, R-squared values,
             and the final composite 'score', sorted by 'score' in descending order.
         """
-        if self.coint_type == CointType.JOHANSEN:
-            res = johansen_cointegration(df)
-            res["norm_coint"] = res["trace_stat"].rank(pct=True)
-        else:
-            res = engle_granger_cointegration(df)
-            res["norm_coint"] = 1 - res["p_value"]
+        res = engle_granger_cointegration(df)
+        res["norm_coint"] = 1 - res["p_value"]
 
         df_corr = df.copy()
         if self.source == Source.LOG:

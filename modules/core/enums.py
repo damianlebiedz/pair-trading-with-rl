@@ -22,11 +22,6 @@ class Source(str, Enum):
     LOG = "log"
 
 
-class CointType(str, Enum):
-    EG = "eg"
-    JOHANSEN = "johansen"
-
-
 class ObsSpaceType(str, Enum):
     MINIMAL = "minimal"
     STANDARD = "standard"

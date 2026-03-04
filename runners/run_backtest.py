@@ -43,7 +43,7 @@ def run_backtest(cfg: DictConfig):
     }
 
     rl_output_dir = None
-    if cfg.performance.use_rl:
+    if cfg.performance.rl_model_subfolder:
         rl_output_dir = setup_rl_run_environment(__file__)
 
     config = {
@@ -105,7 +105,6 @@ def run_backtest(cfg: DictConfig):
             interval=cfg.market.interval,
             top_n_factor=cfg.pair_selection.top_n_factor,
             output_dir=output_dir,
-            coint_type=cfg.pair_selection.coint_type,
             beta_hedge=cfg.performance.beta_hedge,
         )
 
@@ -168,25 +167,25 @@ def run_backtest(cfg: DictConfig):
         strategies_map = {}
 
         agent = None
-        if cfg.performance.use_rl:
+        if cfg.performance.rl_model_subfolder:
             valid_spaces = ObsSpaceType
             obs_space_type = next(
                 (
                     space
                     for space in valid_spaces
-                    if f"_{space}_" in cfg.performance.model_name
+                    if f"_{space}_" in cfg.performance.rl_model_subfolder
                 ),
                 None,
             )
 
             if not obs_space_type:
                 raise ValueError(
-                    f"Error: wrong obs_space_type in model_name: '{cfg.performance.model_name}'. "
+                    f"Error: wrong obs_space_type in model_name: '{cfg.performance.rl_model_subfolder}'. "
                     f"Must be one of: {valid_spaces}"
                 )
 
             base_model_path = os.path.join(
-                rl_output_dir, "models", cfg.performance.model_name
+                rl_output_dir, "models", cfg.performance.rl_model_subfolder
             )
             model_zip_path = f"{base_model_path}.zip"
             vec_normalize_path = f"{base_model_path}_normalize.pkl"

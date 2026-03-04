@@ -66,14 +66,6 @@
       "title": "BetaHedge",
       "type": "string"
     },
-    "CointType": {
-      "enum": [
-        "eg",
-        "johansen"
-      ],
-      "title": "CointType",
-      "type": "string"
-    },
     "Interval": {
       "enum": [
         "1d",
@@ -163,10 +155,6 @@
           "title": "Top N Factor",
           "type": "integer"
         },
-        "coint_type": {
-          "$ref": "#/$defs/CointType",
-          "description": "Statistical test used for cointegration. Options: ['eg', 'johansen']"
-        },
         "start": {
           "description": "Start date for pair selection.",
           "title": "Start",
@@ -180,7 +168,6 @@
       },
       "required": [
         "top_n_factor",
-        "coint_type",
         "start",
         "end"
       ],
@@ -189,12 +176,7 @@
     },
     "Performance": {
       "properties": {
-        "use_rl": {
-          "description": "Use RL flag.",
-          "title": "Use Rl",
-          "type": "boolean"
-        },
-        "model_name": {
+        "rl_model_subfolder": {
           "anyOf": [
             {
               "type": "string"
@@ -204,8 +186,8 @@
             }
           ],
           "default": null,
-          "description": "Name of the RL model file in data_rl/models.",
-          "title": "Model Name"
+          "description": "Name of the folder with RL model, null if running without RL.",
+          "title": "Rl Model Subfolder"
         },
         "iterations": {
           "description": "Number of backtest iterations (monthly).",
@@ -237,7 +219,6 @@
         }
       },
       "required": [
-        "use_rl",
         "iterations",
         "beta_hedge",
         "delayed_entry",
