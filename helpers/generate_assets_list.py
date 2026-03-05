@@ -55,17 +55,17 @@ def generate_assets_list():
 
     start_ts_date = pd.Timestamp(cfg.start, tz="UTC")
     end_ts_date = pd.Timestamp(cfg.end, tz="UTC")
-
-    data_start_time = (
-        start_ts_date - pd.DateOffset(months=1) - pd.Timedelta(days=cfg.buffer_days)
+    data_start_time = start_ts_date - pd.Timedelta(days=cfg.buffer_days)
+    data_end_time = (
+        end_ts_date
+        + pd.DateOffset(months=cfg.window_months)
+        + pd.Timedelta(days=cfg.buffer_days)
     )
-    data_end_time = end_ts_date + pd.Timedelta(days=cfg.buffer_days)
 
     start_ts = int(data_start_time.timestamp() * 1000)
     end_ts = int(data_end_time.timestamp() * 1000)
 
     volume_data = {}
-
     for symbol in tqdm(symbols, desc="Fetching Volume"):
         klines = client.get_klines(
             symbol=symbol,
@@ -76,7 +76,6 @@ def generate_assets_list():
         )
         if not klines:
             continue
-
         df = pd.DataFrame(
             klines,
             columns=[
@@ -99,72 +98,58 @@ def generate_assets_list():
         df.set_index("open_time", inplace=True)
         volume_data[symbol] = df["quote_volume"]
 
-    expected_days = (end_ts_date - start_ts_date).days + 1
-
-    valid_symbols = []
-    for sym, vol_series in volume_data.items():
-        if vol_series.empty:
-            continue
-
-        starts_ok = vol_series.index[0] <= start_ts_date
-        ends_ok = vol_series.index[-1] >= end_ts_date
-
-        period_data = vol_series.loc[start_ts_date:end_ts_date]
-        density_ok = len(period_data) >= expected_days
-
-        if starts_ok and ends_ok and density_ok:
-            valid_symbols.append(sym)
-        else:
-            reason = "Gap in data" if not density_ok else "Range mismatch"
-            logger.debug(
-                f"Skipping {sym}: {reason} ({len(period_data)}/{expected_days} days)"
-            )
+    valid_symbols = [sym for sym, vol in volume_data.items() if not vol.empty]
 
     universes = {}
     md_universes = {}
 
-    target_months = pd.date_range(start=start_ts_date, end=end_ts_date, freq="MS")
+    target_dates = pd.date_range(start=start_ts_date, end=end_ts_date, freq="MS")
 
-    for target_month in target_months:
-        window_start = target_month - pd.DateOffset(months=1)
-        window_end = target_month - pd.DateOffset(days=1)
+    for target_date in target_dates:
+        window_start = target_date
+        window_end = (
+            target_date + pd.DateOffset(months=cfg.window_months) - pd.Timedelta(days=1)
+        )
 
-        month_key = target_month.strftime("%Y-%m")
+        month_key = target_date.strftime("%Y-%m")
+        range_label = (
+            f"{window_start.strftime('%b %Y')} - {window_end.strftime('%b %Y')}"
+        )
         monthly_volumes = {}
 
         for sym in valid_symbols:
             vol_series = volume_data[sym]
             period_vol = vol_series.loc[window_start:window_end]
-
-            if len(period_vol) >= 28:
+            if len(period_vol) >= (28 * cfg.window_months):
                 monthly_volumes[sym] = period_vol.mean()
 
         sorted_symbols = sorted(
             monthly_volumes.keys(), key=lambda x: monthly_volumes[x], reverse=True
         )
-
-        top_symbols_with_vol = [
+        top_with_vol = [
             (sym, monthly_volumes[sym]) for sym in sorted_symbols[: cfg.top_n]
         ]
-        top_symbols = [sym for sym, vol in top_symbols_with_vol]
 
-        universes[month_key] = top_symbols
-        md_universes[month_key] = top_symbols_with_vol
+        universes[month_key] = [sym for sym, vol in top_with_vol]
+        md_universes[range_label] = (month_key, top_with_vol)
 
     with open(json_out, "w", encoding="utf-8") as f:
         json.dump(universes, f, indent=4)
     logger.info(f"Saved JSON configuration: {json_out}")
 
-    md_content = f"# Traded Assets Universe (Top {cfg.top_n} by Volume)\n\n"
-    md_content += "This document lists the tradable universe for each month. The selection is based on the **1-month Average** daily quote volume to favor stable, high-cap projects.\n\n"
-
-    for month_key, symbols_with_vol in md_universes.items():
-        md_content += f"### {month_key}\n"
-        formatted_symbols = []
-        for sym, vol in symbols_with_vol:
-            vol_in_millions = vol / 1_000_000
-            formatted_symbols.append(f"{sym} (${vol_in_millions:.1f}M)")
-        md_content += f"**Assets:** {', '.join(formatted_symbols)}\n\n"
+    md_content = f"# Traded Assets Universe (Top {cfg.top_n})\n\n"
+    md_content += (
+        f"**Methodology Note:** This universe is selected based on the **average daily quote volume (USDT)** "
+        f"calculated over a **{cfg.window_months}-month forward-looking formation window**. "
+        f"This ensures that the assets used for pair selection are among the most liquid projects "
+        f"specifically during the formation and testing periods. Assets with significant data gaps "
+        f"(less than 27 days per month) are automatically excluded.\n\n"
+    )
+    md_content += "---\n\n"
+    for range_label, (m_key, symbols_with_vol) in md_universes.items():
+        md_content += f"### {range_label} (Key: {m_key})\n"
+        formatted = [f"{sym} (${vol / 1e6:.1f}M)" for sym, vol in symbols_with_vol]
+        md_content += f"**Assets:** {', '.join(formatted)}\n\n"
 
     with open(md_out, "w", encoding="utf-8") as f:
         f.write(md_content)

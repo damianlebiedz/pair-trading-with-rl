@@ -151,6 +151,9 @@ class GenerateAssetsList(BaseModel):
     top_n: int = Field(
         gt=0, description="Number of top assets to select based on volume/liquidity."
     )
+    window_months: int = Field(
+        gt=0, description="Duration of the formation window in months."
+    )
     start: DateStr = Field(
         description="Start date for evaluating asset liquidity and volume (YYYY-MM-DD)."
     )

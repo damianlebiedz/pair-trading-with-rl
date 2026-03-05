@@ -96,8 +96,15 @@ def run_backtest(cfg: DictConfig):
     )
 
     try:
+        valid_keys = [k for k in universe_data.keys() if not k.startswith("_")]
+        if not valid_keys:
+            raise ValueError("No valid month keys found in universe JSON.")
+
+        first_month_key = sorted(valid_keys)[0]
+        first_ticker = universe_data[first_month_key][0]
+
         _validation_df = load_data(
-            tickers=[universe_data[sorted(universe_data.keys())[0]][0]],
+            tickers=[first_ticker],
             start=earliest_date,
             end=latest_date,
             interval=cfg.market.interval,
@@ -105,10 +112,9 @@ def run_backtest(cfg: DictConfig):
         del _validation_df
 
     except ValueError as e:
-        logger.error("Not enough historical data for requested ranges!")
-        logger.error(str(e))
+        logger.error(f"Validation failed: {e}")
         raise SystemExit(
-            "Backtest aborted due to missing data. Please fetch more data or adjust dates."
+            "Backtest aborted due to missing data or invalid JSON. Please check dates/JSON."
         )
 
     logger.info(f"Saving results to: {root}")
@@ -127,7 +133,7 @@ def run_backtest(cfg: DictConfig):
 
         if month_key not in universe_data:
             logger.error(
-                f"Universe for month {month_key} (needed for {current_selection_date.strftime('%Y-%m')}) not found in list_of_assets.json!"
+                f"Universe for month {month_key} not found in list_of_assets.json!"
             )
             continue
 

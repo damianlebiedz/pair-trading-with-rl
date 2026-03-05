@@ -1,8 +1,9 @@
 # yaml-language-server: $schema=../schemas/schema_helpers.json
 
 top_n: 50
-start: 2023-10-01
-end: 2025-11-30
+window_months: 2
+start: 2023-11-01
+end: 2025-10-31
 buffer_days: 7
 interval: 1h
 limit_per_request: 1000
