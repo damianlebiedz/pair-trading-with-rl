@@ -61,24 +61,6 @@ def setup_run_environment(calling_file: str) -> str:
     return output_dir
 
 
-def setup_rl_run_environment(calling_file: str) -> str:
-    script_dir = os.path.dirname(os.path.abspath(calling_file))
-    project_root = os.path.abspath(os.path.join(script_dir, ".."))
-
-    data_dir = os.path.join(project_root, "data_rl")
-    models_dir = os.path.join(data_dir, "models")
-    training_data_dir = os.path.join(data_dir, "training_data")
-
-    os.makedirs(data_dir, exist_ok=True)
-    os.makedirs(models_dir, exist_ok=True)
-    os.makedirs(training_data_dir, exist_ok=True)
-
-    logger.debug("--- RL Environment Setup ---")
-    logger.debug(f"Directory: {data_dir}")
-
-    return data_dir
-
-
 def execute_testing(
     bt: Strategy,
     best_params: dict[str, Any],

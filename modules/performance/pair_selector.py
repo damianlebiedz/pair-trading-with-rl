@@ -80,8 +80,8 @@ class PairSelector:
         df_ps = load_data(
             tickers=tickers, start=ps_start, end=ps_end, interval=interval
         )
-
-        candidates = self._run_scoring_ranking(df_ps)
+        source_df_ps = np.log(df_ps) if self.source == Source.LOG.value else df_ps
+        candidates = self._run_scoring_ranking(source_df_ps)
 
         if candidates.empty:
             logger.warning("No candidates found after cointegration tests.")

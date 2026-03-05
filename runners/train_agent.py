@@ -18,8 +18,8 @@ from modules.core.config import Config
 from modules.core.enums import RLModelName
 from modules.data_services.data_utils import load_strategy_result
 from modules.learning.environments import build_multi_env
-from runners.core.pipelines import setup_rl_run_environment, setup_run_environment
-from runners.core.utils import save_hydra_config_snapshot
+from runners.core.pipelines import setup_run_environment
+from runners.core.utils import save_hydra_config_snapshot, get_first_subdirectory
 
 logger = logging.getLogger(__name__)
 load_dotenv()
@@ -77,7 +77,34 @@ class LogEquityCallback(BaseCallback):
 @hydra.main(version_base=None, config_path="../config", config_name="train_agent")
 def train_agent(cfg: DictConfig):
     root = setup_run_environment(__file__)
-    rl_root = setup_rl_run_environment(__file__)
+
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.abspath(os.path.join(script_dir, ".."))
+
+    training_folder = cfg.rl.training_folder
+
+    if not training_folder:
+        training_root = os.path.join(project_root, "data", "training_data")
+        try:
+            training_folder = get_first_subdirectory(training_root)
+            logger.info(
+                f"No training subfolder specified. Auto-selected: {training_folder}"
+            )
+        except (FileNotFoundError, ValueError) as e:
+            logger.error(f"Cannot auto-select training data: {e}")
+            return
+
+    training_data_dir = os.path.join(
+        project_root, "data", "training_data", training_folder
+    )
+
+    model_dir = os.path.join(project_root, "data", "rl_models")
+    log_dir = os.path.join(root, "tensorboard_logs")
+
+    os.makedirs(training_data_dir, exist_ok=True)
+    os.makedirs(model_dir, exist_ok=True)
+    os.makedirs(log_dir, exist_ok=True)
+
     save_hydra_config_snapshot(cfg=cfg, root_dir=root)
 
     cfg = Config(**OmegaConf.to_container(cfg, resolve=True))
@@ -85,14 +112,6 @@ def train_agent(cfg: DictConfig):
     seed = cfg.rl.seed
     set_random_seed(seed)
     logger.info(f"Random seed set to: {seed}")
-
-    data_path = os.path.join(Path(rl_root), "training_data", cfg.rl.training_subfolder)
-    model_dir = os.path.join(root, "models")
-    log_dir = os.path.join(root, "tensorboard_logs")
-
-    os.makedirs(data_path, exist_ok=True)
-    os.makedirs(model_dir, exist_ok=True)
-    os.makedirs(log_dir, exist_ok=True)
 
     run = wandb.init(
         project=cfg.wandb.project,
@@ -104,9 +123,9 @@ def train_agent(cfg: DictConfig):
         dir=root,
     )
 
-    logger.info(f"Loading training data from '{data_path}'...")
+    logger.info(f"Loading training data from '{training_data_dir}'...")
 
-    all_files = list(Path(data_path).rglob("*.parquet"))
+    all_files = list(Path(training_data_dir).rglob("*.parquet"))
     valid_files = [
         f
         for f in all_files
@@ -182,7 +201,7 @@ def train_agent(cfg: DictConfig):
 
     if wandb.run is not None:
         data_artifact = wandb.Artifact(name="training_dataset", type="dataset")
-        data_artifact.add_dir(data_path)
+        data_artifact.add_dir(training_data_dir)
         wandb.log_artifact(data_artifact)
 
     vec_env = build_multi_env(

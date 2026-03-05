@@ -1,0 +1,39 @@
+top_n: 50
+start: "2023-10-01"
+end: "2025-11-30"
+buffer_days: 7
+interval: "1h"
+limit_per_request: 1000
+
+whitelist:
+  - "JUP"
+
+blacklist:
+  - "USDC"
+  - "BUSD"
+  - "TUSD"
+  - "FDUSD"
+  - "USDP"
+  - "DAI"
+  - "USDS"
+  - "AEUR"
+  - "EUR"
+  - "TRY"
+  - "GBP"
+  - "RUB"
+  - "ARS"
+  - "BRL"
+  - "UAH"
+  - "RON"
+  - "ZAR"
+  - "PLN"
+  - "WBTC"
+  - "WETH"
+  - "STETH"
+  - "BETH"
+  - "RETH"
+  - "CBETH"
+  - "FTT"
+  - "LUNA"
+  - "LUNC"
+  - "USTC"

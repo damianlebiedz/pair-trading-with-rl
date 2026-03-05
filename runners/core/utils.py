@@ -76,3 +76,16 @@ def load_model(
         raise ValueError(f"Unsupported model: {model_path}")
 
     return model, vec_normalize
+
+
+def get_first_subdirectory(base_path: str) -> str:
+    if not os.path.exists(base_path):
+        raise FileNotFoundError(f"Base directory not found: {base_path}")
+    subdirs = [
+        d for d in os.listdir(base_path) if os.path.isdir(os.path.join(base_path, d))
+    ]
+    if not subdirs:
+        raise ValueError(f"No subdirectories found in: {base_path}")
+    subdirs.sort()
+
+    return subdirs[0]

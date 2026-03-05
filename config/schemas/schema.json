@@ -176,18 +176,47 @@
     },
     "Performance": {
       "properties": {
-        "rl_model_subfolder": {
+        "use_rl": {
+          "description": "Flag to use RL model during backtest.",
+          "title": "Use Rl",
+          "type": "boolean"
+        },
+        "z_score_window": {
+          "description": "Z-Score lookback window size.",
+          "exclusiveMinimum": 0,
+          "title": "Z Score Window",
+          "type": "integer"
+        },
+        "entry_threshold": {
+          "description": "Z-score threshold to open a position.",
+          "title": "Entry Threshold",
+          "type": "number"
+        },
+        "exit_threshold": {
           "anyOf": [
             {
+              "type": "number"
+            },
+            {
+              "const": "-entry_threshold",
               "type": "string"
+            }
+          ],
+          "description": "Z-score threshold to close a position. Can be positive or negative (also equals to -entry_threshold).",
+          "title": "Exit Threshold"
+        },
+        "stop_loss": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 1,
+              "type": "number"
             },
             {
               "type": "null"
             }
           ],
-          "default": null,
-          "description": "Name of the folder with RL model, null if running without RL.",
-          "title": "Rl Model Subfolder"
+          "description": "Stop loss multiplier (e.g., 1.05 for 5% from entry_threshold), null if trade without SL.",
+          "title": "Stop Loss"
         },
         "iterations": {
           "description": "Number of backtest iterations (monthly).",
@@ -214,27 +243,53 @@
           "title": "Time Decay Sl",
           "type": "boolean"
         },
-        "test": {
-          "$ref": "#/$defs/Test"
+        "beta_start": {
+          "description": "Lookback window start date for beta calculation.",
+          "title": "Beta Start",
+          "type": "string"
+        },
+        "start": {
+          "description": "Start date for test.",
+          "title": "Start",
+          "type": "string"
+        },
+        "end": {
+          "description": "End date for test.",
+          "title": "End",
+          "type": "string"
         }
       },
       "required": [
+        "use_rl",
+        "z_score_window",
+        "entry_threshold",
+        "exit_threshold",
+        "stop_loss",
         "iterations",
         "beta_hedge",
         "delayed_entry",
         "sl_lock",
         "time_decay_sl",
-        "test"
+        "beta_start",
+        "start",
+        "end"
       ],
       "title": "Performance",
       "type": "object"
     },
     "RL": {
       "properties": {
-        "training_subfolder": {
-          "description": "Name of the folder with training data.",
-          "title": "Training Subfolder",
-          "type": "string"
+        "training_folder": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Name of the folder with training data, if null take first one.",
+          "title": "Training Folder"
         },
         "reward": {
           "$ref": "#/$defs/RLRewards",
@@ -261,7 +316,7 @@
         }
       },
       "required": [
-        "training_subfolder",
+        "training_folder",
         "reward",
         "obs_space_type",
         "passes_per_pair",
@@ -402,32 +457,6 @@
       "title": "Settings",
       "type": "object"
     },
-    "Test": {
-      "properties": {
-        "beta_start": {
-          "description": "Lookback window start date for beta calculation.",
-          "title": "Beta Start",
-          "type": "string"
-        },
-        "start": {
-          "description": "Start date for test.",
-          "title": "Start",
-          "type": "string"
-        },
-        "end": {
-          "description": "End date for test.",
-          "title": "End",
-          "type": "string"
-        }
-      },
-      "required": [
-        "beta_start",
-        "start",
-        "end"
-      ],
-      "title": "Test",
-      "type": "object"
-    },
     "Wandb": {
       "properties": {
         "project": {
@@ -511,42 +540,22 @@
       "title": "Generate Plots",
       "type": "boolean"
     },
-    "z_score_window": {
-      "description": "Z-Score lookback window size.",
-      "exclusiveMinimum": 0,
-      "title": "Z Score Window",
-      "type": "integer"
+    "save_for_training": {
+      "description": "Flag to auto-save backtest data in data/rl_training for RL training.",
+      "title": "Save For Training",
+      "type": "boolean"
     },
-    "entry_threshold": {
-      "description": "Z-score threshold to open a position.",
-      "title": "Entry Threshold",
-      "type": "number"
-    },
-    "exit_threshold": {
+    "rl_model_folder": {
       "anyOf": [
         {
-          "type": "number"
-        },
-        {
-          "const": "-entry_threshold",
           "type": "string"
-        }
-      ],
-      "description": "Z-score threshold to close a position. Can be positive or negative (also equals to -entry_threshold).",
-      "title": "Exit Threshold"
-    },
-    "stop_loss": {
-      "anyOf": [
-        {
-          "exclusiveMinimum": 1,
-          "type": "number"
         },
         {
           "type": "null"
         }
       ],
-      "description": "Stop loss multiplier (e.g., 1.05 for 5% from entry_threshold), null if trade without SL.",
-      "title": "Stop Loss"
+      "description": "Name of the folder with RL model, if null take first one or run without RL.",
+      "title": "Rl Model Folder"
     },
     "market": {
       "$ref": "#/$defs/Market",

@@ -6,7 +6,7 @@ defaults:
   - rl_algo: recurrent_ppo
 
 rl:
-  training_subfolder: "WINNER_5_hybrid_fixed"
+  training_folder: null
   reward: pnl_signal
   obs_space_type: minimal
   passes_per_pair: 10

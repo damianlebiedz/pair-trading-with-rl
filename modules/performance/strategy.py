@@ -113,19 +113,22 @@ class Strategy:
         source_x_col = f"{x_col}_{self.source}"
         source_y_col = f"{y_col}_{self.source}"
 
-        test_start_pos = df.index.get_indexer(
-            [pd.to_datetime(test_start)], method="bfill"
-        )[0]
+        offset = pd.Timedelta(self.interval.value)
 
-        target_beta_date = pd.to_datetime(beta_test_start)
-        beta_start_pos = df.index.get_indexer([target_beta_date], method="bfill")[0]
-        if df.index[beta_start_pos] == target_beta_date:
-            beta_start_pos += 1
+        beta_start_dt = pd.to_datetime(beta_test_start)
+        test_start_dt = pd.to_datetime(test_start) + offset
+        test_end_dt = pd.to_datetime(test_end)
 
-        end_pos = df.index.get_indexer([pd.to_datetime(test_end)], method="bfill")[0]
+        beta_start_pos = df.index.get_indexer([beta_start_dt], method="bfill")[0]
+        test_start_pos = df.index.get_indexer([test_start_dt], method="bfill")[0]
+        end_pos = df.index.get_indexer([test_end_dt], method="ffill")[0]
 
-        if -1 in [test_start_pos, beta_start_pos, end_pos]:
-            raise KeyError("Index not found in dataframe")
+        if -1 in [beta_start_pos, test_start_pos, end_pos]:
+            raise KeyError(
+                f"Index out of bounds! \n"
+                f"Requested -> Beta: {beta_start_dt}, Test: {test_start_dt}, End: {test_end_dt}\n"
+                f"Available -> First: {df.index[0]}, Last: {df.index[-1]}"
+            )
 
         X_vals = df[source_x_col].values
         Y_vals = df[source_y_col].values

@@ -46,8 +46,8 @@ class Settings(BaseModel):
 
 
 class RL(BaseModel):
-    training_subfolder: str = Field(
-        description="Name of the folder with training data."
+    training_folder: str | None = Field(
+        description="Name of the folder with training data, if null take first one."
     )
     reward: RLRewards = Field(
         description=f"Type of RL reward. Options: {[e.value for e in RLRewards]}"
@@ -76,26 +76,19 @@ class PairSelection(BaseModel):
         return self
 
 
-class Test(BaseModel):
-    beta_start: str = Field(
-        description="Lookback window start date for beta calculation."
-    )
-    start: str = Field(description="Start date for test.")
-    end: str = Field(description="End date for test.")
-
-    @model_validator(mode="after")
-    def validate_dates(self) -> "Test":
-        if pd.to_datetime(self.start) >= pd.to_datetime(self.end):
-            raise ValueError("Test: 'start' date must be before 'end' date.")
-        if pd.to_datetime(self.beta_start) >= pd.to_datetime(self.start):
-            raise ValueError("Test: 'beta_start' date must be before 'start' date.")
-        return self
-
-
 class Performance(BaseModel):
-    rl_model_subfolder: str | None = Field(
-        default=None,
-        description="Name of the folder with RL model, null if running without RL.",
+    use_rl: bool = Field(description="Flag to use RL model during backtest.")
+    z_score_window: int = Field(
+        gt=0,
+        description="Z-Score lookback window size.",
+    )
+    entry_threshold: float = Field(description="Z-score threshold to open a position.")
+    exit_threshold: float | Literal["-entry_threshold"] = Field(
+        description="Z-score threshold to close a position. Can be positive or negative (also equals to -entry_threshold)."
+    )
+    stop_loss: float | None = Field(
+        gt=1,
+        description="Stop loss multiplier (e.g., 1.05 for 5% from entry_threshold), null if trade without SL.",
     )
     iterations: int = Field(
         gt=0,
@@ -107,8 +100,19 @@ class Performance(BaseModel):
     delayed_entry: bool = Field(description="Delayed entry flag.")
     sl_lock: bool = Field(description="SL lock until mean-reversal flag.")
     time_decay_sl: bool = Field(description="Time Decay SL flag.")
+    beta_start: str = Field(
+        description="Lookback window start date for beta calculation."
+    )
+    start: str = Field(description="Start date for test.")
+    end: str = Field(description="End date for test.")
 
-    test: Test
+    @model_validator(mode="after")
+    def validate_dates(self) -> "Performance":
+        if pd.to_datetime(self.start) >= pd.to_datetime(self.end):
+            raise ValueError("Test: 'start' date must be before 'end' date.")
+        if pd.to_datetime(self.beta_start) >= pd.to_datetime(self.start):
+            raise ValueError("Test: 'beta_start' date must be before 'start' date.")
+        return self
 
 
 class RunBacktest(BaseModel):
@@ -218,17 +222,11 @@ class Config(BaseModel):
 
     tickers: list[str] = Field(description="List of asset tickers.")
     generate_plots: bool = Field(description="Generate plots if true.")
-    z_score_window: int = Field(
-        gt=0,
-        description="Z-Score lookback window size.",
+    save_for_training: bool = Field(
+        description="Flag to auto-save backtest data in data/rl_training for RL training."
     )
-    entry_threshold: float = Field(description="Z-score threshold to open a position.")
-    exit_threshold: float | Literal["-entry_threshold"] = Field(
-        description="Z-score threshold to close a position. Can be positive or negative (also equals to -entry_threshold)."
-    )
-    stop_loss: float | None = Field(
-        gt=1,
-        description="Stop loss multiplier (e.g., 1.05 for 5% from entry_threshold), null if trade without SL.",
+    rl_model_folder: str | None = Field(
+        description="Name of the folder with RL model, if null take first one or run without RL."
     )
 
     market: Market = Field(

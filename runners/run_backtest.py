@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import hydra
@@ -17,12 +18,12 @@ from runners.core.pipelines import (
     setup_run_environment,
     merge_multi_pair_results,
     merge_multi_period_results,
-    setup_rl_run_environment,
 )
 from runners.core.utils import (
     generate_date_lists,
     load_model,
     save_hydra_config_snapshot,
+    get_first_subdirectory,
 )
 
 logger = logging.getLogger(__name__)
@@ -33,30 +34,47 @@ def run_backtest(cfg: DictConfig):
     root = setup_run_environment(__file__)
     save_hydra_config_snapshot(cfg=cfg, root_dir=root)
 
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.abspath(os.path.join(script_dir, ".."))
+
+    training_session_dir = None
+    if cfg.save_for_training:
+        run_id = os.path.basename(root)
+        training_session_dir = os.path.join(project_root, "data", "rl_training", run_id)
+        os.makedirs(training_session_dir, exist_ok=True)
+        logger.info(
+            f"Backtest results will be saved for training in: {training_session_dir}"
+        )
+
+    json_path = os.path.join(project_root, "config/schemas/list_of_assets.json")
+
+    if not os.path.exists(json_path):
+        logger.error(f"Error: file not found {json_path}")
+        return
+
+    with open(json_path, "r") as f:
+        universe_data = json.load(f)
+
     cfg = Config(**OmegaConf.to_container(cfg, resolve=True))
 
-    if cfg.exit_threshold == "-entry_threshold":
-        exit_threshold = -cfg.entry_threshold
+    if cfg.performance.exit_threshold == "-entry_threshold":
+        exit_threshold = -cfg.performance.entry_threshold
     else:
-        exit_threshold = cfg.exit_threshold
+        exit_threshold = cfg.performance.exit_threshold
 
     best_params = {
-        "z_score_window": cfg.z_score_window,
-        "entry_threshold": cfg.entry_threshold,
+        "z_score_window": cfg.performance.z_score_window,
+        "entry_threshold": cfg.performance.entry_threshold,
         "exit_threshold": exit_threshold,
-        "stop_loss": cfg.stop_loss,
+        "stop_loss": cfg.performance.stop_loss,
     }
-
-    rl_output_dir = None
-    if cfg.performance.rl_model_subfolder:
-        rl_output_dir = setup_rl_run_environment(__file__)
 
     config = {
         "pair_selection_start": cfg.pair_selection.start,
         "pair_selection_end": cfg.pair_selection.end,
-        "beta_test_start": cfg.performance.test.beta_start,
-        "test_start": cfg.performance.test.start,
-        "test_end": cfg.performance.test.end,
+        "beta_test_start": cfg.performance.beta_start,
+        "test_start": cfg.performance.start,
+        "test_end": cfg.performance.end,
     }
 
     number_of_iterations = cfg.performance.iterations
@@ -76,14 +94,16 @@ def run_backtest(cfg: DictConfig):
     logger.debug(
         f"Pre-validating data availability from {earliest_date} to {latest_date}..."
     )
+
     try:
         _validation_df = load_data(
-            tickers=[cfg.tickers[0]],
+            tickers=[universe_data[sorted(universe_data.keys())[0]][0]],
             start=earliest_date,
             end=latest_date,
             interval=cfg.market.interval,
         )
         del _validation_df
+
     except ValueError as e:
         logger.error("Not enough historical data for requested ranges!")
         logger.error(str(e))
@@ -102,8 +122,20 @@ def run_backtest(cfg: DictConfig):
 
         logger.info(f"--- Running Iteration {i+1} ---")
 
+        current_selection_date = pd.to_datetime(lists["pair_selection_start_list"][i])
+        month_key = current_selection_date.strftime("%Y-%m")
+
+        if month_key not in universe_data:
+            logger.error(f"Month {month_key} not found in list_of_assets.json!")
+            continue
+
+        current_iteration_tickers = universe_data[month_key]
+        logger.debug(
+            f"Using universe from {month_key}: {len(current_iteration_tickers)} assets."
+        )
+
         ps_df = execute_pair_selection(
-            tickers=cfg.tickers,
+            tickers=current_iteration_tickers,
             ps_start=lists["pair_selection_start_list"][i],
             ps_end=lists["pair_selection_end_list"][i],
             beta_test_start=lists["beta_test_start_list"][i],
@@ -171,27 +203,37 @@ def run_backtest(cfg: DictConfig):
         strategies = []
         strategies_map = {}
 
+        rl_model_folder = cfg.rl_model_folder
+
         agent = None
-        if cfg.performance.rl_model_subfolder:
+        if cfg.performance.use_rl:
+            if not rl_model_folder:
+                models_root = os.path.join(project_root, "data", "rl_models")
+                try:
+                    rl_model_folder = get_first_subdirectory(models_root)
+                    logger.info(
+                        f"No model subfolder specified. Auto-selected: {rl_model_folder}"
+                    )
+                except (FileNotFoundError, ValueError) as e:
+                    logger.error(f"Cannot auto-select model: {e}")
+                    return
+
+            base_model_path = os.path.join(
+                project_root, "data", "rl_models", rl_model_folder
+            )
+
             valid_spaces = ObsSpaceType
             obs_space_type = next(
-                (
-                    space
-                    for space in valid_spaces
-                    if f"_{space}_" in cfg.performance.rl_model_subfolder
-                ),
+                (space for space in valid_spaces if f"_{space}_" in rl_model_folder),
                 None,
             )
 
             if not obs_space_type:
                 raise ValueError(
-                    f"Error: wrong obs_space_type in model_name: '{cfg.performance.rl_model_subfolder}'. "
+                    f"Error: wrong obs_space_type in model_name: '{rl_model_folder}'. "
                     f"Must be one of: {valid_spaces}"
                 )
 
-            base_model_path = os.path.join(
-                rl_output_dir, "models", cfg.performance.rl_model_subfolder
-            )
             model_zip_path = f"{base_model_path}.zip"
             vec_normalize_path = f"{base_model_path}_normalize.pkl"
 
@@ -275,6 +317,14 @@ def run_backtest(cfg: DictConfig):
             )
 
             test_results.append(result_test)
+
+            if cfg.save_for_training:
+                file_name = f"returns_{ticker_x}_{ticker_y}_{result_test.start}_{result_test.end}"
+                save_strategy_result(
+                    result=result_test,
+                    file_name=file_name,
+                    directory=training_session_dir,
+                )
 
         if len(test_results) > 1:
             merge_multi_pair_results(
