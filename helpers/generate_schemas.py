@@ -11,12 +11,13 @@ logger = get_logger(__name__)
 def generate_schemas():
     target_dir = Path(__file__).resolve().parent.parent / "config" / "schemas"
 
-    if target_dir.exists() and target_dir.is_dir():
-        for file in target_dir.glob("*.json"):
-            file.unlink()
-            logger.debug(f"Deleted old schema: {file.name}")
-    else:
-        target_dir.mkdir(parents=True, exist_ok=True)
+    schemas_to_cleanup = ["schema.json", "schema_rl_algo.json"]
+
+    for filename in schemas_to_cleanup:
+        file_path = target_dir / filename
+        if file_path.exists():
+            file_path.unlink()
+            logger.debug(f"Deleted old schema: {filename}")
 
     schema_dict = Config.model_json_schema()
 
