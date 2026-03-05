@@ -127,7 +127,8 @@ def run_backtest(cfg: DictConfig):
 
         if month_key not in universe_data:
             logger.error(
-                f"Universe for month {month_key} (needed for {current_selection_date.strftime('%Y-%m')}) not found in list_of_assets.json!")
+                f"Universe for month {month_key} (needed for {current_selection_date.strftime('%Y-%m')}) not found in list_of_assets.json!"
+            )
             continue
 
         current_iteration_tickers = universe_data[month_key]

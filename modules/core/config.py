@@ -291,11 +291,11 @@ class Config(BaseModel):
     )
     market: Market | None = Field(
         default=None,
-        description="Market simulation parameters including capital, fees, and timeframe."
+        description="Market simulation parameters including capital, fees, and timeframe.",
     )
     settings: Settings | None = Field(
         default=None,
-        description="General strategy parameters, including volatility and time decay bounds."
+        description="General strategy parameters, including volatility and time decay bounds.",
     )
     pair_selection: PairSelection = Field(
         description="Configuration for statistical tests and top pair filtering."
@@ -305,11 +305,11 @@ class Config(BaseModel):
     )
     fetch_historical_data: FetchHistoricalData | None = Field(
         default=None,
-        description="Parameters for the historical data downloading utility."
+        description="Parameters for the historical data downloading utility.",
     )
     generate_assets_list: GenerateAssetsList | None = Field(
         default=None,
-        description="Parameters for the asset universe generation and filtering utility."
+        description="Parameters for the asset universe generation and filtering utility.",
     )
     rl: RL | None = Field(
         default=None,

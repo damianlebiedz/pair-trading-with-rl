@@ -384,4 +384,3 @@ def merge_multi_period_results(
     logger.debug(f"Merge Multi-Period Results for {ticker_x}-{ticker_y} completed.")
 
     return final_result
-
