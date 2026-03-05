@@ -140,7 +140,7 @@ def run_backtest(cfg: DictConfig):
             ps_end=lists["pair_selection_end_list"][i],
             beta_test_start=lists["beta_test_start_list"][i],
             interval=cfg.market.interval,
-            top_n_factor=cfg.pair_selection.top_n_factor,
+            top_n=cfg.pair_selection.top_n,
             output_dir=output_dir,
             beta_hedge=cfg.performance.beta_hedge,
         )
@@ -270,7 +270,7 @@ def run_backtest(cfg: DictConfig):
                 end=lists["test_end_list"][i],
                 interval=cfg.market.interval,
                 fee_rate=cfg.market.fee_rate,
-                initial_cash=cfg.market.initial_cash / cfg.pair_selection.top_n_factor,
+                initial_cash=cfg.market.initial_cash / cfg.pair_selection.top_n,
                 risk_free_rate_annual=cfg.market.risk_free_rate_annual,
                 beta_hedge=cfg.performance.beta_hedge,
                 delayed_entry=cfg.performance.delayed_entry,

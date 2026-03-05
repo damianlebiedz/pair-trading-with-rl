@@ -48,7 +48,7 @@ Below is an automatically generated list of all configuration parameters support
 
 
 ### PairSelection
-- **`top_n_factor`**: Factor determining how many top pairs to select.
+- **`top_n`**: Factor determining how many top pairs to select.
 - **`start`**: Start date for pair selection.
 - **`end`**: End date for pair selection.
 

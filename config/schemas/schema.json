@@ -149,10 +149,10 @@
     },
     "PairSelection": {
       "properties": {
-        "top_n_factor": {
+        "top_n": {
           "description": "Factor determining how many top pairs to select.",
           "exclusiveMinimum": 0,
-          "title": "Top N Factor",
+          "title": "Top N",
           "type": "integer"
         },
         "start": {
@@ -167,7 +167,7 @@
         }
       },
       "required": [
-        "top_n_factor",
+        "top_n",
         "start",
         "end"
       ],

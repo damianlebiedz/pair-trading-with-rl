@@ -63,7 +63,7 @@ class RL(BaseModel):
 
 
 class PairSelection(BaseModel):
-    top_n_factor: int = Field(
+    top_n: int = Field(
         gt=0, description="Factor determining how many top pairs to select."
     )
     start: str = Field(description="Start date for pair selection.")

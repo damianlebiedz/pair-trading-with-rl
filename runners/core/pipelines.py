@@ -145,7 +145,7 @@ def execute_pair_selection(
     ps_end: str,
     beta_test_start: str,
     interval: str,
-    top_n_factor: float,
+    top_n: float,
     output_dir: str,
     beta_hedge: BetaHedge,
 ) -> pd.DataFrame:
@@ -159,7 +159,7 @@ def execute_pair_selection(
         ps_end=ps_end,
         beta_test_start=beta_test_start,
         interval=interval,
-        top_n=top_n_factor,
+        top_n=top_n,
         beta_hedge=beta_hedge,
     )
 
