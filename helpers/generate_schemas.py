@@ -1,43 +1,51 @@
 import json
 from pathlib import Path
+from typing import Union, Any
 from pydantic import TypeAdapter
 
-from modules.core.config import Config, RLAlgoConfig
+from modules.core.config import (
+    Config,
+    RLAlgoConfig,
+    FetchHistoricalData,
+    GenerateAssetsList,
+)
 from modules.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
 
+def strip_required(schema: Any) -> None:
+    if isinstance(schema, dict):
+        schema.pop("required", None)
+        for value in schema.values():
+            strip_required(value)
+    elif isinstance(schema, list):
+        for item in schema:
+            strip_required(item)
+
+
 def generate_schemas():
     target_dir = Path(__file__).resolve().parent.parent / "config" / "schemas"
 
-    schemas_to_cleanup = ["schema.json", "schema_rl_algo.json"]
-
-    for filename in schemas_to_cleanup:
-        file_path = target_dir / filename
-        if file_path.exists():
-            file_path.unlink()
-            logger.debug(f"Deleted old schema: {filename}")
-
     schema_dict = Config.model_json_schema()
+    strip_required(schema_dict)
 
-    if "required" in schema_dict:
-        del schema_dict["required"]
-
-    output_path = target_dir / "schema.json"
-    with open(output_path, "w", encoding="utf-8") as f:
-        json.dump(schema_dict, f, indent=2, ensure_ascii=False)
-
-    logger.info(f"Schema saved to: {output_path}")
+    with open(target_dir / "schema.json", "w", encoding="utf-8") as f:
+        json.dump(Config.model_json_schema(), f, indent=2)
+    logger.debug(f"Schema saved to: {target_dir / "schema.json"}")
 
     rl_adapter = TypeAdapter(RLAlgoConfig)
-    rl_schema_dict = rl_adapter.json_schema()
+    with open(target_dir / "schema_rl_algo.json", "w", encoding="utf-8") as f:
+        json.dump(rl_adapter.json_schema(), f, indent=2)
+    logger.debug(f"Schema saved to: {target_dir / "schema_rl_algo.json"}")
 
-    rl_output_path = target_dir / "schema_rl_algo.json"
-    with open(rl_output_path, "w", encoding="utf-8") as f:
-        json.dump(rl_schema_dict, f, indent=2, ensure_ascii=False)
+    HelpersUnion = Union[FetchHistoricalData, GenerateAssetsList]
+    helpers_adapter = TypeAdapter(HelpersUnion)
+    with open(target_dir / "schema_helpers.json", "w", encoding="utf-8") as f:
+        json.dump(helpers_adapter.json_schema(), f, indent=2)
+    logger.debug(f"Schema saved to: {target_dir / "schema_helpers.json"}")
 
-    logger.info(f"Schema saved to: {rl_output_path}")
+    logger.info(f"Schemas saved to: {target_dir}")
 
 
 def generate_docs():

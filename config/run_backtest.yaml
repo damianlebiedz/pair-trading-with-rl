@@ -6,8 +6,8 @@ rl_model_folder: null
 
 pair_selection:
   top_n: 10
-  start: "2023-11-01"
-  end: "2024-01-01"
+  start: 2023-11-01
+  end: 2024-01-01
 
 performance:
   use_rl: false
@@ -22,10 +22,11 @@ performance:
   delayed_entry: true
   sl_lock: true
   time_decay_sl: true
+  freeze_std: true
 
-  beta_start: "2023-12-01"
-  start: "2024-01-01"
-  end: "2024-02-01"
+  beta_start: 2023-12-01
+  start: 2024-01-01
+  end: 2024-02-01
 
 defaults:
   - _self_

@@ -1,0 +1,127 @@
+{
+  "$defs": {
+    "FetchHistoricalData": {
+      "properties": {
+        "start": {
+          "description": "Start date for downloading historical data (YYYY-MM-DD).",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "title": "Start",
+          "type": "string"
+        },
+        "end": {
+          "description": "End date for downloading historical data (YYYY-MM-DD).",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "title": "End",
+          "type": "string"
+        },
+        "interval": {
+          "$ref": "#/$defs/Interval",
+          "description": "Data timeframe for the fetcher. Options: ['1d', '4h', '1h', '30m', '15m', '5m', '3m', '1m']"
+        },
+        "limit_per_request": {
+          "default": 1000,
+          "description": "Maximum number of data points per single API request.",
+          "title": "Limit Per Request",
+          "type": "integer"
+        },
+        "timeout": {
+          "default": 30,
+          "description": "Network timeout in seconds for API calls.",
+          "title": "Timeout",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "start",
+        "end",
+        "interval"
+      ],
+      "title": "FetchHistoricalData",
+      "type": "object"
+    },
+    "GenerateAssetsList": {
+      "properties": {
+        "top_n": {
+          "description": "Number of top assets to select based on volume/liquidity.",
+          "exclusiveMinimum": 0,
+          "title": "Top N",
+          "type": "integer"
+        },
+        "start": {
+          "description": "Start date for evaluating asset liquidity and volume (YYYY-MM-DD).",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "title": "Start",
+          "type": "string"
+        },
+        "end": {
+          "description": "End date for evaluating asset liquidity and volume (YYYY-MM-DD).",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "title": "End",
+          "type": "string"
+        },
+        "buffer_days": {
+          "default": 0,
+          "description": "Number of extra days to check for data availability/continuity.",
+          "title": "Buffer Days",
+          "type": "integer"
+        },
+        "interval": {
+          "$ref": "#/$defs/Interval",
+          "description": "Timeframe for volume evaluation. Options: ['1d', '4h', '1h', '30m', '15m', '5m', '3m', '1m']"
+        },
+        "limit_per_request": {
+          "default": 1000,
+          "description": "API limit for asset listing requests.",
+          "title": "Limit Per Request",
+          "type": "integer"
+        },
+        "whitelist": {
+          "description": "List of tickers to forcibly include in the final list.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Whitelist",
+          "type": "array"
+        },
+        "blacklist": {
+          "description": "List of tickers to forcibly exclude from the final list.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Blacklist",
+          "type": "array"
+        }
+      },
+      "required": [
+        "top_n",
+        "start",
+        "end",
+        "interval"
+      ],
+      "title": "GenerateAssetsList",
+      "type": "object"
+    },
+    "Interval": {
+      "enum": [
+        "1d",
+        "4h",
+        "1h",
+        "30m",
+        "15m",
+        "5m",
+        "3m",
+        "1m"
+      ],
+      "title": "Interval",
+      "type": "string"
+    }
+  },
+  "anyOf": [
+    {
+      "$ref": "#/$defs/FetchHistoricalData"
+    },
+    {
+      "$ref": "#/$defs/GenerateAssetsList"
+    }
+  ]
+}

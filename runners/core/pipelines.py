@@ -268,7 +268,7 @@ def merge_multi_period_results(
     risk_free_rate_annual: float,
     interval: str,
     plot: bool,
-    tickers: list[str],
+    tickers_dict: dict[int, list[str]],
     prefix: str = "",
 ) -> StrategyResult | None:
     """
@@ -294,6 +294,9 @@ def merge_multi_period_results(
 
     results = []
 
+    ewp_dfs = []
+    btc_dfs = []
+
     for d in iter_dirs:
         pattern = f"{prefix}returns_{ticker_x}_{ticker_y}_*.parquet"
         files = list(d.glob(pattern))
@@ -305,6 +308,16 @@ def merge_multi_period_results(
         file_stem = files[0].stem
         res = load_strategy_result(file_stem, directory=str(d))
         results.append(res)
+
+        if plot:
+            iter_num = int(d.name)
+            iter_tickers = tickers_dict[iter_num]
+
+            btc_period = load_btc_benchmark(res.start, res.end, interval)
+            ewp_period = load_ewp_benchmark(iter_tickers, res.start, res.end, interval)
+
+            btc_dfs.append(btc_period[["BTC_pct"]])
+            ewp_dfs.append(ewp_period[["portfolio_pct"]])
 
     if not results:
         logger.warning("No results collected for merging.")
@@ -351,21 +364,18 @@ def merge_multi_period_results(
     )
 
     if plot:
-        btc_data = load_btc_benchmark(
-            test_start=final_result.start,
-            test_end=final_result.end,
-            interval=interval,
-        )
-        ewp_data = load_ewp_benchmark(
-            tickers=tickers,
-            test_start=final_result.start,
-            test_end=final_result.end,
-            interval=interval,
-        )
+        final_btc = pd.concat(btc_dfs).sort_index()
+        final_btc = final_btc[~final_btc.index.duplicated(keep="first")]
+        final_btc["BTC_return"] = (1 + final_btc["BTC_pct"]).cumprod() - 1
+
+        final_ewp = pd.concat(ewp_dfs).sort_index()
+        final_ewp = final_ewp[~final_ewp.index.duplicated(keep="first")]
+        final_ewp["ewp_return"] = (1 + final_ewp["portfolio_pct"]).cumprod() - 1
+
         plot_returns(
             result=final_result,
-            btc_data=btc_data,
-            ewp_data=ewp_data,
+            btc_data=final_btc,
+            ewp_data=final_ewp,
             directory=output_dir,
             save=True,
             prefix=prefix,
@@ -374,3 +384,4 @@ def merge_multi_period_results(
     logger.debug(f"Merge Multi-Period Results for {ticker_x}-{ticker_y} completed.")
 
     return final_result
+

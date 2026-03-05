@@ -1,11 +1,11 @@
 from typing import Annotated, Union, Literal, Any
-
 import pandas as pd
 from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
     model_validator,
+    StringConstraints,
 )
 from modules.core.enums import (
     Interval,
@@ -16,6 +16,8 @@ from modules.core.enums import (
     RLPolicyType,
     WandbMode,
 )
+
+DateStr = Annotated[str, StringConstraints(pattern=r"^\d{4}-\d{2}-\d{2}$")]
 
 
 class Market(BaseModel):
@@ -66,8 +68,8 @@ class PairSelection(BaseModel):
     top_n: int = Field(
         gt=0, description="Factor determining how many top pairs to select."
     )
-    start: str = Field(description="Start date for pair selection.")
-    end: str = Field(description="End date for pair selection.")
+    start: DateStr = Field(description="Start date for pair selection (YYYY-MM-DD).")
+    end: DateStr = Field(description="End date for pair selection (YYYY-MM-DD).")
 
     @model_validator(mode="after")
     def validate_dates(self) -> "PairSelection":
@@ -100,11 +102,14 @@ class Performance(BaseModel):
     delayed_entry: bool = Field(description="Delayed entry flag.")
     sl_lock: bool = Field(description="SL lock until mean-reversal flag.")
     time_decay_sl: bool = Field(description="Time Decay SL flag.")
+    freeze_std: bool = Field(
+        description="Flag to use fixed std from entry while calculating in-position Z-Score."
+    )
     beta_start: str = Field(
         description="Lookback window start date for beta calculation."
     )
-    start: str = Field(description="Start date for test.")
-    end: str = Field(description="End date for test.")
+    start: DateStr = Field(description="Start date for test (YYYY-MM-DD).")
+    end: DateStr = Field(description="End date for test (YYYY-MM-DD).")
 
     @model_validator(mode="after")
     def validate_dates(self) -> "Performance":
@@ -115,11 +120,69 @@ class Performance(BaseModel):
         return self
 
 
-class RunBacktest(BaseModel):
-    test_start: str = Field(description="Start date for the backtest loop.")
-    test_end: str = Field(description="End date for the backtest loop.")
+class FetchHistoricalData(BaseModel):
+    start: DateStr = Field(
+        description="Start date for downloading historical data (YYYY-MM-DD)."
+    )
+    end: DateStr = Field(
+        description="End date for downloading historical data (YYYY-MM-DD)."
+    )
+    interval: Interval = Field(
+        description=f"Data timeframe for the fetcher. Options: {[e.value for e in Interval]}"
+    )
+    limit_per_request: int = Field(
+        default=1000,
+        description="Maximum number of data points per single API request.",
+    )
+    timeout: int = Field(
+        default=30, description="Network timeout in seconds for API calls."
+    )
 
-    performance: Performance
+    @model_validator(mode="after")
+    def validate_dates(self) -> "FetchHistoricalData":
+        if pd.to_datetime(self.start) >= pd.to_datetime(self.end):
+            raise ValueError(
+                "FetchHistoricalData: 'start' date must be before 'end' date."
+            )
+        return self
+
+
+class GenerateAssetsList(BaseModel):
+    top_n: int = Field(
+        gt=0, description="Number of top assets to select based on volume/liquidity."
+    )
+    start: DateStr = Field(
+        description="Start date for evaluating asset liquidity and volume (YYYY-MM-DD)."
+    )
+    end: DateStr = Field(
+        description="End date for evaluating asset liquidity and volume (YYYY-MM-DD)."
+    )
+    buffer_days: int = Field(
+        default=0,
+        description="Number of extra days to check for data availability/continuity.",
+    )
+    interval: Interval = Field(
+        description=f"Timeframe for volume evaluation. Options: {[e.value for e in Interval]}"
+    )
+    limit_per_request: int = Field(
+        default=1000, description="API limit for asset listing requests."
+    )
+    whitelist: list[str] = Field(
+        default_factory=list,
+        description="List of tickers to forcibly include in the final list.",
+    )
+    blacklist: list[str] = Field(
+        default_factory=list,
+        description="List of tickers to forcibly exclude from the final list.",
+    )
+
+    @model_validator(mode="after")
+    def validate_dates(self) -> "GenerateAssetsList":
+        if pd.to_datetime(self.start) >= pd.to_datetime(self.end):
+            raise ValueError(
+                "GenerateAssetsList: 'start' date must be before 'end' date."
+            )
+        return self
 
 
 class A2CBaseline(BaseModel):
@@ -219,8 +282,6 @@ class Config(BaseModel):
     defaults: list[str | RLAlgoDefault | dict[str, Any]] | None = Field(
         default=None, description="Hydra defaults list."
     )
-
-    tickers: list[str] = Field(description="List of asset tickers.")
     generate_plots: bool = Field(description="Generate plots if true.")
     save_for_training: bool = Field(
         description="Flag to auto-save backtest data in data/rl_training for RL training."
@@ -228,11 +289,12 @@ class Config(BaseModel):
     rl_model_folder: str | None = Field(
         description="Name of the folder with RL model, if null take first one or run without RL."
     )
-
-    market: Market = Field(
+    market: Market | None = Field(
+        default=None,
         description="Market simulation parameters including capital, fees, and timeframe."
     )
-    settings: Settings = Field(
+    settings: Settings | None = Field(
+        default=None,
         description="General strategy parameters, including volatility and time decay bounds."
     )
     pair_selection: PairSelection = Field(
@@ -241,13 +303,17 @@ class Config(BaseModel):
     performance: Performance = Field(
         description="Trading logic flags, SL types, and backtest execution parameters."
     )
+    fetch_historical_data: FetchHistoricalData | None = Field(
+        default=None,
+        description="Parameters for the historical data downloading utility."
+    )
+    generate_assets_list: GenerateAssetsList | None = Field(
+        default=None,
+        description="Parameters for the asset universe generation and filtering utility."
+    )
     rl: RL | None = Field(
         default=None,
         description="Reinforcement Learning environment parameters and training settings.",
-    )
-    run_backtest: RunBacktest | None = Field(
-        default=None,
-        description="Execution timeline and explicit settings for the backtest runner.",
     )
     rl_algo: RLAlgoConfig | None = Field(
         default=None,

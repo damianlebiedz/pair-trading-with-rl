@@ -12,13 +12,8 @@ hydra:
   output_subdir: null
 
 wandb:
-  project: "research-paper"
+  project: research-paper
   mode: online
-
-tickers: [ "BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT", "ADAUSDT", "AVAXUSDT", "DOGEUSDT", "TRXUSDT",
-           "DOTUSDT", "LINKUSDT", "SHIBUSDT", "LTCUSDT", "BCHUSDT", "UNIUSDT", "XLMUSDT", "ATOMUSDT", "ICPUSDT",
-           "FILUSDT", "LDOUSDT", "APTUSDT", "QNTUSDT", "ARBUSDT", "VETUSDT", "MKRUSDT", "OPUSDT", "NEARUSDT",
-           "GRTUSDT", "AAVEUSDT", "ALGOUSDT" ]
 
 market:
   initial_cash: 100000

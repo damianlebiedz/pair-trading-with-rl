@@ -4,7 +4,6 @@ Below is an automatically generated list of all configuration parameters support
 
 ## Root Parameters
 
-- **`tickers`**: List of asset tickers.
 - **`generate_plots`**: Generate plots if true.
 - **`save_for_training`**: Flag to auto-save backtest data in data/rl_training for RL training.
 - **`rl_model_folder`**: Name of the folder with RL model, if null take first one or run without RL.
@@ -12,8 +11,9 @@ Below is an automatically generated list of all configuration parameters support
 - **`settings`**: General strategy parameters, including volatility and time decay bounds.
 - **`pair_selection`**: Configuration for statistical tests and top pair filtering.
 - **`performance`**: Trading logic flags, SL types, and backtest execution parameters.
+- **`fetch_historical_data`**: Parameters for the historical data downloading utility.
+- **`generate_assets_list`**: Parameters for the asset universe generation and filtering utility.
 - **`rl`**: Reinforcement Learning environment parameters and training settings.
-- **`run_backtest`**: Execution timeline and explicit settings for the backtest runner.
 - **`rl_algo`**: RL algorithm selection (e.g., A2C, PPO) and its specific hyperparameters.
 - **`wandb`**: Weights & Biases configuration for experiment tracking and logging.
 
@@ -34,6 +34,25 @@ Below is an automatically generated list of all configuration parameters support
 - **`ent_coef`**: Entropy coefficient for the loss calculation. Higher values encourage more exploration.
 
 
+### FetchHistoricalData
+- **`start`**: Start date for downloading historical data (YYYY-MM-DD).
+- **`end`**: End date for downloading historical data (YYYY-MM-DD).
+- **`interval`**: Data timeframe for the fetcher. Options: ['1d', '4h', '1h', '30m', '15m', '5m', '3m', '1m']
+- **`limit_per_request`**: Maximum number of data points per single API request.
+- **`timeout`**: Network timeout in seconds for API calls.
+
+
+### GenerateAssetsList
+- **`top_n`**: Number of top assets to select based on volume/liquidity.
+- **`start`**: Start date for evaluating asset liquidity and volume (YYYY-MM-DD).
+- **`end`**: End date for evaluating asset liquidity and volume (YYYY-MM-DD).
+- **`buffer_days`**: Number of extra days to check for data availability/continuity.
+- **`interval`**: Timeframe for volume evaluation. Options: ['1d', '4h', '1h', '30m', '15m', '5m', '3m', '1m']
+- **`limit_per_request`**: API limit for asset listing requests.
+- **`whitelist`**: List of tickers to forcibly include in the final list.
+- **`blacklist`**: List of tickers to forcibly exclude from the final list.
+
+
 ### Market
 - **`initial_cash`**: Starting capital for the backtest.
 - **`fee_rate`**: Transaction fee rate (e.g., 0.001 for 0.1%).
@@ -49,8 +68,8 @@ Below is an automatically generated list of all configuration parameters support
 
 ### PairSelection
 - **`top_n`**: Factor determining how many top pairs to select.
-- **`start`**: Start date for pair selection.
-- **`end`**: End date for pair selection.
+- **`start`**: Start date for pair selection (YYYY-MM-DD).
+- **`end`**: End date for pair selection (YYYY-MM-DD).
 
 
 ### Performance
@@ -64,9 +83,10 @@ Below is an automatically generated list of all configuration parameters support
 - **`delayed_entry`**: Delayed entry flag.
 - **`sl_lock`**: SL lock until mean-reversal flag.
 - **`time_decay_sl`**: Time Decay SL flag.
+- **`freeze_std`**: Flag to use fixed std from entry while calculating in-position Z-Score.
 - **`beta_start`**: Lookback window start date for beta calculation.
-- **`start`**: Start date for test.
-- **`end`**: End date for test.
+- **`start`**: Start date for test (YYYY-MM-DD).
+- **`end`**: End date for test (YYYY-MM-DD).
 
 
 ### RL
@@ -90,12 +110,6 @@ Below is an automatically generated list of all configuration parameters support
 - **`gamma`**: Discount factor for future rewards (between 0 and 1).
 - **`ent_coef`**: Entropy coefficient for the loss calculation. Higher values encourage more exploration.
 - **`clip_range`**: Range for clipping the surrogate objective. Prevents overly large policy updates to ensure stability (typically 0.2).
-
-
-### RunBacktest
-- **`test_start`**: Start date for the backtest loop.
-- **`test_end`**: End date for the backtest loop.
-- **`performance`**: *No description provided*
 
 
 ### Settings

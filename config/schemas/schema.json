@@ -66,6 +66,107 @@
       "title": "BetaHedge",
       "type": "string"
     },
+    "FetchHistoricalData": {
+      "properties": {
+        "start": {
+          "description": "Start date for downloading historical data (YYYY-MM-DD).",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "title": "Start",
+          "type": "string"
+        },
+        "end": {
+          "description": "End date for downloading historical data (YYYY-MM-DD).",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "title": "End",
+          "type": "string"
+        },
+        "interval": {
+          "$ref": "#/$defs/Interval",
+          "description": "Data timeframe for the fetcher. Options: ['1d', '4h', '1h', '30m', '15m', '5m', '3m', '1m']"
+        },
+        "limit_per_request": {
+          "default": 1000,
+          "description": "Maximum number of data points per single API request.",
+          "title": "Limit Per Request",
+          "type": "integer"
+        },
+        "timeout": {
+          "default": 30,
+          "description": "Network timeout in seconds for API calls.",
+          "title": "Timeout",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "start",
+        "end",
+        "interval"
+      ],
+      "title": "FetchHistoricalData",
+      "type": "object"
+    },
+    "GenerateAssetsList": {
+      "properties": {
+        "top_n": {
+          "description": "Number of top assets to select based on volume/liquidity.",
+          "exclusiveMinimum": 0,
+          "title": "Top N",
+          "type": "integer"
+        },
+        "start": {
+          "description": "Start date for evaluating asset liquidity and volume (YYYY-MM-DD).",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "title": "Start",
+          "type": "string"
+        },
+        "end": {
+          "description": "End date for evaluating asset liquidity and volume (YYYY-MM-DD).",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "title": "End",
+          "type": "string"
+        },
+        "buffer_days": {
+          "default": 0,
+          "description": "Number of extra days to check for data availability/continuity.",
+          "title": "Buffer Days",
+          "type": "integer"
+        },
+        "interval": {
+          "$ref": "#/$defs/Interval",
+          "description": "Timeframe for volume evaluation. Options: ['1d', '4h', '1h', '30m', '15m', '5m', '3m', '1m']"
+        },
+        "limit_per_request": {
+          "default": 1000,
+          "description": "API limit for asset listing requests.",
+          "title": "Limit Per Request",
+          "type": "integer"
+        },
+        "whitelist": {
+          "description": "List of tickers to forcibly include in the final list.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Whitelist",
+          "type": "array"
+        },
+        "blacklist": {
+          "description": "List of tickers to forcibly exclude from the final list.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Blacklist",
+          "type": "array"
+        }
+      },
+      "required": [
+        "top_n",
+        "start",
+        "end",
+        "interval"
+      ],
+      "title": "GenerateAssetsList",
+      "type": "object"
+    },
     "Interval": {
       "enum": [
         "1d",
@@ -156,12 +257,14 @@
           "type": "integer"
         },
         "start": {
-          "description": "Start date for pair selection.",
+          "description": "Start date for pair selection (YYYY-MM-DD).",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
           "title": "Start",
           "type": "string"
         },
         "end": {
-          "description": "End date for pair selection.",
+          "description": "End date for pair selection (YYYY-MM-DD).",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
           "title": "End",
           "type": "string"
         }
@@ -243,18 +346,25 @@
           "title": "Time Decay Sl",
           "type": "boolean"
         },
+        "freeze_std": {
+          "description": "Flag to use fixed std from entry while calculating in-position Z-Score.",
+          "title": "Freeze Std",
+          "type": "boolean"
+        },
         "beta_start": {
           "description": "Lookback window start date for beta calculation.",
           "title": "Beta Start",
           "type": "string"
         },
         "start": {
-          "description": "Start date for test.",
+          "description": "Start date for test (YYYY-MM-DD).",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
           "title": "Start",
           "type": "string"
         },
         "end": {
-          "description": "End date for test.",
+          "description": "End date for test (YYYY-MM-DD).",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
           "title": "End",
           "type": "string"
         }
@@ -270,6 +380,7 @@
         "delayed_entry",
         "sl_lock",
         "time_decay_sl",
+        "freeze_std",
         "beta_start",
         "start",
         "end"
@@ -404,30 +515,6 @@
       "title": "RecurrentPPO",
       "type": "object"
     },
-    "RunBacktest": {
-      "properties": {
-        "test_start": {
-          "description": "Start date for the backtest loop.",
-          "title": "Test Start",
-          "type": "string"
-        },
-        "test_end": {
-          "description": "End date for the backtest loop.",
-          "title": "Test End",
-          "type": "string"
-        },
-        "performance": {
-          "$ref": "#/$defs/Performance"
-        }
-      },
-      "required": [
-        "test_start",
-        "test_end",
-        "performance"
-      ],
-      "title": "RunBacktest",
-      "type": "object"
-    },
     "Settings": {
       "properties": {
         "vol_window": {
@@ -527,14 +614,6 @@
       "description": "Hydra defaults list.",
       "title": "Defaults"
     },
-    "tickers": {
-      "description": "List of asset tickers.",
-      "items": {
-        "type": "string"
-      },
-      "title": "Tickers",
-      "type": "array"
-    },
     "generate_plots": {
       "description": "Generate plots if true.",
       "title": "Generate Plots",
@@ -558,11 +637,27 @@
       "title": "Rl Model Folder"
     },
     "market": {
-      "$ref": "#/$defs/Market",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Market"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
       "description": "Market simulation parameters including capital, fees, and timeframe."
     },
     "settings": {
-      "$ref": "#/$defs/Settings",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Settings"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
       "description": "General strategy parameters, including volatility and time decay bounds."
     },
     "pair_selection": {
@@ -572,6 +667,30 @@
     "performance": {
       "$ref": "#/$defs/Performance",
       "description": "Trading logic flags, SL types, and backtest execution parameters."
+    },
+    "fetch_historical_data": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/FetchHistoricalData"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Parameters for the historical data downloading utility."
+    },
+    "generate_assets_list": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/GenerateAssetsList"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Parameters for the asset universe generation and filtering utility."
     },
     "rl": {
       "anyOf": [
@@ -584,18 +703,6 @@
       ],
       "default": null,
       "description": "Reinforcement Learning environment parameters and training settings."
-    },
-    "run_backtest": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/RunBacktest"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Execution timeline and explicit settings for the backtest runner."
     },
     "rl_algo": {
       "anyOf": [
@@ -637,6 +744,13 @@
       "description": "Weights & Biases configuration for experiment tracking and logging."
     }
   },
+  "required": [
+    "generate_plots",
+    "save_for_training",
+    "rl_model_folder",
+    "pair_selection",
+    "performance"
+  ],
   "title": "Config",
   "type": "object"
 }

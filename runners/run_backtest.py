@@ -113,7 +113,7 @@ def run_backtest(cfg: DictConfig):
 
     logger.info(f"Saving results to: {root}")
 
-    tickers = cfg.tickers if cfg.generate_plots else None
+    tickers_dict = {}
 
     for i in range(number_of_iterations):
         output_dir = os.path.join(root, f"{i+1}")
@@ -126,13 +126,16 @@ def run_backtest(cfg: DictConfig):
         month_key = current_selection_date.strftime("%Y-%m")
 
         if month_key not in universe_data:
-            logger.error(f"Month {month_key} not found in list_of_assets.json!")
+            logger.error(
+                f"Universe for month {month_key} (needed for {current_selection_date.strftime('%Y-%m')}) not found in list_of_assets.json!")
             continue
 
         current_iteration_tickers = universe_data[month_key]
         logger.debug(
             f"Using universe from {month_key}: {len(current_iteration_tickers)} assets."
         )
+
+        tickers_dict[i + 1] = current_iteration_tickers
 
         ps_df = execute_pair_selection(
             tickers=current_iteration_tickers,
@@ -153,7 +156,7 @@ def run_backtest(cfg: DictConfig):
                 f"Iteration {i + 1}: No pairs selected! Generating flat (cash-only) result for this period."
             )
 
-            ref_ticker = cfg.tickers[0]
+            ref_ticker = current_iteration_tickers[0]
             ref_data = load_data(
                 tickers=[ref_ticker],
                 start=lists["test_start_list"][i],
@@ -281,6 +284,7 @@ def run_backtest(cfg: DictConfig):
                     cfg.settings.time_decay_max,
                 ),
                 vol_window=cfg.settings.vol_window,
+                freeze_std=cfg.performance.freeze_std,
                 agent=agent,
             )
 
@@ -313,7 +317,7 @@ def run_backtest(cfg: DictConfig):
                 subdir="test",
                 interval=cfg.market.interval,
                 plot=cfg.generate_plots,
-                tickers=tickers,
+                tickers=current_iteration_tickers,
             )
 
             test_results.append(result_test)
@@ -336,7 +340,7 @@ def run_backtest(cfg: DictConfig):
                 test_end=lists["test_end_list"][i],
                 interval=cfg.market.interval,
                 plot=cfg.generate_plots,
-                tickers=tickers,
+                tickers=current_iteration_tickers,
             )
 
     if number_of_iterations > 1:
@@ -348,7 +352,7 @@ def run_backtest(cfg: DictConfig):
             risk_free_rate_annual=cfg.market.risk_free_rate_annual,
             interval=cfg.market.interval,
             plot=cfg.generate_plots,
-            tickers=tickers,
+            tickers_dict=tickers_dict,
         )
 
     logger.info(f"Results saved in {root}.")

@@ -41,6 +41,7 @@ class Strategy:
         vol_window: int,
         time_decay_sl: bool,
         time_decay_params: tuple[int, int],
+        freeze_std: bool,
         agent: RLAgentAdapter | None = None,
         source: Source = Source.LOG.value,
     ):
@@ -55,10 +56,11 @@ class Strategy:
         self.beta_hedge = beta_hedge
         self.delayed_entry = delayed_entry
         self.sl_lock = sl_lock
+        self.vol_window = vol_window
         self.time_decay_sl = time_decay_sl
         self.time_decay_params = time_decay_params
+        self.freeze_std = freeze_std
         self.agent = agent
-        self.vol_window = vol_window
         self.source = source
 
         self.data = load_pair(
@@ -272,13 +274,15 @@ class Strategy:
                         position_state.position != 0
                         and position_state.entry_beta is not None
                     ):
-                        spread, mean, _ = calculate_spread_statistics(
+                        spread, mean, current_std = calculate_spread_statistics(
                             X_slice=slice_x_win,
                             Y_slice=slice_y_win,
                             beta=position_state.entry_beta,
                         )
 
-                        std = position_state.entry_std
+                        std = (
+                            position_state.entry_std if self.freeze_std else current_std
+                        )
 
                         z_score = calculate_z_score(spread=spread, mean=mean, std=std)
 
