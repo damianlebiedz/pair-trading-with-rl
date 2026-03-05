@@ -1,6 +1,8 @@
 from pathlib import Path
 import pandas as pd
 
+from modules.core.enums import Interval
+
 
 def get_project_root() -> Path:
     """
@@ -11,7 +13,7 @@ def get_project_root() -> Path:
 
 
 def load_single_ticker(
-    ticker: str, start: str, end: str, interval: str, base_dir: Path
+    ticker: str, start: str, end: str, interval: Interval, base_dir: Path
 ) -> pd.DataFrame:
     """Load data for a single asset and return as a DataFrame."""
     ticker_dir = base_dir / ticker
@@ -19,10 +21,10 @@ def load_single_ticker(
     if not ticker_dir.exists():
         raise FileNotFoundError(f"Directory not found: {ticker_dir}")
 
-    files = list(ticker_dir.glob(f"*_{interval}.csv"))
+    files = list(ticker_dir.glob(f"*_{interval.value}.csv"))
     if not files:
         raise FileNotFoundError(
-            f"No CSV file with interval '{interval}' found in {ticker_dir}"
+            f"No CSV file with interval '{interval.value}' found in {ticker_dir}"
         )
 
     df = pd.read_csv(files[0], parse_dates=["open_time", "close_time"])
@@ -39,7 +41,7 @@ def load_single_ticker(
 
 
 def load_data(
-    tickers: list[str], start: str, end: str, interval: str, data_dir: str = "data"
+    tickers: list[str], start: str, end: str, interval: Interval, data_dir: str = "data"
 ) -> pd.DataFrame:
     """Load data for a list of assets and return as DataFrame."""
     base_dir = get_project_root() / data_dir
@@ -57,21 +59,6 @@ def load_data(
     return data
 
 
-def load_pair(
-    x: str, y: str, start: str, end: str, interval: str, data_dir: str = "data"
-) -> pd.DataFrame:
+def load_pair(x: str, y: str, *args, **kwargs) -> pd.DataFrame:
     """Load data for a single pair and return as DataFrame."""
-    base_dir = get_project_root() / data_dir
-
-    df_x = load_single_ticker(x, start, end, interval, base_dir)
-    df_y = load_single_ticker(y, start, end, interval, base_dir)
-
-    data = pd.concat([df_x, df_y], axis=1)
-    data = data[(data.index > start) & (data.index <= end)]
-
-    if data.empty:
-        raise ValueError(
-            f"No data available for tickers {[x, y]} in range {start} to {end}"
-        )
-
-    return data
+    return load_data([x, y], *args, **kwargs)

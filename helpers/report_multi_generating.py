@@ -29,6 +29,7 @@ SELECTED_METRICS = [
     "avg_win_return",
     "avg_lose_return",
     "avg_trade_return",
+    "avg_trade_duration",
     "sharpe_ratio_annual",
     "sortino_ratio_annual",
     "calmar_ratio_annual",
@@ -42,6 +43,7 @@ FORMAT_MAP = {
     "avg_win_return": "{:.2%}",
     "avg_lose_return": "{:.2%}",
     "avg_trade_return": "{:.2%}",
+    "avg_trade_duration": "{:.4f}",
     "sharpe_ratio_annual": "{:.4f}",
     "sortino_ratio_annual": "{:.4f}",
     "calmar_ratio_annual": "{:.4f}",
@@ -59,6 +61,7 @@ RENAME_MAP = {
     "avg_win_return": "Avg Win",
     "avg_lose_return": "Avg Loss",
     "avg_trade_return": "Avg Trade Return",
+    "avg_trade_duration": "Avg Trade Duration",
     "sharpe_ratio_annual": "Sharpe Ratio",
     "sortino_ratio_annual": "Sortino Ratio",
     "calmar_ratio_annual": "Calmar Ratio",
@@ -89,8 +92,8 @@ def generate_comparison_report(strategies_input: dict | list) -> None:
     report_output_dir.mkdir(parents=True, exist_ok=True)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    chart_filename = f"comparison_chart_{timestamp}.html"
-    report_filename = f"report_{timestamp}.html"
+    chart_filename = f"multi_comparison_chart_{timestamp}.html"
+    report_filename = f"multi_report_{timestamp}.html"
 
     strategies_returns = {}
     stats_df_dict = {}
@@ -121,7 +124,6 @@ def generate_comparison_report(strategies_input: dict | list) -> None:
                 df_stat["metric"] = df_stat["metric"].astype(str)
                 df_stat = df_stat.set_index("metric")
 
-                # Rozbicie na MultiIndex: Strategia -> Gross/Net
                 if "gross" in df_stat.columns:
                     stats_df_dict[(label, "Gross")] = df_stat["gross"].reindex(
                         SELECTED_METRICS
@@ -358,32 +360,29 @@ def generate_comparison_report(strategies_input: dict | list) -> None:
                 overflow: hidden;
             }
 
-            /* --- STYL AKADEMICKI (LaTeX Booktabs) --- */
             .academic-table {
                 width: 85%;
                 margin: 30px auto;
                 border-collapse: collapse; 
                 font-size: 12pt;
-                table-layout: fixed; /* Wymusza równe szerokości kolumn */
+                table-layout: fixed;
             }
 
             .academic-table th,
             .academic-table td {
-                border: none; /* Całkowity brak pionowych kresek */
+                border: none;
                 padding: 10px 12px;
                 text-align: center;
                 vertical-align: middle;
             }
 
-            /* Główna gruba linia na samej górze tabeli */
             .academic-table thead tr:first-child th {
                 border-top: 2px solid black;
-                border-bottom: 1px solid black; /* Oddziela nazwy strategii od Gross/Net */
+                border-bottom: 1px solid black;
                 font-size: 13pt;
                 padding-bottom: 10px;
             }
 
-            /* Linia pod Gross/Net zamykająca nagłówek */
             .academic-table thead tr:nth-child(2) th {
                 border-bottom: 1px solid black;
                 font-style: italic;
@@ -392,12 +391,10 @@ def generate_comparison_report(strategies_input: dict | list) -> None:
                 padding-bottom: 8px;
             }
 
-            /* Główna gruba linia na samym dole tabeli */
             .academic-table tbody tr:last-child td {
                 border-bottom: 2px solid black;
             }
 
-            /* Wyrównanie pierwszej kolumny (Metryki) do lewej i ustawienie jej szerokości */
             .academic-table tbody td:first-child,
             .academic-table thead th:first-child {
                 text-align: left;
@@ -405,7 +402,6 @@ def generate_comparison_report(strategies_input: dict | list) -> None:
                 font-weight: bold;
             }
 
-            /* Delikatny efekt najechania myszką ułatwiający czytanie wierszy */
             .academic-table tbody tr:hover {
                 background-color: #f9f9f9;
             }

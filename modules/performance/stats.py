@@ -1,8 +1,8 @@
 import calendar
-from typing import Literal
 import numpy as np
 import pandas as pd
 
+from modules.core.enums import Interval
 from modules.data_services.data_utils import get_steps
 
 
@@ -10,7 +10,7 @@ def calculate_stats(
     df: pd.DataFrame,
     exec_log_df: pd.DataFrame,
     initial_cash: float,
-    interval: Literal["1d", "4h", "1h", "30m", "15m", "5m", "3m", "1m"],
+    interval: Interval,
     risk_free_rate_annual: float,
 ) -> pd.DataFrame:
     """
@@ -18,6 +18,7 @@ def calculate_stats(
     1. Time-series analysis (Sharpe, CAGR, Drawdown etc.) based on the equity curve.
     2. Trade execution analysis (Win Rate, Avg Trade etc.) based on the execution logger.
     """
+    df = df.dropna(subset=["equity"]).copy()
     steps_per_day = get_steps(interval)
 
     if not df.empty:
@@ -139,6 +140,7 @@ def calculate_stats(
                 "win_count": 0,
                 "lose_count": 0,
                 "win_rate": None,
+                "avg_trade_duration": None,
                 "max_win": None,
                 "max_lose": None,
                 "avg_win_return": None,
@@ -153,6 +155,7 @@ def calculate_stats(
                 "win_count": 0,
                 "lose_count": 0,
                 "win_rate": None,
+                "avg_trade_duration": None,
                 "max_win": None,
                 "max_lose": None,
                 "avg_win_return": None,
@@ -179,6 +182,10 @@ def calculate_stats(
 
         win_rate = win_count / total_trades if total_trades > 0 else None
 
+        avg_trade_duration = (
+            close_positions["time_in_pos"].mean() if total_trades > 0 else None
+        )
+
         max_win = trade_returns.max() if not trade_returns.empty else None
         max_lose = trade_returns.min() if not trade_returns.empty else None
 
@@ -190,6 +197,7 @@ def calculate_stats(
             "win_count": win_count,
             "lose_count": lose_count,
             "win_rate": win_rate,
+            "avg_trade_duration": avg_trade_duration,
             "max_win": max_win,
             "max_lose": max_lose,
             "avg_win_return": avg_win_ret,
@@ -215,6 +223,7 @@ def calculate_stats(
         "win_count",
         "lose_count",
         "win_rate",
+        "avg_trade_duration",
         "max_win",
         "max_lose",
         "avg_win_return",

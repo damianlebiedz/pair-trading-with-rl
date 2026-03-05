@@ -1,18 +1,13 @@
 import logging
-from typing import Literal
 import numpy as np
 import pandas as pd
-from sklearn.preprocessing import MinMaxScaler
 
+from modules.core.enums import Source, BetaHedge
 from modules.core.indicators import (
     calculate_beta,
-    calculate_half_life_window,
     calculate_hurst,
 )
-from modules.core.statistical_tests import (
-    johansen_cointegration,
-    engle_granger_cointegration,
-)
+from modules.core.statistical_tests import engle_granger_cointegration
 from modules.data_services.data_loaders import load_data
 
 logger = logging.getLogger(__name__)
@@ -21,10 +16,7 @@ logger = logging.getLogger(__name__)
 class PairSelector:
     def __init__(
         self,
-        coint_type: Literal["eg", "johansen"],
-        beta_method: Literal["ols", "kalman"],
-        valid_window: tuple[int, int],
-        source: str = "log",
+        source: Source = Source.LOG.value,
     ):
         """
         Initializes the PairSelector module.
@@ -34,40 +26,22 @@ class PairSelector:
         2. **Validation**: Based on Mean Reversion characteristics (Hurst Exponent) and Beta stability.
 
         Args:
-            coint_type: The statistical test used for the cointegration component of the score.
-                - 'eg': Engle-Granger two-step method.
-                - 'johansen': Johansen test.
-            beta_method: The method used to calculate the Hedge Ratio (Beta) during validation.
-                - 'ols': Ordinary Least Squares (static).
-                - 'kalman': Kalman Filter (dynamic state space).
-            valid_window: Min and max values of Z-Score window.
             source: Data transformation applied before analysis (default: 'log').
 
         Raises:
             ValueError: If `coint_type` or `beta_method` are not supported.
         """
-        self.coint_type = coint_type
-        self.beta_method = beta_method
-        self.valid_window = valid_window
         self.source = source
-
-        if coint_type not in ["eg", "johansen"]:
-            raise ValueError("'coint_type' must be 'eg' or 'johansen'")
-
-        if beta_method not in ["ols", "kalman"]:
-            raise ValueError("'beta_method' must be 'ols', or 'kalman'")
-
-        if valid_window[0] > valid_window[1]:
-            raise ValueError(f"'valid_window' should be (min, max): {valid_window}")
 
     def select_pairs(
         self,
         tickers: list[str],
         ps_start: str,
         ps_end: str,
-        test_win_start: str,
+        beta_test_start: str,
         interval: str,
         top_n: int,
+        beta_hedge: BetaHedge,
     ) -> pd.DataFrame:
         """
         Executes the Pair Selection pipeline using a Composite Score (Ranking & Validation) approach.
@@ -85,7 +59,7 @@ class PairSelector:
         -----------------
         1. **Data Loading (Selection)**: Loads price data for the `ps_start` - `ps_end` period.
         2. **Composite Scoring**:
-           - Runs Cointegration Test (Johansen/EG) -> Normalizes result to 0-1 scale.
+           - Runs Cointegration Test (EG) -> Normalizes result to 0-1 scale.
            - Calculates Correlation ($R^2$) -> Already 0-1 scale.
            - Computes `Score = (0.5 * Norm_Coint) + (0.5 * R_Squared)`.
            - Sorts pairs by `Score` in descending order. This filters out pairs with high cointegration
@@ -95,17 +69,7 @@ class PairSelector:
         4. **Iterative Validation**:
            Iterates through the top-scored candidates and checks on Validation Data:
            - **Beta Check**: Rejects if Beta <= 0.
-           - **Hurst Check**: Calculates Hurst Exponent on the spread formed by the current Beta.
-             Rejects if Hurst > 0.5 (indicating trending/random walk behavior).
         5. **Final Selection**: Picks the first `top_n` pairs that pass all validation filters.
-
-        Args:
-            tickers: List of asset tickers to analyze.
-            ps_start: Start date for the Scoring/Ranking data.
-            ps_end: End date for the Scoring/Ranking data.
-            test_win_start: Start date for the Validation/Calibration data.
-            interval: Data timeframe (e.g., '1h').
-            top_n: Number of pairs to select.
 
         Returns:
             pd.DataFrame: DataFrame containing the selected `top_n` pairs with their
@@ -113,7 +77,9 @@ class PairSelector:
         """
 
         logger.debug(f"Loading data for Pair Selection: {ps_start} - {ps_end}")
-        df_ps = load_data(tickers, ps_start, ps_end, interval)
+        df_ps = load_data(
+            tickers=tickers, start=ps_start, end=ps_end, interval=interval
+        )
 
         candidates = self._run_scoring_ranking(df_ps)
 
@@ -126,12 +92,17 @@ class PairSelector:
         )
 
         df_val = load_data(
-            tickers=tickers, start=test_win_start, end=ps_end, interval=interval
+            tickers=tickers, start=beta_test_start, end=ps_end, interval=interval
         )
 
         for col in df_val.columns:
             if df_val[col].dtype in ["float64", "float32"]:
-                df_val[f"{col}_log"] = np.log(df_val[col])
+                df_val[f"{col}_{Source.LOG.value}"] = np.log(df_val[col])
+
+        target_beta_date = pd.to_datetime(beta_test_start)
+        beta_start_pos = df_val.index.get_indexer([target_beta_date], method="bfill")[0]
+        if df_val.index[beta_start_pos] == target_beta_date:
+            beta_start_pos += 1
 
         validated_pairs = []
 
@@ -143,20 +114,24 @@ class PairSelector:
                 source_x_col = f"{t_x}_{self.source}"
                 source_y_col = f"{t_y}_{self.source}"
 
-                X_vals = df_val[source_x_col].values
-                Y_vals = df_val[source_y_col].values
+                X_vals_full = df_val[source_x_col].values
+                Y_vals_full = df_val[source_y_col].values
 
-                beta = calculate_beta(
-                    X_slice=X_vals, Y_slice=Y_vals, beta_method=self.beta_method
-                )
+                X_vals_beta = X_vals_full[beta_start_pos:]
+                Y_vals_beta = Y_vals_full[beta_start_pos:]
+
+                if beta_hedge != BetaHedge.NO_HEDGE:
+                    beta = calculate_beta(X_slice=X_vals_beta, Y_slice=Y_vals_beta)
+                else:
+                    beta = 1
 
                 if beta <= 0:
                     logger.debug(f"Pair {pair} rejected. Beta {beta:.3f} <= 0")
                     continue
 
                 hurst = calculate_hurst(
-                    X_slice=X_vals,
-                    Y_slice=Y_vals,
+                    X_slice=X_vals_beta,
+                    Y_slice=Y_vals_beta,
                     beta=beta,
                 )
 
@@ -164,25 +139,11 @@ class PairSelector:
                     logger.debug(f"Pair {pair} rejected. Hurst {hurst:.3f} > 0.5")
                     continue
 
-                X_log_vals = df_val[f"{t_x}_log"].values
-                Y_log_vals = df_val[f"{t_y}_log"].values
-
-                win = calculate_half_life_window(
-                    X_slice=X_log_vals,
-                    Y_slice=Y_log_vals,
-                    beta=beta,
-                    valid_window=self.valid_window,
-                )
-                if win is None:
-                    logger.debug(f"Pair {pair} rejected. Window = None")
-                    continue
-
                 res_row = row.to_dict()
                 res_row.update(
                     {
                         "validation_beta": beta,
                         "validation_hurst": hurst,
-                        "validation_window": win,
                     }
                 )
                 validated_pairs.append(res_row)
@@ -206,22 +167,32 @@ class PairSelector:
         """
         Runs cointegration tests AND correlation analysis to compute a Composite Score.
 
+        The score combines long-term equilibrium (cointegration) with short-term linear
+        dependency (R-squared) to rank potential pairs.
+
+        Cointegration Normalization Logic:
+        - Johansen: Uses percentile ranking (`rank(pct=True)`) on the trace statistic.
+          This ensures a uniform distribution between 0.0 and 1.0 and makes the scoring
+          robust against extreme outliers that could distort distance-based scalers.
+        - Engle-Granger: Uses `1 - p_value`. This inverts the p-value scale so that
+          higher values (approaching 1) represent stronger statistical significance
+          of the cointegration.
+
         Score Logic:
         Score = 0.5 * Normalized(Coint_Strength) + 0.5 * R_Squared
 
+        Args:
+            df (pd.DataFrame): Historical price data for the assets.
+
         Returns:
-            DataFrame sorted by 'score' (descending).
+            pd.DataFrame: DataFrame containing test statistics, R-squared values,
+            and the final composite 'score', sorted by 'score' in descending order.
         """
-        if self.coint_type == "johansen":
-            res = johansen_cointegration(df)
-            scaler = MinMaxScaler()
-            res["norm_coint"] = scaler.fit_transform(res[["trace_stat"]])
-        else:
-            res = engle_granger_cointegration(df)
-            res["norm_coint"] = 1 - res["p_value"]
+        res = engle_granger_cointegration(df)
+        res["norm_coint"] = 1 - res["p_value"]
 
         df_corr = df.copy()
-        if self.source == "log":
+        if self.source == Source.LOG.value:
             for col in df_corr.columns:
                 if df_corr[col].min() > 0:
                     df_corr[col] = np.log(df_corr[col] + 1e-8)

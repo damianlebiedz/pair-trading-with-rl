@@ -1,16 +1,17 @@
-algo_name: "recurrent_ppo"
-policy_type: "MlpLstmPolicy"
+# yaml-language-server: $schema=../schemas/schema_rl_algo.json
+
+algo_name: recurrent_ppo
 
 params:
-  learning_rate: 0.0003   # Step size for the optimizer (smaller LR is usually better for PPO)
-  n_steps: 128            # Steps to collect before updating (PPO works better with larger buffers)
-  batch_size: 256         # Number of samples used for each gradient update
-  n_epochs: 10            # Number of optimization passes over the collected data
-  gamma: 0.99             # Discount factor for future rewards
-  ent_coef: 0.01          # Entropy coefficient to encourage exploration (higher = more random)
-  clip_range: 0.2         # Range for clipping the surrogate objective (ensures stable updates)
+  learning_rate: 0.0003
+  n_steps: 128
+  batch_size: 256
+  n_epochs: 10
+  gamma: 0.99
+  ent_coef: 0.01
+  clip_range: 0.2
   policy_kwargs:
-    lstm_hidden_size: 128 # Size of the hidden state in the LSTM cell
-    n_lstm_layers: 1      # Number of stacked LSTM layers
-    shared_lstm: False    # Use a shared LSTM backbone for both Actor and Critic
-    enable_critic_lstm: True
+    lstm_hidden_size: 128
+    n_lstm_layers: 1
+    shared_lstm: false
+    enable_critic_lstm: true

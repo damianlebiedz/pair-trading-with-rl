@@ -12,7 +12,7 @@ limit_per_request = 1000
 def fetch_data_from_binance(
     symbol: str, interval: str, start_str: str, end_str: str, date_format: str
 ) -> None:
-    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    root_dir = os.path.dirname(os.path.abspath(__file__))
     data_dir = os.path.join(root_dir, "data")
     os.makedirs(data_dir, exist_ok=True)
 
@@ -34,10 +34,12 @@ def fetch_data_from_binance(
 
     klines_all = []
 
+    is_complete = True
+
     pbar = tqdm(
         total=100,
-        desc=f"Downloading data for {symbol} ({interval}) {start_time.strftime('%Y-%m-%d')} → {end_time.strftime('%Y-%m-%d')}: ",
-        bar_format="{desc} {bar} {n_fmt}% | {remaining}",
+        desc=f"Downloading data for {symbol} ({interval}) {start_time.strftime('%Y-%m-%d')} → {end_time.strftime('%Y-%m-%d')}",
+        bar_format="{desc}: {bar} {n_fmt}% | {remaining}",
     )
 
     current_ts = start_ts
@@ -51,8 +53,19 @@ def fetch_data_from_binance(
         )
 
         if not klines:
-            print(f"Missing record while fetching data for {symbol}. Fetching stopped.")
+            print(
+                f"\n[!] Missing record while fetching data for {symbol}. Fetching stopped."
+            )
+            is_complete = False
             break
+
+        if len(klines_all) == 0:
+            if klines[0][0] > start_ts:
+                print(
+                    f"\n[!] {symbol} data starts later than requested (Listed after {start_str}?). Skipping."
+                )
+                is_complete = False
+                break
 
         klines_all.extend(klines)
         last_close = klines[-1][6]
@@ -65,7 +78,16 @@ def fetch_data_from_binance(
         time.sleep(0.1)
 
     pbar.close()
-    print(f"Downloaded {len(klines_all)} records.")
+
+    if not is_complete:
+        print(f"Data for {symbol} is INCOMPLETE. File will not be saved.\n")
+        return
+
+    if not klines_all:
+        print(f"No data downloaded for {symbol}. File will not be saved.\n")
+        return
+
+    print(f"Downloaded {len(klines_all)} complete records for {symbol}.")
 
     columns = [
         "open_time",
@@ -100,7 +122,7 @@ def fetch_data_from_binance(
 
     os.makedirs(os.path.join(data_dir, symbol), exist_ok=True)
     df.to_csv(filename, index=False, encoding="utf-8-sig")
-    print(f"Data saved to: {filename}")
+    print(f"Data saved to: {filename}\n")
 
 
 if __name__ == "__main__":

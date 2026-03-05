@@ -45,7 +45,7 @@ def plot_zscore_pos(
     directory: str | None = None,
     save: bool = False,
 ) -> None:
-    df = result.data.copy()
+    df = result.data.dropna(subset=["equity"]).copy()
 
     for col in ["entry_thr", "exit_thr", "sl_thr", "z_score", "position"]:
         if col in df.columns:
@@ -246,7 +246,7 @@ def plot_spread_pos(
     directory: str | None = None,
     save: bool = False,
 ) -> None:
-    df = result.data.copy()
+    df = result.data.dropna(subset=["equity"]).copy()
 
     for col in [
         "entry_thr",
@@ -472,7 +472,7 @@ def plot_returns(
     save: bool = True,
     prefix: str | None = "",
 ) -> None:
-    df = result.data.copy()
+    df = result.data.dropna(subset=["equity"]).copy()
 
     if result.ticker_x in df.columns:
         df[f"return_{result.ticker_x}"] = (

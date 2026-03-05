@@ -1,8 +1,6 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
-
 import pandas as pd
-from pydantic import BaseModel, ConfigDict
 
 
 @dataclass(slots=True)
@@ -20,7 +18,6 @@ class PositionState:
     sl_thr: float | None = None
     open_time: pd.Timestamp | None = None
     entry_beta: float | None = None
-    entry_win: int | None = None
     entry_std: float | None = None
     sl_lock: bool = False
 
@@ -36,7 +33,6 @@ class PositionState:
         entry_equity,
         sl_thr,
         entry_beta,
-        entry_win,
         entry_std,
     ):
         self.position = position
@@ -49,7 +45,6 @@ class PositionState:
         self.entry_equity = entry_equity
         self.sl_thr = sl_thr
         self.entry_beta = entry_beta
-        self.entry_win = entry_win
         self.entry_std = entry_std
 
     def clear_position(self):
@@ -63,13 +58,12 @@ class PositionState:
         self.entry_equity = 0.0
         self.time_in_pos = 0
         self.entry_beta = None
-        self.entry_win = None
         self.entry_std = None
 
 
+@dataclass(slots=True)
 class ExecLogger:
-    def __init__(self):
-        self._logs: list[dict[str, Any]] = []
+    _logs: list[dict[str, Any]] = field(default_factory=list)
 
     def log(
         self,
@@ -105,9 +99,8 @@ class ExecLogger:
         return pd.DataFrame(self._logs)
 
 
-class StrategyResult(BaseModel):
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-
+@dataclass(slots=True)
+class StrategyResult:
     data: pd.DataFrame
     ticker_x: str
     ticker_y: str

@@ -1,14 +1,14 @@
-name: train_agent
+# yaml-language-server: $schema=schemas/schema.json
 
 defaults:
   - _self_
   - base
-  - rl_algo: recurrent_ppo # 'a2c_baseline' or 'recurrent_ppo'
+  - rl_algo: recurrent_ppo
 
 rl:
   training_subfolder: "WINNER_5_hybrid_fixed"
-  reward: "pnl_signal" # "pnl" or "pnl_signal"
-  obs_space_type: "minimal" # "full", "standard", or "minimal"
+  reward: pnl_signal
+  obs_space_type: minimal
   passes_per_pair: 10
   seed: 42
   verbose: 1

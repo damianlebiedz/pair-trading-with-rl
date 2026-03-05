@@ -1,47 +1,45 @@
 from functools import reduce
 from io import StringIO
 from pathlib import Path
-from typing import Literal
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 import json
 
+from modules.core.enums import Interval, Source
 from modules.performance.models import StrategyResult
 from modules.data_services.data_loaders import load_data, get_project_root
 
 
 def get_steps(
-    interval: Literal["1d", "4h", "1h", "30m", "15m", "5m", "3m", "1m"],
+    interval: Interval,
 ) -> int:
     """Get steps of the interval."""
-    if interval == "1d":
+    if interval == Interval.D1:
         return 1
-    elif interval == "4h":
+    elif interval == Interval.H4:
         return 6
-    elif interval == "1h":
+    elif interval == Interval.H1:
         return 24
-    elif interval == "30m":
+    elif interval == Interval.M30:
         return 48
-    elif interval == "15m":
+    elif interval == Interval.M15:
         return 96
-    elif interval == "5m":
+    elif interval == Interval.M5:
         return 288
-    elif interval == "3m":
+    elif interval == Interval.M3:
         return 480
-    elif interval == "1m":
+    elif interval == Interval.M1:
         return 1440
     else:
-        raise ValueError(
-            f"Wrong interval '{interval}', should be one of: '1d', '4h', '1h', '30m', '15m', '5m', '3m', '1m'."
-        )
+        raise ValueError(f"Wrong interval '{interval}', should be in: {Interval}")
 
 
 def add_log_prices(df: pd.DataFrame, ticker_x: str, ticker_y: str) -> None:
     """Add log prices to DataFrame."""
-    df[f"{ticker_x}_log"] = np.log(df[ticker_x])
-    df[f"{ticker_y}_log"] = np.log(df[ticker_y])
+    df[f"{ticker_x}_{Source.LOG.value}"] = np.log(df[ticker_x])
+    df[f"{ticker_y}_{Source.LOG.value}"] = np.log(df[ticker_y])
 
 
 def merge_by_pair(dfs: list[pd.DataFrame], keep_cols: list[list[str]]) -> pd.DataFrame:
@@ -56,7 +54,9 @@ def merge_by_pair(dfs: list[pd.DataFrame], keep_cols: list[list[str]]) -> pd.Dat
     return merged
 
 
-def load_btc_benchmark(test_start: str, test_end: str, interval: str) -> pd.DataFrame:
+def load_btc_benchmark(
+    test_start: str, test_end: str, interval: Interval
+) -> pd.DataFrame:
     btc_data = load_data(
         tickers=["BTCUSDT"],
         start=test_start,
@@ -71,7 +71,7 @@ def load_btc_benchmark(test_start: str, test_end: str, interval: str) -> pd.Data
 
 
 def load_ewp_benchmark(
-    tickers: list[str], test_start: str, test_end: str, interval: str
+    tickers: list[str], test_start: str, test_end: str, interval: Interval
 ) -> pd.DataFrame:
     """
     Generates an Equally Weighted (EW) portfolio benchmark with continuous rebalancing.

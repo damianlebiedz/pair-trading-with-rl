@@ -14,6 +14,8 @@ from stable_baselines3.common.vec_env import VecNormalize
 import os
 from wandb.integration.sb3 import WandbCallback
 
+from modules.core.config import Config
+from modules.core.enums import RLModelName
 from modules.data_services.data_utils import load_strategy_result
 from modules.learning.environments import build_multi_env
 from runners.core.pipelines import setup_rl_run_environment, setup_run_environment
@@ -22,10 +24,21 @@ from runners.core.utils import save_hydra_config_snapshot
 logger = logging.getLogger(__name__)
 load_dotenv()
 
-ALGO_MAP = {"a2c_baseline": A2C, "recurrent_ppo": RecurrentPPO}
+ALGO_MAP = {RLModelName.A2C_BASELINE: A2C, RLModelName.RECURRENT_PPO: RecurrentPPO}
 
 
 class LogEquityCallback(BaseCallback):
+    """
+    Custom callback for Stable Baselines3 that logs aggregated portfolio statistics to Weights & Biases.
+    Logged metrics (visible in the WandB dashboard):
+
+    - portfolio/avg_equity: Average equity across all environments. The primary indicator of whether the overall strategy is profitable.
+    - portfolio/exposure_pct: Market exposure (from 0.0 to 1.0). Shows what percentage of pairs have an open position at a given step. Values close to 0 indicate the agent is overly cautious (e.g., due to fees), while values close to 1 suggest overtrading.
+    - portfolio/avg_win_rate: Win rate of closed trades. Helps assess whether the agent correctly predicts mean reversion, independent of net profitability.
+    - portfolio/avg_hold_time: Average position holding time (in steps/periods). If extremely low (e.g., 1–2 steps), it indicates the agent is panic-closing positions due to negative PnL immediately after entry (spread/fees).
+    - portfolio/total_fees_paid: Cumulative total fees paid across the entire portfolio. A critical metric for diagnosing “fee drag” — when exchange fees erode strategy profits.
+    """
+
     def __init__(self, verbose=0):
         super(LogEquityCallback, self).__init__(verbose)
 
@@ -34,15 +47,26 @@ class LogEquityCallback(BaseCallback):
 
         if infos:
             avg_equity = np.mean([info.get("equity", 0.0) for info in infos])
-            active_positions = sum(
-                [1 for info in infos if abs(info.get("position", 0)) > 0.1]
+
+            current_positions = [
+                1 if abs(i.get("position", 0)) > 0.1 else 0 for i in infos
+            ]
+            portfolio_exposure = np.mean(current_positions)
+
+            avg_win_rate = np.mean([info.get("win_rate", 0.0) for info in infos])
+            avg_hold_time = np.mean([info.get("avg_hold_time", 0.0) for info in infos])
+            total_portfolio_fees = np.sum(
+                [info.get("ep_total_fees", 0.0) for info in infos]
             )
 
             if wandb.run is not None:
                 wandb.log(
                     {
-                        "env/avg_equity": avg_equity,
-                        "env/active_positions": active_positions,
+                        "portfolio/avg_equity": avg_equity,
+                        "portfolio/exposure_pct": portfolio_exposure,
+                        "portfolio/avg_win_rate": avg_win_rate,
+                        "portfolio/avg_hold_time": avg_hold_time,
+                        "portfolio/total_fees_paid": total_portfolio_fees,
                         "global_step": self.num_timesteps,
                     }
                 )
@@ -55,6 +79,8 @@ def train_agent(cfg: DictConfig):
     root = setup_run_environment(__file__)
     rl_root = setup_rl_run_environment(__file__)
     save_hydra_config_snapshot(cfg=cfg, root_dir=root)
+
+    cfg = Config(**OmegaConf.to_container(cfg, resolve=True))
 
     seed = cfg.rl.seed
     set_random_seed(seed)

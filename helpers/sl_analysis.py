@@ -119,7 +119,7 @@ def create_html_plot(df: pd.DataFrame, title: str, out_file: Path):
     print(f"--> Saved interactive HTML dashboard: {out_file}")
 
 
-def summarize_folder(folder_name):
+def sl_analysis(folder_name):
     script_dir = Path(__file__).resolve().parent
     project_root = script_dir.parent
     target_dir = project_root / "results" / folder_name
@@ -222,4 +222,4 @@ def summarize_folder(folder_name):
 
 
 if __name__ == "__main__":
-    summarize_folder(PATH)
+    sl_analysis(PATH)

@@ -1,0 +1,30 @@
+# yaml-language-server: $schema=schemas/schema.json
+
+generate_plots: false
+
+z_score_window: 672
+entry_threshold: 2.5
+exit_threshold: 0.0
+stop_loss: null
+
+pair_selection:
+  top_n_factor: 10
+  start: "2023-11-01"
+  end: "2024-01-01"
+
+performance:
+  rl_model_subfolder: null
+  iterations: 12
+  beta_hedge: rolling
+  delayed_entry: true
+  sl_lock: true
+  time_decay_sl: true
+
+  test:
+    beta_start: "2023-12-01"
+    start: "2024-01-01"
+    end: "2024-02-01"
+
+defaults:
+  - _self_
+  - base

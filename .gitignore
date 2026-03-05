@@ -13,4 +13,7 @@ data_rl/*/*
 results/*
 !results/.ignore
 
+docs/*
+!docs/configuration.md
+
 .env

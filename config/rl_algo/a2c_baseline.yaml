@@ -1,8 +1,9 @@
-algo_name: "a2c_baseline"
-policy_type: "MlpPolicy"  # Policy Network
+# yaml-language-server: $schema=../schemas/schema_rl_algo.json
+
+algo_name: a2c_baseline
 
 params:
-  learning_rate: 0.0007   # Step size for the optimizer
-  n_steps: 5              # Number of steps to collect before updating (A2C updates very frequently)
-  gamma: 0.99             # Discount factor for future rewards
-  ent_coef: 0.01          # Entropy coefficient to encourage exploration
+  learning_rate: 0.0007
+  n_steps: 5
+  gamma: 0.99
+  ent_coef: 0.01

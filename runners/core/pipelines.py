@@ -4,9 +4,10 @@ import sys
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 import pandas as pd
 
+from modules.core.enums import BetaHedge
 from modules.performance.models import StrategyResult
 from modules.data_services.data_utils import (
     save_strategy_result,
@@ -15,12 +16,10 @@ from modules.data_services.data_utils import (
     load_strategy_result,
     load_ewp_benchmark,
 )
-from modules.performance.multi_pair_optimizer import MultiPairOptimizer
 from modules.data_services.merge_utils import (
     aggregate_strategy_results,
     stitch_strategy_results,
 )
-from modules.performance.objectives import SortinoWithPenalty
 from modules.performance.pair_selector import PairSelector
 from modules.performance.stats import calculate_stats
 from modules.performance.strategy import Strategy
@@ -86,7 +85,7 @@ def execute_testing(
     ticker_x: str,
     ticker_y: str,
     output_dir: str,
-    win_test_start: str,
+    beta_test_start: str,
     test_start: str,
     test_end: str,
     interval: str,
@@ -98,19 +97,19 @@ def execute_testing(
     if subdir:
         output_dir = os.path.join(output_dir, subdir)
 
-    fixed_window = best_params["fixed_window"]
+    z_score_window = best_params["z_score_window"]
     entry_threshold = best_params["entry_threshold"]
     exit_threshold = best_params["exit_threshold"]
     stop_loss = best_params["stop_loss"]
 
     result = bt.run_strategy(
-        fixed_window=fixed_window,
+        z_score_window=z_score_window,
         entry_threshold=entry_threshold,
         exit_threshold=exit_threshold,
         stop_loss=stop_loss,
         test_start=test_start,
         test_end=test_end,
-        win_test_start=win_test_start,
+        beta_test_start=beta_test_start,
     )
 
     save_strategy_result(
@@ -162,27 +161,24 @@ def execute_pair_selection(
     tickers: list[str],
     ps_start: str,
     ps_end: str,
-    test_win_start: str,
+    beta_test_start: str,
     interval: str,
     top_n_factor: float,
     output_dir: str,
-    coint_type: Literal["eg", "johansen"],
-    beta_method: Literal["ols", "kalman"],
-    valid_window: tuple[int, int],
+    beta_hedge: BetaHedge,
 ) -> pd.DataFrame:
     logger.info("Starting Pair Selection Pipeline.")
 
-    selector = PairSelector(
-        coint_type=coint_type, beta_method=beta_method, valid_window=valid_window
-    )
+    selector = PairSelector()
 
     final_df = selector.select_pairs(
         tickers=tickers,
         ps_start=ps_start,
         ps_end=ps_end,
-        test_win_start=test_win_start,
+        beta_test_start=beta_test_start,
         interval=interval,
         top_n=top_n_factor,
+        beta_hedge=beta_hedge,
     )
 
     if final_df.empty:
@@ -191,68 +187,13 @@ def execute_pair_selection(
 
     save_dataframe(
         df=final_df,
-        file_name=f"pair_selection_{coint_type}_{ps_start}_{ps_end}",
+        file_name=f"pair_selection_{ps_start}_{ps_end}",
         directory=output_dir,
     )
 
     logger.info(f"Pair Selection completed. Saved {len(final_df)} pairs.")
 
     return final_df
-
-
-def execute_multi_pair_optimization(
-    strategies: list[Strategy],
-    static_params: dict[str, Any],
-    param_space: list[Any],
-    metric_type: Literal["gross", "net"],
-    objective_func: Literal["sortino"],
-    opt_start: str,
-    opt_end: str,
-    opt_win_start: str,
-    penalty_bad: float,
-    n_iter: int,
-    interval: str,
-    risk_free_rate_annual: float,
-    min_trades_per_pair: int,
-    initial_cash: float,
-) -> dict[str, Any]:
-    logger.info(f"Starting Multi-Pair Optimization on {len(strategies)} pairs...")
-
-    if objective_func not in ["sortino"]:
-        raise ValueError("objective_func should be 'sortino'")
-
-    if objective_func == "sortino":
-        objective_func = SortinoWithPenalty(
-            min_trades_per_pair=min_trades_per_pair,
-            penalty_bad=penalty_bad,
-        )
-
-    optimizer = MultiPairOptimizer(
-        strategies=strategies,
-        opt_start=opt_start,
-        opt_end=opt_end,
-        opt_win_start=opt_win_start,
-        penalty_bad=penalty_bad,
-        n_iter=n_iter,
-        interval=interval,
-        risk_free_rate_annual=risk_free_rate_annual,
-        min_trades_per_pair=min_trades_per_pair,
-        initial_cash=initial_cash,
-        number_of_pairs=len(strategies),
-    )
-
-    best_params, best_score = optimizer.run(
-        static_params=static_params,
-        param_space=param_space,
-        metric_type=metric_type,
-        objective_func=objective_func,
-    )
-
-    best_params.update(static_params)
-    log = (best_params, best_score)
-    logger.info(log)
-
-    return best_params
 
 
 def merge_multi_pair_results(
