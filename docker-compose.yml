@@ -1,18 +1,26 @@
 x-base: &base_config
-  image: research-paper-base
+  build:
+    context: .
+    image: research-paper-base
   env_file:
     - .env
   volumes:
     - ./config:/app/config
     - ./data:/app/data
-    - ./data_rl/models:/app/models
-    - ./data_rl/training_data:/app/training_data
     - ./results:/app/results
   environment:
     - HYDRA_FULL_ERROR=1
     - PYTHONPATH=/app
 
 services:
+  fetch_historical_data:
+    <<: *base_config
+    command: python helpers/fetch_historical_data.py
+    deploy:
+      restart_policy:
+        condition: on-failure
+        max_attempts: 3
+
   run_backtest:
     <<: *base_config
     command: python runners/run_backtest.py
@@ -20,3 +28,15 @@ services:
   train_agent:
     <<: *base_config
     command: python runners/train_agent.py
+
+  generate_assets_list:
+    <<: *base_config
+    command: python helpers/generate_assets_list.py
+    deploy:
+      restart_policy:
+        condition: on-failure
+        max_attempts: 3
+
+  generate_schemas:
+    <<: *base_config
+    command: python helpers/generate_schemas.py

@@ -3,12 +3,11 @@
 This project implements an advanced pairs trading framework comparing two distinct approaches: **Statistical Arbitrage** and **Reinforcement Learning**.
 
 - [Key Features](#key-features)
-- [Installation & Running](#installation--running)
-  - [Poetry](#poetry)
+- [Installation & Setup](#installation--setup)
   - [Docker](#docker)
+  - [Poetry](#poetry)
+- [Reproducing Results (Paper Evaluation)](#reproducing-results-paper-evaluation)
 - [Project Structure](#project-structure)
-- [Data Acquisition](#data-acquisition)
-- [Usage & Workflows](#usage--workflows)
 - [Configuration](#Configuration)
 - [License](#license)
 
@@ -27,126 +26,102 @@ This project implements an advanced pairs trading framework comparing two distin
 
 ---
 
-## Installation & Running
+## Installation & Setup
 
-### Poetry
-
-This project uses **Poetry** for dependency management and **Python 3.12**.
-
-Make sure that you have installed:
-- Python 3.12: https://www.python.org/downloads/release/python-3120/
-- Poetry: https://python-poetry.org/docs/#installation
+First, clone the repository and configure your environment variables. You must set up your Weights & Biases (WandB) API key, which is required for tracking the Reinforcement Learning training process.
 
 ```bash
 # Clone the repository
-git clone https://github.com/damianlebiedz/research-paper.git
+git clone [https://github.com/damianlebiedz/research-paper.git](https://github.com/damianlebiedz/research-paper.git)
 cd research-paper
 
+# Set up environment variables
+cp .env.example .env
+# Open the .env file and add your actual API key: WANDB_API_KEY=your_key_here
+```
+
+Once the .env file is ready, you can run this project using either Docker (recommended for isolated, reproducible environments) or locally via Poetry.
+
+### Docker
+
+This project uses Docker Compose with a base image to ensure 100% environment consistency.
+
+```bash
+# Build the Base Image
+docker compose build
+```
+
+### Poetry
+
+Ensure you have Python 3.12 and Poetry installed.
+
+```bash
 # Install dependencies
 poetry install
 ```
 
-### Docker
+## Reproducing Results (Paper Evaluation)
+To guarantee academic reproducibility, this project uses a Makefile pipeline.
 
-This project uses Docker to ensure a consistent environment.
+Why? Relying on live external APIs (like Binance) for historical data can lead to inconsistencies due to changing limits or delisted assets. Furthermore, Reinforcement Learning training can introduce hardware-dependent variance.
 
-Follow a two-step workflow: first, build the **Base Image** containing all dependencies, and then use **Docker Compose** to run specific experiment scripts.
+To solve this, we provide two separate execution tracks: the **Fast Track** (using frozen artifacts) and the **Full Track** (running everything from scratch).
 
-Make sure that you have installed:
-- Docker Desktop: https://docs.docker.com/desktop/
+Note: You must specify the environment by appending `RUN_MODE=docker` (recommended for reviewers) or `RUN_MODE=poetry` to your make commands.
 
-#### 1. Build the Base Image
-
-```bash
-# Clone the repository
-git clone https://github.com/damianlebiedz/research-paper.git
-cd research-paper
-
-# Build the Base Image
-docker build -t research-paper-base .
-```
-
-#### 2. Run Experiments with Docker Compose
-Once the image is built, you can run any of the predefined services.
-To run a service and see the logs in your terminal:
+### 1. Fast Track (Recommended for Reviewers)
+This track evaluates the pre-trained RL agent on a frozen, version-controlled dataset hosted on Zenodo (DOI: 10.5281/zenodo.XXXXXXX). It bypasses the Binance API and the lengthy RL training process, guaranteeing identical results to those published in the paper.
 
 ```bash
-docker compose up <service_name>
+make fast_track RUN_MODE=docker
 ```
-Available Services:
-- `train_agent`: Trains the RL model.
-- `pair_selection`: Executes the pair selection logic.
-- `test_single`: Runs a single backtest on specific parameters.
-- `test_multi`: Runs batch testing across multiple models/pairs on specific parameters.
-- `opt_and_test_multi`: Performs hyperparameter optimization followed by testing.
+What it does:
+- `download_artifacts`: Downloads and extracts the exact historical/.parquet dataset and the pre-trained .zip RL model from Zenodo.
+- `backtest`: Runs the baseline Statistical Arbitrage backtest.
+- `backtest_rl`: Runs the backtest using the pre-trained Reinforcement Learning agent.
 
-#### 3. Development Workflow
-- Configuration Changes: The `./config` directory is mapped as a volume. This means you can edit your `.yaml` files, and the changes will be applied instantly when you start a container. No rebuild is required for config changes.
-
-- Persistent Data: Training logs, data, and saved models are stored in `/tensorboard_logs`, `/data`, and `/models` respectively. These folders are synchronized between your machine and the container.
-
-- Overriding Parameters: You can override any Hydra configuration parameter on-the-fly without editing files:
+### 2. Full Track (End-to-End Reproduction)
+This track executes the entire pipeline from scratch. It is intended for researchers who want to fetch the latest data or retrain the agent entirely.
 
 ```bash
-docker compose run --rm train_agent python runners/train_agent.py rl.obs_space_type=standard
+make full_track RUN_MODE=docker
 ```
+What it does:
+- `fetch`: Dynamically generates the asset universe and fetches raw OHLCV data directly from the Binance API.
+- `backtest`: Runs the baseline Statistical Arbitrage backtest.
+- `train`: Trains the Reinforcement Learning agent from scratch (can take several hours).
+- `backtest_rl`: Evaluates your newly trained agent.
 
-#### 4. Multirun
-You can use hydra multirun with Docker Compose:
-```bash
-docker compose run --rm test_multi python runners/test_multi.py -m stop_loss=2,2.5
-```
+(Optional) You can also run individual stages, for example: make train `RUN_MODE=docker`.
 
 ## Project Structure
 ```
 .
-├── config/                 # Hydra configuration files
-├── data/                   # Market data (downloaded via helpers)
-├── helpers/                # Scripts for data fetching and reporting
+├── config/                 # Hydra configuration files (.yaml & .json schemas)
+├── data/                   # Market data (downloaded via helpers or Zenodo)
+├── helpers/                # Scripts for data fetching and schema generationreporting
 ├── modules/
 │   ├── core/               # Execution logic, indicators, stat tests
 │   ├── data_services/      # Data loading and merging utils
 │   ├── learning/           # RL environments, agents, and rewards
 │   └── performance/        # Strategy logic, optimization objectives
-├── runners/                # Main entry points (scripts)
+├── runners/                # Main entry points (backtesting, training)
+└── results/                # Output metrics, plots, and saved models
 ```
-
-## Data Acquisition
-Before running any pipelines, you need to fetch historical market data. A helper script is provided to download OHLCV data directly from Binance.
-
-```bash
-poetry run python helpers/data_fetching.py
-```
-Data is saved to `data/{TICKER}/{filename}.csv`.
-
-## Usage & Workflows
-The project entry points are located in the `runners/` directory. Configuration is managed via Hydra.
-
-1. Statistical Optimization & Testing
-
-Runs the full pipeline: Pair Selection → Hyperparameter Optimization → Out-of-Sample Testing.
-
-```bash
-poetry run python runners/opt_and_test_multi.py
-```
-Config location: `config/opt_and_test_multi.yaml`
-
-2. Reinforcement Learning Agent Training
-
-Trains an RL agent on a specific dataset.
-
-```bash
-# Make sure to configure your WandB API key in .env
-poetry run python runners/train_agent.py
-```
-Config location: `config/train_agent.yaml`
 
 ## Configuration
 The project currently uses standard **Hydra** YAML configuration files located in the `config/` directory.
 
 - `base.yaml`: General global settings.
-- `rl_algo/`: Specific configurations for A2C/PPO.
+- `run_backtest.yaml`: Settings for the backtesting engine.
+- `rl_algo/`: Specific configurations for A2C and Recurrent PPO.
 - `opt_and_test_multi.yaml`: Settings for the statistical pipeline.
+
+You can dynamically override parameters directly from the CLI without editing files. For example, to run the RL backtest manually with a custom configuration:
+
+```bash
+docker compose run --rm run_backtest python runners/run_backtest.py use_rl=True
+```
 
 ## License
 Only for research/educational purposes. Commercial use is prohibited. See LICENSE for full terms.

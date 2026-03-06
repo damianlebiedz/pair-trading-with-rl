@@ -1,11 +1,11 @@
 from typing import Annotated, Union, Literal, Any
-
 import pandas as pd
 from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
     model_validator,
+    StringConstraints,
 )
 from modules.core.enums import (
     Interval,
@@ -16,6 +16,8 @@ from modules.core.enums import (
     RLPolicyType,
     WandbMode,
 )
+
+DateStr = Annotated[str, StringConstraints(pattern=r"^\d{4}-\d{2}-\d{2}$")]
 
 
 class Market(BaseModel):
@@ -46,8 +48,8 @@ class Settings(BaseModel):
 
 
 class RL(BaseModel):
-    training_subfolder: str = Field(
-        description="Name of the folder with training data."
+    training_folder: str | None = Field(
+        description="Name of the folder with training data, if null take first one."
     )
     reward: RLRewards = Field(
         description=f"Type of RL reward. Options: {[e.value for e in RLRewards]}"
@@ -63,11 +65,11 @@ class RL(BaseModel):
 
 
 class PairSelection(BaseModel):
-    top_n_factor: int = Field(
+    top_n: int = Field(
         gt=0, description="Factor determining how many top pairs to select."
     )
-    start: str = Field(description="Start date for pair selection.")
-    end: str = Field(description="End date for pair selection.")
+    start: DateStr = Field(description="Start date for pair selection (YYYY-MM-DD).")
+    end: DateStr = Field(description="End date for pair selection (YYYY-MM-DD).")
 
     @model_validator(mode="after")
     def validate_dates(self) -> "PairSelection":
@@ -76,26 +78,19 @@ class PairSelection(BaseModel):
         return self
 
 
-class Test(BaseModel):
-    beta_start: str = Field(
-        description="Lookback window start date for beta calculation."
-    )
-    start: str = Field(description="Start date for test.")
-    end: str = Field(description="End date for test.")
-
-    @model_validator(mode="after")
-    def validate_dates(self) -> "Test":
-        if pd.to_datetime(self.start) >= pd.to_datetime(self.end):
-            raise ValueError("Test: 'start' date must be before 'end' date.")
-        if pd.to_datetime(self.beta_start) >= pd.to_datetime(self.start):
-            raise ValueError("Test: 'beta_start' date must be before 'start' date.")
-        return self
-
-
 class Performance(BaseModel):
-    rl_model_subfolder: str | None = Field(
-        default=None,
-        description="Name of the folder with RL model, null if running without RL.",
+    use_rl: bool = Field(description="Flag to use RL model during backtest.")
+    z_score_window: int = Field(
+        gt=0,
+        description="Z-Score lookback window size.",
+    )
+    entry_threshold: float = Field(description="Z-score threshold to open a position.")
+    exit_threshold: float | Literal["-entry_threshold"] = Field(
+        description="Z-score threshold to close a position. Can be positive or negative (also equals to -entry_threshold)."
+    )
+    stop_loss: float | None = Field(
+        gt=1,
+        description="Stop loss multiplier (e.g., 1.05 for 5% from entry_threshold), null if trade without SL.",
     )
     iterations: int = Field(
         gt=0,
@@ -107,15 +102,71 @@ class Performance(BaseModel):
     delayed_entry: bool = Field(description="Delayed entry flag.")
     sl_lock: bool = Field(description="SL lock until mean-reversal flag.")
     time_decay_sl: bool = Field(description="Time Decay SL flag.")
+    freeze_std: bool = Field(
+        description="Flag to use fixed std from entry while calculating in-position Z-Score."
+    )
+    beta_start: str = Field(
+        description="Lookback window start date for beta calculation."
+    )
+    start: DateStr = Field(description="Start date for test (YYYY-MM-DD).")
+    end: DateStr = Field(description="End date for test (YYYY-MM-DD).")
 
-    test: Test
+    @model_validator(mode="after")
+    def validate_dates(self) -> "Performance":
+        if pd.to_datetime(self.start) >= pd.to_datetime(self.end):
+            raise ValueError("Test: 'start' date must be before 'end' date.")
+        if pd.to_datetime(self.beta_start) >= pd.to_datetime(self.start):
+            raise ValueError("Test: 'beta_start' date must be before 'start' date.")
+        return self
 
 
-class RunBacktest(BaseModel):
-    test_start: str = Field(description="Start date for the backtest loop.")
-    test_end: str = Field(description="End date for the backtest loop.")
+class FetchHistoricalData(BaseModel):
+    interval: Interval = Field(
+        description=f"Data timeframe for the fetcher. Options: {[e.value for e in Interval]}"
+    )
+    limit_per_request: int = Field(
+        default=1000,
+        description="Maximum number of data points per single API request.",
+    )
+    timeout: int = Field(
+        default=30, description="Network timeout in seconds for API calls."
+    )
 
-    performance: Performance
+
+class GenerateAssetsList(BaseModel):
+    top_n: int = Field(
+        gt=0, description="Number of top assets to select based on volume/liquidity."
+    )
+    start: DateStr = Field(
+        description="Start date for evaluating asset liquidity and volume (YYYY-MM-DD)."
+    )
+    end: DateStr = Field(
+        description="End date for evaluating asset liquidity and volume (YYYY-MM-DD)."
+    )
+    test_end: DateStr = Field(description="End date for test (YYYY-MM-DD).")
+    iterations: int = Field(
+        gt=0,
+        description="Number of iterations (monthly) to fetch historical data.",
+    )
+    limit_per_request: int = Field(
+        default=1000, description="API limit for asset listing requests."
+    )
+    whitelist: list[str] = Field(
+        default_factory=list,
+        description="List of tickers to forcibly include in the final list.",
+    )
+    blacklist: list[str] = Field(
+        default_factory=list,
+        description="List of tickers to forcibly exclude from the final list.",
+    )
+
+    @model_validator(mode="after")
+    def validate_dates(self) -> "GenerateAssetsList":
+        if pd.to_datetime(self.start) >= pd.to_datetime(self.end):
+            raise ValueError(
+                "GenerateAssetsList: 'start' date must be before 'end' date."
+            )
+        return self
 
 
 class A2CBaseline(BaseModel):
@@ -215,41 +266,44 @@ class Config(BaseModel):
     defaults: list[str | RLAlgoDefault | dict[str, Any]] | None = Field(
         default=None, description="Hydra defaults list."
     )
-
-    tickers: list[str] = Field(description="List of asset tickers.")
-    generate_plots: bool = Field(description="Generate plots if true.")
-    z_score_window: int = Field(
-        gt=0,
-        description="Z-Score lookback window size.",
+    generate_plots: bool | None = Field(
+        default=None, description="Generate plots if true."
     )
-    entry_threshold: float = Field(description="Z-score threshold to open a position.")
-    exit_threshold: float | Literal["-entry_threshold"] = Field(
-        description="Z-score threshold to close a position. Can be positive or negative (also equals to -entry_threshold)."
+    save_for_training: bool | None = Field(
+        default=None,
+        description="Flag to auto-save backtest data in data/rl_training for RL training.",
     )
-    stop_loss: float | None = Field(
-        gt=1,
-        description="Stop loss multiplier (e.g., 1.05 for 5% from entry_threshold), null if trade without SL.",
+    rl_model_folder: str | None = Field(
+        default=None,
+        description="Name of the folder with RL model, if null take first one or run without RL.",
     )
-
-    market: Market = Field(
-        description="Market simulation parameters including capital, fees, and timeframe."
+    market: Market | None = Field(
+        default=None,
+        description="Market simulation parameters including capital, fees, and timeframe.",
     )
-    settings: Settings = Field(
-        description="General strategy parameters, including volatility and time decay bounds."
+    settings: Settings | None = Field(
+        default=None,
+        description="General strategy parameters, including volatility and time decay bounds.",
     )
-    pair_selection: PairSelection = Field(
-        description="Configuration for statistical tests and top pair filtering."
+    pair_selection: PairSelection | None = Field(
+        default=None,
+        description="Configuration for statistical tests and top pair filtering.",
     )
-    performance: Performance = Field(
-        description="Trading logic flags, SL types, and backtest execution parameters."
+    performance: Performance | None = Field(
+        default=None,
+        description="Trading logic flags, SL types, and backtest execution parameters.",
+    )
+    fetch_historical_data: FetchHistoricalData | None = Field(
+        default=None,
+        description="Parameters for the historical data downloading utility.",
+    )
+    generate_assets_list: GenerateAssetsList | None = Field(
+        default=None,
+        description="Parameters for the asset universe generation and filtering utility.",
     )
     rl: RL | None = Field(
         default=None,
         description="Reinforcement Learning environment parameters and training settings.",
-    )
-    run_backtest: RunBacktest | None = Field(
-        default=None,
-        description="Execution timeline and explicit settings for the backtest runner.",
     )
     rl_algo: RLAlgoConfig | None = Field(
         default=None,

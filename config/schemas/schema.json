@@ -66,6 +66,96 @@
       "title": "BetaHedge",
       "type": "string"
     },
+    "FetchHistoricalData": {
+      "properties": {
+        "interval": {
+          "$ref": "#/$defs/Interval",
+          "description": "Data timeframe for the fetcher. Options: ['1d', '4h', '1h', '30m', '15m', '5m', '3m', '1m']"
+        },
+        "limit_per_request": {
+          "default": 1000,
+          "description": "Maximum number of data points per single API request.",
+          "title": "Limit Per Request",
+          "type": "integer"
+        },
+        "timeout": {
+          "default": 30,
+          "description": "Network timeout in seconds for API calls.",
+          "title": "Timeout",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "interval"
+      ],
+      "title": "FetchHistoricalData",
+      "type": "object"
+    },
+    "GenerateAssetsList": {
+      "properties": {
+        "top_n": {
+          "description": "Number of top assets to select based on volume/liquidity.",
+          "exclusiveMinimum": 0,
+          "title": "Top N",
+          "type": "integer"
+        },
+        "start": {
+          "description": "Start date for evaluating asset liquidity and volume (YYYY-MM-DD).",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "title": "Start",
+          "type": "string"
+        },
+        "end": {
+          "description": "End date for evaluating asset liquidity and volume (YYYY-MM-DD).",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "title": "End",
+          "type": "string"
+        },
+        "test_end": {
+          "description": "End date for test (YYYY-MM-DD).",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "title": "Test End",
+          "type": "string"
+        },
+        "iterations": {
+          "description": "Number of iterations (monthly) to fetch historical data.",
+          "exclusiveMinimum": 0,
+          "title": "Iterations",
+          "type": "integer"
+        },
+        "limit_per_request": {
+          "default": 1000,
+          "description": "API limit for asset listing requests.",
+          "title": "Limit Per Request",
+          "type": "integer"
+        },
+        "whitelist": {
+          "description": "List of tickers to forcibly include in the final list.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Whitelist",
+          "type": "array"
+        },
+        "blacklist": {
+          "description": "List of tickers to forcibly exclude from the final list.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Blacklist",
+          "type": "array"
+        }
+      },
+      "required": [
+        "top_n",
+        "start",
+        "end",
+        "test_end",
+        "iterations"
+      ],
+      "title": "GenerateAssetsList",
+      "type": "object"
+    },
     "Interval": {
       "enum": [
         "1d",
@@ -149,25 +239,27 @@
     },
     "PairSelection": {
       "properties": {
-        "top_n_factor": {
+        "top_n": {
           "description": "Factor determining how many top pairs to select.",
           "exclusiveMinimum": 0,
-          "title": "Top N Factor",
+          "title": "Top N",
           "type": "integer"
         },
         "start": {
-          "description": "Start date for pair selection.",
+          "description": "Start date for pair selection (YYYY-MM-DD).",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
           "title": "Start",
           "type": "string"
         },
         "end": {
-          "description": "End date for pair selection.",
+          "description": "End date for pair selection (YYYY-MM-DD).",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
           "title": "End",
           "type": "string"
         }
       },
       "required": [
-        "top_n_factor",
+        "top_n",
         "start",
         "end"
       ],
@@ -176,18 +268,47 @@
     },
     "Performance": {
       "properties": {
-        "rl_model_subfolder": {
+        "use_rl": {
+          "description": "Flag to use RL model during backtest.",
+          "title": "Use Rl",
+          "type": "boolean"
+        },
+        "z_score_window": {
+          "description": "Z-Score lookback window size.",
+          "exclusiveMinimum": 0,
+          "title": "Z Score Window",
+          "type": "integer"
+        },
+        "entry_threshold": {
+          "description": "Z-score threshold to open a position.",
+          "title": "Entry Threshold",
+          "type": "number"
+        },
+        "exit_threshold": {
           "anyOf": [
             {
+              "type": "number"
+            },
+            {
+              "const": "-entry_threshold",
               "type": "string"
+            }
+          ],
+          "description": "Z-score threshold to close a position. Can be positive or negative (also equals to -entry_threshold).",
+          "title": "Exit Threshold"
+        },
+        "stop_loss": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 1,
+              "type": "number"
             },
             {
               "type": "null"
             }
           ],
-          "default": null,
-          "description": "Name of the folder with RL model, null if running without RL.",
-          "title": "Rl Model Subfolder"
+          "description": "Stop loss multiplier (e.g., 1.05 for 5% from entry_threshold), null if trade without SL.",
+          "title": "Stop Loss"
         },
         "iterations": {
           "description": "Number of backtest iterations (monthly).",
@@ -214,27 +335,61 @@
           "title": "Time Decay Sl",
           "type": "boolean"
         },
-        "test": {
-          "$ref": "#/$defs/Test"
+        "freeze_std": {
+          "description": "Flag to use fixed std from entry while calculating in-position Z-Score.",
+          "title": "Freeze Std",
+          "type": "boolean"
+        },
+        "beta_start": {
+          "description": "Lookback window start date for beta calculation.",
+          "title": "Beta Start",
+          "type": "string"
+        },
+        "start": {
+          "description": "Start date for test (YYYY-MM-DD).",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "title": "Start",
+          "type": "string"
+        },
+        "end": {
+          "description": "End date for test (YYYY-MM-DD).",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "title": "End",
+          "type": "string"
         }
       },
       "required": [
+        "use_rl",
+        "z_score_window",
+        "entry_threshold",
+        "exit_threshold",
+        "stop_loss",
         "iterations",
         "beta_hedge",
         "delayed_entry",
         "sl_lock",
         "time_decay_sl",
-        "test"
+        "freeze_std",
+        "beta_start",
+        "start",
+        "end"
       ],
       "title": "Performance",
       "type": "object"
     },
     "RL": {
       "properties": {
-        "training_subfolder": {
-          "description": "Name of the folder with training data.",
-          "title": "Training Subfolder",
-          "type": "string"
+        "training_folder": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Name of the folder with training data, if null take first one.",
+          "title": "Training Folder"
         },
         "reward": {
           "$ref": "#/$defs/RLRewards",
@@ -261,7 +416,7 @@
         }
       },
       "required": [
-        "training_subfolder",
+        "training_folder",
         "reward",
         "obs_space_type",
         "passes_per_pair",
@@ -349,30 +504,6 @@
       "title": "RecurrentPPO",
       "type": "object"
     },
-    "RunBacktest": {
-      "properties": {
-        "test_start": {
-          "description": "Start date for the backtest loop.",
-          "title": "Test Start",
-          "type": "string"
-        },
-        "test_end": {
-          "description": "End date for the backtest loop.",
-          "title": "Test End",
-          "type": "string"
-        },
-        "performance": {
-          "$ref": "#/$defs/Performance"
-        }
-      },
-      "required": [
-        "test_start",
-        "test_end",
-        "performance"
-      ],
-      "title": "RunBacktest",
-      "type": "object"
-    },
     "Settings": {
       "properties": {
         "vol_window": {
@@ -400,32 +531,6 @@
         "time_decay_max"
       ],
       "title": "Settings",
-      "type": "object"
-    },
-    "Test": {
-      "properties": {
-        "beta_start": {
-          "description": "Lookback window start date for beta calculation.",
-          "title": "Beta Start",
-          "type": "string"
-        },
-        "start": {
-          "description": "Start date for test.",
-          "title": "Start",
-          "type": "string"
-        },
-        "end": {
-          "description": "End date for test.",
-          "title": "End",
-          "type": "string"
-        }
-      },
-      "required": [
-        "beta_start",
-        "start",
-        "end"
-      ],
-      "title": "Test",
       "type": "object"
     },
     "Wandb": {
@@ -498,71 +603,116 @@
       "description": "Hydra defaults list.",
       "title": "Defaults"
     },
-    "tickers": {
-      "description": "List of asset tickers.",
-      "items": {
-        "type": "string"
-      },
-      "title": "Tickers",
-      "type": "array"
-    },
     "generate_plots": {
-      "description": "Generate plots if true.",
-      "title": "Generate Plots",
-      "type": "boolean"
-    },
-    "z_score_window": {
-      "description": "Z-Score lookback window size.",
-      "exclusiveMinimum": 0,
-      "title": "Z Score Window",
-      "type": "integer"
-    },
-    "entry_threshold": {
-      "description": "Z-score threshold to open a position.",
-      "title": "Entry Threshold",
-      "type": "number"
-    },
-    "exit_threshold": {
       "anyOf": [
         {
-          "type": "number"
-        },
-        {
-          "const": "-entry_threshold",
-          "type": "string"
-        }
-      ],
-      "description": "Z-score threshold to close a position. Can be positive or negative (also equals to -entry_threshold).",
-      "title": "Exit Threshold"
-    },
-    "stop_loss": {
-      "anyOf": [
-        {
-          "exclusiveMinimum": 1,
-          "type": "number"
+          "type": "boolean"
         },
         {
           "type": "null"
         }
       ],
-      "description": "Stop loss multiplier (e.g., 1.05 for 5% from entry_threshold), null if trade without SL.",
-      "title": "Stop Loss"
+      "default": null,
+      "description": "Generate plots if true.",
+      "title": "Generate Plots"
+    },
+    "save_for_training": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Flag to auto-save backtest data in data/rl_training for RL training.",
+      "title": "Save For Training"
+    },
+    "rl_model_folder": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Name of the folder with RL model, if null take first one or run without RL.",
+      "title": "Rl Model Folder"
     },
     "market": {
-      "$ref": "#/$defs/Market",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Market"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
       "description": "Market simulation parameters including capital, fees, and timeframe."
     },
     "settings": {
-      "$ref": "#/$defs/Settings",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Settings"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
       "description": "General strategy parameters, including volatility and time decay bounds."
     },
     "pair_selection": {
-      "$ref": "#/$defs/PairSelection",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PairSelection"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
       "description": "Configuration for statistical tests and top pair filtering."
     },
     "performance": {
-      "$ref": "#/$defs/Performance",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Performance"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
       "description": "Trading logic flags, SL types, and backtest execution parameters."
+    },
+    "fetch_historical_data": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/FetchHistoricalData"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Parameters for the historical data downloading utility."
+    },
+    "generate_assets_list": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/GenerateAssetsList"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Parameters for the asset universe generation and filtering utility."
     },
     "rl": {
       "anyOf": [
@@ -575,18 +725,6 @@
       ],
       "default": null,
       "description": "Reinforcement Learning environment parameters and training settings."
-    },
-    "run_backtest": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/RunBacktest"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Execution timeline and explicit settings for the backtest runner."
     },
     "rl_algo": {
       "anyOf": [

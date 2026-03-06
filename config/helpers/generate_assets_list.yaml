@@ -1,0 +1,40 @@
+# yaml-language-server: $schema=../schemas/schema_helpers.json
+
+top_n: 100
+start: 2023-11-01
+end: 2024-01-01
+test_end: 2024-02-01
+iterations: 24
+
+whitelist:
+  - JUP
+
+blacklist:
+    - USDC
+    - BUSD
+    - TUSD
+    - FDUSD
+    - USDP
+    - DAI
+    - USDS
+    - AEUR
+    - EUR
+    - TRY
+    - GBP
+    - RUB
+    - ARS
+    - BRL
+    - UAH
+    - RON
+    - ZAR
+    - PLN
+    - WBTC
+    - WETH
+    - STETH
+    - BETH
+    - RETH
+    - CBETH
+    - FTT
+    - LUNA
+    - LUNC
+    - USTC

@@ -1,19 +1,19 @@
 .idea
 __pycache__
-.hydra/
+.mypy_cache
+.ruff_cache
+.venv/
 
 data/*
-!data/.ignore
-
-data_rl/*
-!data_rl/*/
-data_rl/*/*
-!data_rl/*/.ignore
+!data/*/
+data/*/*
+!data/*/.ignore
 
 results/*
 !results/.ignore
 
 docs/*
 !docs/configuration.md
+!docs/list_of_assets.md
 
 .env

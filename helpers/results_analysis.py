@@ -83,6 +83,7 @@ def parse_results():
                 z_score_window = config.get("z_score_window", "N/A")
                 top_n_factor = ps.get("top_n_factor", "N/A")
                 beta_hedge = perf.get("beta_hedge", "N/A")
+                delayed_entry = perf.get("delayed_entry", "N/A")
 
                 stats_df = pd.read_parquet(stats_file)
 
@@ -101,6 +102,7 @@ def parse_results():
                         "Entry": entry,
                         "Exit": exit_t,
                         "SL": stop_loss,
+                        "Delayed Entry": delayed_entry,
                         "Total Trades": int(
                             (get_metric("win_count", "net") or 0)
                             + (get_metric("lose_count", "net") or 0)

@@ -61,24 +61,6 @@ def setup_run_environment(calling_file: str) -> str:
     return output_dir
 
 
-def setup_rl_run_environment(calling_file: str) -> str:
-    script_dir = os.path.dirname(os.path.abspath(calling_file))
-    project_root = os.path.abspath(os.path.join(script_dir, ".."))
-
-    data_dir = os.path.join(project_root, "data_rl")
-    models_dir = os.path.join(data_dir, "models")
-    training_data_dir = os.path.join(data_dir, "training_data")
-
-    os.makedirs(data_dir, exist_ok=True)
-    os.makedirs(models_dir, exist_ok=True)
-    os.makedirs(training_data_dir, exist_ok=True)
-
-    logger.debug("--- RL Environment Setup ---")
-    logger.debug(f"Directory: {data_dir}")
-
-    return data_dir
-
-
 def execute_testing(
     bt: Strategy,
     best_params: dict[str, Any],
@@ -163,7 +145,7 @@ def execute_pair_selection(
     ps_end: str,
     beta_test_start: str,
     interval: str,
-    top_n_factor: float,
+    top_n: float,
     output_dir: str,
     beta_hedge: BetaHedge,
 ) -> pd.DataFrame:
@@ -177,7 +159,7 @@ def execute_pair_selection(
         ps_end=ps_end,
         beta_test_start=beta_test_start,
         interval=interval,
-        top_n=top_n_factor,
+        top_n=top_n,
         beta_hedge=beta_hedge,
     )
 
@@ -286,7 +268,7 @@ def merge_multi_period_results(
     risk_free_rate_annual: float,
     interval: str,
     plot: bool,
-    tickers: list[str],
+    tickers_dict: dict[int, list[str]],
     prefix: str = "",
 ) -> StrategyResult | None:
     """
@@ -312,6 +294,9 @@ def merge_multi_period_results(
 
     results = []
 
+    ewp_dfs = []
+    btc_dfs = []
+
     for d in iter_dirs:
         pattern = f"{prefix}returns_{ticker_x}_{ticker_y}_*.parquet"
         files = list(d.glob(pattern))
@@ -323,6 +308,16 @@ def merge_multi_period_results(
         file_stem = files[0].stem
         res = load_strategy_result(file_stem, directory=str(d))
         results.append(res)
+
+        if plot:
+            iter_num = int(d.name)
+            iter_tickers = tickers_dict[iter_num]
+
+            btc_period = load_btc_benchmark(res.start, res.end, interval)
+            ewp_period = load_ewp_benchmark(iter_tickers, res.start, res.end, interval)
+
+            btc_dfs.append(btc_period[["BTC_pct"]])
+            ewp_dfs.append(ewp_period[["portfolio_pct"]])
 
     if not results:
         logger.warning("No results collected for merging.")
@@ -369,21 +364,18 @@ def merge_multi_period_results(
     )
 
     if plot:
-        btc_data = load_btc_benchmark(
-            test_start=final_result.start,
-            test_end=final_result.end,
-            interval=interval,
-        )
-        ewp_data = load_ewp_benchmark(
-            tickers=tickers,
-            test_start=final_result.start,
-            test_end=final_result.end,
-            interval=interval,
-        )
+        final_btc = pd.concat(btc_dfs).sort_index()
+        final_btc = final_btc[~final_btc.index.duplicated(keep="first")]
+        final_btc["BTC_return"] = (1 + final_btc["BTC_pct"]).cumprod() - 1
+
+        final_ewp = pd.concat(ewp_dfs).sort_index()
+        final_ewp = final_ewp[~final_ewp.index.duplicated(keep="first")]
+        final_ewp["ewp_return"] = (1 + final_ewp["portfolio_pct"]).cumprod() - 1
+
         plot_returns(
             result=final_result,
-            btc_data=btc_data,
-            ewp_data=ewp_data,
+            btc_data=final_btc,
+            ewp_data=final_ewp,
             directory=output_dir,
             save=True,
             prefix=prefix,
