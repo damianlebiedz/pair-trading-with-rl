@@ -528,7 +528,6 @@
             "CRVUSDT",
             "XLMUSDT",
             "CYBERUSDT",
-            "AXLUSDT",
             "GLMUSDT",
             "RVNUSDT",
             "TRUUSDT",
@@ -536,7 +535,8 @@
             "XVGUSDT",
             "CELOUSDT",
             "BEAMXUSDT",
-            "PHBUSDT"
+            "PHBUSDT",
+            "COSUSDT"
         ]
     },
     "2024-04": {
@@ -1225,7 +1225,6 @@
             "LTCUSDT",
             "HBARUSDT",
             "LINKUSDT",
-            "EIGENUSDT",
             "PEOPLEUSDT",
             "1000SATSUSDT",
             "UNIUSDT",
@@ -1292,7 +1291,8 @@
             "XTZUSDT",
             "CELOUSDT",
             "SCRTUSDT",
-            "BEAMXUSDT"
+            "BEAMXUSDT",
+            "BANANAUSDT"
         ]
     },
     "2024-11": {
@@ -2388,7 +2388,6 @@
             "DOGEUSDT",
             "XRPUSDT",
             "SUIUSDT",
-            "WLFIUSDT",
             "AVAXUSDT",
             "ADAUSDT",
             "ZECUSDT",
@@ -2480,7 +2479,8 @@
             "RUNEUSDT",
             "TREEUSDT",
             "VETUSDT",
-            "MEMEUSDT"
+            "MEMEUSDT",
+            "AIXBTUSDT"
         ]
     },
     "2025-10": {

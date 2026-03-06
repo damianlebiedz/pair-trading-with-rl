@@ -112,7 +112,10 @@ def generate_assets_list():
             mask = (vol_series.index >= window_start) & (vol_series.index < window_end)
             period_vol = vol_series.loc[mask]
 
-            if len(period_vol) == expected_days:
+            day_before = window_start - pd.Timedelta(days=1)
+            has_prior_day = day_before in vol_series.index
+
+            if len(period_vol) == expected_days and has_prior_day:
                 monthly_volumes[sym] = period_vol.mean()
 
         sorted_symbols = sorted(
