@@ -1,5 +1,7 @@
 x-base: &base_config
-  image: research-paper-base
+  build:
+    context: .
+    image: research-paper-base
   env_file:
     - .env
   volumes:
@@ -22,9 +24,6 @@ services:
   run_backtest:
     <<: *base_config
     command: python runners/run_backtest.py
-    depends_on:
-      fetch_historical_data:
-        condition: service_completed_successfully
 
   train_agent:
     <<: *base_config
@@ -33,6 +32,10 @@ services:
   generate_assets_list:
     <<: *base_config
     command: python helpers/generate_assets_list.py
+    deploy:
+      restart_policy:
+        condition: on-failure
+        max_attempts: 3
 
   generate_schemas:
     <<: *base_config
