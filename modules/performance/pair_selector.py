@@ -95,9 +95,10 @@ class PairSelector:
             tickers=tickers, start=beta_test_start, end=ps_end, interval=interval
         )
 
-        for col in df_val.columns:
-            if df_val[col].dtype in ["float64", "float32"]:
-                df_val[f"{col}_{Source.LOG.value}"] = np.log(df_val[col])
+        numeric_cols = df_val.select_dtypes(include=["float64", "float32"])
+        log_df = np.log(numeric_cols)
+        log_df.columns = [f"{col}_{Source.LOG.value}" for col in numeric_cols.columns]
+        df_val = pd.concat([df_val, log_df], axis=1)
 
         target_beta_date = pd.to_datetime(beta_test_start)
         beta_start_pos = df_val.index.get_indexer([target_beta_date], method="bfill")[0]
