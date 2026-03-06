@@ -14,21 +14,10 @@ logger = get_logger(__name__)
 
 def fetch_historical_data():
     """
-    Downloads and compiles historical market data for the entire backtesting universe.
-
-    This script parses the monthly asset baskets and extracts a deduplicated set of unique
-    tickers. If an asset appears in multiple monthly baskets, its data is fetched only once
-    for the entire global test period. This approach eliminates redundant API calls,
-    minimizes network latency, and optimizes local storage.
-
-    Key Features:
-    - Precise Boundary Alignment: Enforces strict start and end timestamps (avoiding
-      the "next year's first candle" spillover) to guarantee perfectly aligned DataFrames.
-    - Optimized Storage: Converts raw Binance JSON responses into highly compressed,
-      columnar Parquet files for lightning-fast I/O during strategy execution.
-
-    Outputs:
-        - A collection of .parquet files in the local data directory, ready for the DataLoader.
+    Downloads and compiles historical market data ONLY for the active periods of each ticker.
+    Instead of downloading the entire global backtest range for every coin, it calculates
+    the precise minimum start and maximum end date required for each asset based on the iterations
+    it appears in within the list_of_assets.json file.
     """
     script_dir = Path(__file__).resolve().parent
     project_root = script_dir.parent
@@ -52,68 +41,76 @@ def fetch_historical_data():
     with open(json_path, "r", encoding="utf-8") as f:
         universes = json.load(f)
 
-    unique_tickers = set()
-    for month, tickers in universes.items():
-        unique_tickers.update(tickers)
+    ticker_ranges = {}
+    for month_key, data in universes.items():
+        iter_start = pd.Timestamp(data["data_fetch_start"])
+        iter_end = pd.Timestamp(data["data_fetch_end"])
 
-    unique_tickers = sorted(list(unique_tickers))
-    total_tickers = len(unique_tickers)
-    logger.info(f"Found {total_tickers} unique tickers across all months.")
+        for ticker in data["assets"]:
+            if ticker not in ticker_ranges:
+                ticker_ranges[ticker] = {"start": iter_start, "end": iter_end}
+            else:
+                ticker_ranges[ticker]["start"] = min(
+                    ticker_ranges[ticker]["start"], iter_start
+                )
+                ticker_ranges[ticker]["end"] = max(
+                    ticker_ranges[ticker]["end"], iter_end
+                )
 
-    start_time = pd.Timestamp(cfg.start, tz="UTC")
-    end_time = pd.Timestamp(cfg.end, tz="UTC")
+    total_tickers = len(ticker_ranges)
+    logger.info(
+        f"Found {total_tickers} unique tickers. Downloading dynamic timeframes..."
+    )
 
-    expected_rows = len(
-        pd.date_range(
-            start=start_time, end=end_time, freq=cfg.interval, inclusive="left"
+    interval = cfg.interval
+
+    for i, (symbol, date_range) in enumerate(sorted(ticker_ranges.items()), 1):
+        start_time = date_range["start"]
+        end_time = date_range["end"]
+
+        expected_index = pd.date_range(
+            start=start_time, end=end_time, freq=interval, inclusive="left"
         )
-    )
-    logger.debug(
-        f"Target range: {start_time} to {end_time}. Expected rows per asset: {expected_rows}"
-    )
+        expected_rows = len(expected_index)
 
-    file_start_str = start_time.strftime("%Y%m%d")
-    file_end_str = end_time.strftime("%Y%m%d")
-
-    start_ts = int(start_time.timestamp() * 1000)
-    end_ts = int(end_time.timestamp() * 1000) - 1
-
-    for i, symbol in enumerate(unique_tickers, 1):
+        file_start_str = start_time.strftime("%Y%m%d")
+        file_end_str = end_time.strftime("%Y%m%d")
         filename = (
-            data_dir
-            / f"{symbol}_{cfg.interval}_{file_start_str}-{file_end_str}.parquet"
+            data_dir / f"{symbol}_{interval}_{file_start_str}-{file_end_str}.parquet"
         )
+
+        old_files = list(data_dir.glob(f"{symbol}_{interval}_*.parquet"))
+        for old_file in old_files:
+            if old_file.name != filename.name:
+                old_file.unlink()
 
         if filename.exists():
             try:
                 existing_df = pd.read_parquet(filename)
                 if len(existing_df) == expected_rows:
                     logger.info(
-                        f"[{i}/{total_tickers}] {filename.name} is valid ({len(existing_df)} rows), skipping."
+                        f"[{i}/{total_tickers}] {filename.name} is valid, skipping."
                     )
                     continue
-                else:
-                    logger.info(
-                        f"[{i}/{total_tickers}] {filename.name} has WRONG row count ({len(existing_df)}). Redownloading..."
-                    )
             except Exception as e:
-                logger.info(
-                    f"[{i}/{total_tickers}] {filename.name} is corrupted: {e}. Redownloading..."
-                )
+                logger.debug(e)
+                pass
 
-        klines_all = []
+        start_ts = int(start_time.timestamp() * 1000)
+        end_ts = int(end_time.timestamp() * 1000) - 1
         current_ts = start_ts
+        klines_all = []
 
         pbar = tqdm(
             total=100,
-            desc=f"[{i}/{total_tickers}] Downloading {symbol} ({cfg.interval})",
+            desc=f"[{i}/{total_tickers}] {symbol} ({start_time.strftime('%b%y')}-{end_time.strftime('%b%y')})",
             bar_format="{desc}: {bar} {n_fmt}% | {remaining}",
         )
 
         while current_ts < end_ts:
             klines = client.get_klines(
                 symbol=symbol,
-                interval=cfg.interval,
+                interval=interval,
                 startTime=current_ts,
                 endTime=end_ts,
                 limit=cfg.limit_per_request,
@@ -129,17 +126,9 @@ def fetch_historical_data():
             progress = min((current_ts - start_ts) / (end_ts - start_ts) * 100, 100)
             pbar.n = int(progress)
             pbar.refresh()
-
             time.sleep(0.1)
 
         pbar.close()
-
-        if len(klines_all) != expected_rows:
-            raise ValueError(
-                f"DATA INTEGRITY ERROR for {symbol}: "
-                f"Downloaded {len(klines_all)} rows, but expected EXACTLY {expected_rows}. "
-                f"Check if the asset was listed on Binance during the entire period {cfg.start} - {cfg.end}."
-            )
 
         df = pd.DataFrame(
             klines_all,
@@ -159,30 +148,42 @@ def fetch_historical_data():
             ],
         )
 
-        df["open_time"] = pd.to_datetime(df["open_time"], unit="ms")
-        df["close_time"] = pd.to_datetime(df["close_time"], unit="ms")
+        if not df.empty:
+            df["open_time"] = pd.to_datetime(df["open_time"], unit="ms")
+            df["close_time"] = pd.to_datetime(df["close_time"], unit="ms")
+            num_cols = ["open", "high", "low", "close", "volume", "quote_asset_volume"]
+            df[num_cols] = df[num_cols].astype(float)
 
-        df["open_time"] = pd.to_datetime(df["open_time"], unit="ms")
-        num_cols = ["open", "high", "low", "close", "volume", "quote_asset_volume"]
-        df[num_cols] = df[num_cols].astype(float)
+            df.set_index("open_time", inplace=True)
+            df = df[~df.index.duplicated(keep="last")]
+            df = df.reindex(expected_index)
+            df.reset_index(inplace=True)
+            df.rename(columns={"index": "open_time"}, inplace=True)
+        else:
+            logger.warning(
+                f"[{i}/{total_tickers}] No data returned for {symbol}. Padding with NaNs."
+            )
+            df = pd.DataFrame({"open_time": expected_index})
+            for col in [
+                "open",
+                "high",
+                "low",
+                "close",
+                "volume",
+                "close_time",
+                "quote_asset_volume",
+                "number_of_trades",
+                "taker_buy_base",
+                "taker_buy_quote",
+                "ignore",
+            ]:
+                df[col] = float("nan")
 
         temp_filename = filename.with_suffix(".tmp")
         df.to_parquet(temp_filename, index=False, engine="pyarrow")
         os.replace(temp_filename, filename)
-        logger.info(f"--> Verified and saved {symbol} ({len(df)} rows)")
 
-    downloaded_files = list(
-        data_dir.glob(f"*_{cfg.interval}_{file_start_str}-{file_end_str}.parquet")
-    )
-    if len(downloaded_files) != total_tickers:
-        missing = total_tickers - len(downloaded_files)
-        raise FileNotFoundError(
-            f"CRITICAL: Final validation failed! Found {len(downloaded_files)} files, expected {total_tickers}. {missing} files are missing."
-        )
-
-    logger.info(
-        f"\nSUCCESS: All {total_tickers} assets downloaded and verified (exactly {expected_rows} rows each)."
-    )
+    logger.info("\nSUCCESS: All specific timeframe assets downloaded.")
 
 
 if __name__ == "__main__":

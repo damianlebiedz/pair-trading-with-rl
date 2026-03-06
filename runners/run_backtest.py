@@ -10,7 +10,7 @@ from modules.core.config import Config
 from modules.learning.agents import RLAgentAdapter
 from modules.performance.models import StrategyResult
 from modules.data_services.data_loaders import load_data
-from modules.data_services.data_utils import save_dataframe, save_strategy_result
+from modules.data_services.data_utils import save_strategy_result, save_dataframe
 from modules.performance.strategy import Strategy
 from runners.core.pipelines import (
     execute_pair_selection,
@@ -52,7 +52,7 @@ def run_backtest(cfg: DictConfig):
         logger.error(f"Error: file not found {json_path}")
         return
 
-    with open(json_path, "r") as f:
+    with open(json_path, "r", encoding="utf-8") as f:
         universe_data = json.load(f)
 
     cfg = Config(**OmegaConf.to_container(cfg, resolve=True))
@@ -101,7 +101,7 @@ def run_backtest(cfg: DictConfig):
             raise ValueError("No valid month keys found in universe JSON.")
 
         first_month_key = sorted(valid_keys)[0]
-        first_ticker = universe_data[first_month_key][0]
+        first_ticker = universe_data[first_month_key]["assets"][0]
 
         _validation_df = load_data(
             tickers=[first_ticker],
@@ -122,13 +122,19 @@ def run_backtest(cfg: DictConfig):
     tickers_dict = {}
 
     for i in range(number_of_iterations):
-        output_dir = os.path.join(root, f"{i+1}")
+        output_dir = os.path.join(root, f"{i + 1}")
         if number_of_iterations == 1:
             output_dir = root
 
-        logger.info(f"--- Running Iteration {i+1} ---")
+        logger.info(f"--- Running Iteration {i + 1} / {number_of_iterations} ---")
 
-        current_selection_date = pd.to_datetime(lists["pair_selection_start_list"][i])
+        ps_start = lists["pair_selection_start_list"][i]
+        ps_end = lists["pair_selection_end_list"][i]
+        beta_start = lists["beta_test_start_list"][i]
+        test_start = lists["test_start_list"][i]
+        test_end = lists["test_end_list"][i]
+
+        current_selection_date = pd.to_datetime(ps_start)
         month_key = current_selection_date.strftime("%Y-%m")
 
         if month_key not in universe_data:
@@ -137,7 +143,7 @@ def run_backtest(cfg: DictConfig):
             )
             continue
 
-        current_iteration_tickers = universe_data[month_key]
+        current_iteration_tickers = universe_data[month_key]["assets"]
         logger.debug(
             f"Using universe from {month_key}: {len(current_iteration_tickers)} assets."
         )
@@ -146,9 +152,9 @@ def run_backtest(cfg: DictConfig):
 
         ps_df = execute_pair_selection(
             tickers=current_iteration_tickers,
-            ps_start=lists["pair_selection_start_list"][i],
-            ps_end=lists["pair_selection_end_list"][i],
-            beta_test_start=lists["beta_test_start_list"][i],
+            ps_start=ps_start,
+            ps_end=ps_end,
+            beta_test_start=beta_start,
             interval=cfg.market.interval,
             top_n=cfg.pair_selection.top_n,
             output_dir=output_dir,
@@ -166,8 +172,8 @@ def run_backtest(cfg: DictConfig):
             ref_ticker = current_iteration_tickers[0]
             ref_data = load_data(
                 tickers=[ref_ticker],
-                start=lists["test_start_list"][i],
-                end=lists["test_end_list"][i],
+                start=test_start,
+                end=test_end,
                 interval=cfg.market.interval,
             )
 
@@ -182,8 +188,8 @@ def run_backtest(cfg: DictConfig):
                 data=empty_data,
                 ticker_x="multi",
                 ticker_y="pair",
-                start=lists["test_start_list"][i],
-                end=lists["test_end_list"][i],
+                start=test_start,
+                end=test_end,
                 interval=cfg.market.interval,
                 fee_rate=cfg.market.fee_rate,
                 stats=pd.DataFrame(),
@@ -276,8 +282,8 @@ def run_backtest(cfg: DictConfig):
             bt = Strategy(
                 ticker_x=ticker_x,
                 ticker_y=ticker_y,
-                start=lists["beta_test_start_list"][i],
-                end=lists["test_end_list"][i],
+                start=beta_start,
+                end=test_end,
                 interval=cfg.market.interval,
                 fee_rate=cfg.market.fee_rate,
                 initial_cash=cfg.market.initial_cash / cfg.pair_selection.top_n,
@@ -299,8 +305,9 @@ def run_backtest(cfg: DictConfig):
             strategies_map[pair_name] = bt
 
         test_results = []
-
-        logger.info(f"--- Testing {len(selected_pairs_names)} Pairs ---")
+        logger.info(
+            f"--- Testing {len(selected_pairs_names)} Pairs (Test Window: {test_start} to {test_end}) ---"
+        )
 
         for pair_name in selected_pairs_names:
             ticker_x, ticker_y = pair_name.split("-")
@@ -318,9 +325,9 @@ def run_backtest(cfg: DictConfig):
                 ticker_x=ticker_x,
                 ticker_y=ticker_y,
                 output_dir=output_dir,
-                beta_test_start=lists["beta_test_start_list"][i],
-                test_start=lists["test_start_list"][i],
-                test_end=lists["test_end_list"][i],
+                beta_test_start=beta_start,
+                test_start=test_start,
+                test_end=test_end,
                 subdir="test",
                 interval=cfg.market.interval,
                 plot=cfg.generate_plots,
@@ -343,8 +350,8 @@ def run_backtest(cfg: DictConfig):
                 results=test_results,
                 initial_cash=cfg.market.initial_cash,
                 risk_free_rate_annual=cfg.market.risk_free_rate_annual,
-                test_start=lists["test_start_list"][i],
-                test_end=lists["test_end_list"][i],
+                test_start=test_start,
+                test_end=test_end,
                 interval=cfg.market.interval,
                 plot=cfg.generate_plots,
                 tickers=current_iteration_tickers,

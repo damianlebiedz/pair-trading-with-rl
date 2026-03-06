@@ -68,18 +68,6 @@
     },
     "FetchHistoricalData": {
       "properties": {
-        "start": {
-          "description": "Start date for downloading historical data (YYYY-MM-DD).",
-          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-          "title": "Start",
-          "type": "string"
-        },
-        "end": {
-          "description": "End date for downloading historical data (YYYY-MM-DD).",
-          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-          "title": "End",
-          "type": "string"
-        },
         "interval": {
           "$ref": "#/$defs/Interval",
           "description": "Data timeframe for the fetcher. Options: ['1d', '4h', '1h', '30m', '15m', '5m', '3m', '1m']"
@@ -98,8 +86,6 @@
         }
       },
       "required": [
-        "start",
-        "end",
         "interval"
       ],
       "title": "FetchHistoricalData",
@@ -125,15 +111,17 @@
           "title": "End",
           "type": "string"
         },
-        "buffer_days": {
-          "default": 0,
-          "description": "Number of extra days to check for data availability/continuity.",
-          "title": "Buffer Days",
-          "type": "integer"
+        "test_end": {
+          "description": "End date for test (YYYY-MM-DD).",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "title": "Test End",
+          "type": "string"
         },
-        "interval": {
-          "$ref": "#/$defs/Interval",
-          "description": "Timeframe for volume evaluation. Options: ['1d', '4h', '1h', '30m', '15m', '5m', '3m', '1m']"
+        "iterations": {
+          "description": "Number of iterations (monthly) to fetch historical data.",
+          "exclusiveMinimum": 0,
+          "title": "Iterations",
+          "type": "integer"
         },
         "limit_per_request": {
           "default": 1000,
@@ -162,7 +150,8 @@
         "top_n",
         "start",
         "end",
-        "interval"
+        "test_end",
+        "iterations"
       ],
       "title": "GenerateAssetsList",
       "type": "object"
@@ -615,14 +604,30 @@
       "title": "Defaults"
     },
     "generate_plots": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
       "description": "Generate plots if true.",
-      "title": "Generate Plots",
-      "type": "boolean"
+      "title": "Generate Plots"
     },
     "save_for_training": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
       "description": "Flag to auto-save backtest data in data/rl_training for RL training.",
-      "title": "Save For Training",
-      "type": "boolean"
+      "title": "Save For Training"
     },
     "rl_model_folder": {
       "anyOf": [
@@ -633,6 +638,7 @@
           "type": "null"
         }
       ],
+      "default": null,
       "description": "Name of the folder with RL model, if null take first one or run without RL.",
       "title": "Rl Model Folder"
     },
@@ -661,11 +667,27 @@
       "description": "General strategy parameters, including volatility and time decay bounds."
     },
     "pair_selection": {
-      "$ref": "#/$defs/PairSelection",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PairSelection"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
       "description": "Configuration for statistical tests and top pair filtering."
     },
     "performance": {
-      "$ref": "#/$defs/Performance",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Performance"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
       "description": "Trading logic flags, SL types, and backtest execution parameters."
     },
     "fetch_historical_data": {
@@ -744,13 +766,6 @@
       "description": "Weights & Biases configuration for experiment tracking and logging."
     }
   },
-  "required": [
-    "generate_plots",
-    "save_for_training",
-    "rl_model_folder",
-    "pair_selection",
-    "performance"
-  ],
   "title": "Config",
   "type": "object"
 }

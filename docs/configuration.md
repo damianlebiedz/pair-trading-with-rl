@@ -35,8 +35,6 @@ Below is an automatically generated list of all configuration parameters support
 
 
 ### FetchHistoricalData
-- **`start`**: Start date for downloading historical data (YYYY-MM-DD).
-- **`end`**: End date for downloading historical data (YYYY-MM-DD).
 - **`interval`**: Data timeframe for the fetcher. Options: ['1d', '4h', '1h', '30m', '15m', '5m', '3m', '1m']
 - **`limit_per_request`**: Maximum number of data points per single API request.
 - **`timeout`**: Network timeout in seconds for API calls.
@@ -46,8 +44,8 @@ Below is an automatically generated list of all configuration parameters support
 - **`top_n`**: Number of top assets to select based on volume/liquidity.
 - **`start`**: Start date for evaluating asset liquidity and volume (YYYY-MM-DD).
 - **`end`**: End date for evaluating asset liquidity and volume (YYYY-MM-DD).
-- **`buffer_days`**: Number of extra days to check for data availability/continuity.
-- **`interval`**: Timeframe for volume evaluation. Options: ['1d', '4h', '1h', '30m', '15m', '5m', '3m', '1m']
+- **`test_end`**: End date for test (YYYY-MM-DD).
+- **`iterations`**: Number of iterations (monthly) to fetch historical data.
 - **`limit_per_request`**: API limit for asset listing requests.
 - **`whitelist`**: List of tickers to forcibly include in the final list.
 - **`blacklist`**: List of tickers to forcibly exclude from the final list.

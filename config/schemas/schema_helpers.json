@@ -2,18 +2,6 @@
   "$defs": {
     "FetchHistoricalData": {
       "properties": {
-        "start": {
-          "description": "Start date for downloading historical data (YYYY-MM-DD).",
-          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-          "title": "Start",
-          "type": "string"
-        },
-        "end": {
-          "description": "End date for downloading historical data (YYYY-MM-DD).",
-          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-          "title": "End",
-          "type": "string"
-        },
         "interval": {
           "$ref": "#/$defs/Interval",
           "description": "Data timeframe for the fetcher. Options: ['1d', '4h', '1h', '30m', '15m', '5m', '3m', '1m']"
@@ -32,8 +20,6 @@
         }
       },
       "required": [
-        "start",
-        "end",
         "interval"
       ],
       "title": "FetchHistoricalData",
@@ -59,15 +45,17 @@
           "title": "End",
           "type": "string"
         },
-        "buffer_days": {
-          "default": 0,
-          "description": "Number of extra days to check for data availability/continuity.",
-          "title": "Buffer Days",
-          "type": "integer"
+        "test_end": {
+          "description": "End date for test (YYYY-MM-DD).",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "title": "Test End",
+          "type": "string"
         },
-        "interval": {
-          "$ref": "#/$defs/Interval",
-          "description": "Timeframe for volume evaluation. Options: ['1d', '4h', '1h', '30m', '15m', '5m', '3m', '1m']"
+        "iterations": {
+          "description": "Number of iterations (monthly) to fetch historical data.",
+          "exclusiveMinimum": 0,
+          "title": "Iterations",
+          "type": "integer"
         },
         "limit_per_request": {
           "default": 1000,
@@ -96,7 +84,8 @@
         "top_n",
         "start",
         "end",
-        "interval"
+        "test_end",
+        "iterations"
       ],
       "title": "GenerateAssetsList",
       "type": "object"

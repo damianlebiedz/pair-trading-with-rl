@@ -121,12 +121,6 @@ class Performance(BaseModel):
 
 
 class FetchHistoricalData(BaseModel):
-    start: DateStr = Field(
-        description="Start date for downloading historical data (YYYY-MM-DD)."
-    )
-    end: DateStr = Field(
-        description="End date for downloading historical data (YYYY-MM-DD)."
-    )
     interval: Interval = Field(
         description=f"Data timeframe for the fetcher. Options: {[e.value for e in Interval]}"
     )
@@ -138,21 +132,10 @@ class FetchHistoricalData(BaseModel):
         default=30, description="Network timeout in seconds for API calls."
     )
 
-    @model_validator(mode="after")
-    def validate_dates(self) -> "FetchHistoricalData":
-        if pd.to_datetime(self.start) >= pd.to_datetime(self.end):
-            raise ValueError(
-                "FetchHistoricalData: 'start' date must be before 'end' date."
-            )
-        return self
-
 
 class GenerateAssetsList(BaseModel):
     top_n: int = Field(
         gt=0, description="Number of top assets to select based on volume/liquidity."
-    )
-    window_months: int = Field(
-        gt=0, description="Duration of the formation window in months."
     )
     start: DateStr = Field(
         description="Start date for evaluating asset liquidity and volume (YYYY-MM-DD)."
@@ -160,12 +143,10 @@ class GenerateAssetsList(BaseModel):
     end: DateStr = Field(
         description="End date for evaluating asset liquidity and volume (YYYY-MM-DD)."
     )
-    buffer_days: int = Field(
-        default=0,
-        description="Number of extra days to check for data availability/continuity.",
-    )
-    interval: Interval = Field(
-        description=f"Timeframe for volume evaluation. Options: {[e.value for e in Interval]}"
+    test_end: DateStr = Field(description="End date for test (YYYY-MM-DD).")
+    iterations: int = Field(
+        gt=0,
+        description="Number of iterations (monthly) to fetch historical data.",
     )
     limit_per_request: int = Field(
         default=1000, description="API limit for asset listing requests."
@@ -285,12 +266,16 @@ class Config(BaseModel):
     defaults: list[str | RLAlgoDefault | dict[str, Any]] | None = Field(
         default=None, description="Hydra defaults list."
     )
-    generate_plots: bool = Field(description="Generate plots if true.")
-    save_for_training: bool = Field(
-        description="Flag to auto-save backtest data in data/rl_training for RL training."
+    generate_plots: bool | None = Field(
+        default=None, description="Generate plots if true."
+    )
+    save_for_training: bool | None = Field(
+        default=None,
+        description="Flag to auto-save backtest data in data/rl_training for RL training.",
     )
     rl_model_folder: str | None = Field(
-        description="Name of the folder with RL model, if null take first one or run without RL."
+        default=None,
+        description="Name of the folder with RL model, if null take first one or run without RL.",
     )
     market: Market | None = Field(
         default=None,
@@ -300,11 +285,13 @@ class Config(BaseModel):
         default=None,
         description="General strategy parameters, including volatility and time decay bounds.",
     )
-    pair_selection: PairSelection = Field(
-        description="Configuration for statistical tests and top pair filtering."
+    pair_selection: PairSelection | None = Field(
+        default=None,
+        description="Configuration for statistical tests and top pair filtering.",
     )
-    performance: Performance = Field(
-        description="Trading logic flags, SL types, and backtest execution parameters."
+    performance: Performance | None = Field(
+        default=None,
+        description="Trading logic flags, SL types, and backtest execution parameters.",
     )
     fetch_historical_data: FetchHistoricalData | None = Field(
         default=None,
