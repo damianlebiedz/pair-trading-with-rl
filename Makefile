@@ -13,13 +13,11 @@ endif
 ZENODO_URL = "https://zenodo.org/record/XXXXXXX/files/reproduction_package.zip"
 
 ifeq ($(RUN_MODE), poetry)
-	# --- LOCAL COMMANDS (POETRY) ---
 	CMD_FETCH = poetry run python helpers/generate_assets_list.py && poetry run python helpers/fetch_historical_data.py
 	CMD_BACKTEST = poetry run python runners/run_backtest.py
 	CMD_TRAIN = poetry run python runners/train_agent.py
 	CMD_BACKTEST_RL = poetry run python runners/run_backtest.py use_rl=True
 else
-	# --- DOCKER COMPOSE COMMANDS ---
 	CMD_FETCH = docker compose run --rm generate_assets_list && docker compose run --rm fetch_historical_data
 	CMD_BACKTEST = docker compose run --rm run_backtest
 	CMD_TRAIN = docker compose run --rm train_agent
