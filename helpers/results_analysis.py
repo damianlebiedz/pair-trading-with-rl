@@ -77,11 +77,11 @@ def parse_results():
                 perf = config.get("performance", {})
                 ps = config.get("pair_selection", {})
 
-                entry = config.get("entry_threshold", "N/A")
-                exit_t = config.get("exit_threshold", "N/A")
-                stop_loss = config.get("stop_loss", "N/A")
-                z_score_window = config.get("z_score_window", "N/A")
-                top_n_factor = ps.get("top_n_factor", "N/A")
+                entry = perf.get("entry_threshold", "N/A")
+                exit_t = perf.get("exit_threshold", "N/A")
+                stop_loss = perf.get("stop_loss", "N/A")
+                z_score_window = perf.get("z_score_window", "N/A")
+                top_n = ps.get("top_n", "N/A")
                 beta_hedge = perf.get("beta_hedge", "N/A")
                 delayed_entry = perf.get("delayed_entry", "N/A")
 
@@ -96,7 +96,7 @@ def parse_results():
                 categories[category_name].append(
                     {
                         "Run_ID": run_dir.name,
-                        "Pairs": top_n_factor,
+                        "Pairs": top_n,
                         "Beta Hedge": beta_hedge,
                         "Z-Score Window": z_score_window,
                         "Entry": entry,
