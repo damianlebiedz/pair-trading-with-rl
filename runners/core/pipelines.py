@@ -317,8 +317,10 @@ def merge_multi_period_results(
                 net_val = res.stats.loc["sortino_ratio_annual", "net"]
                 gross_val = res.stats.loc["sortino_ratio_annual", "gross"]
 
-                if isinstance(net_val, pd.Series): net_val = net_val.iloc[0]
-                if isinstance(gross_val, pd.Series): gross_val = gross_val.iloc[0]
+                if isinstance(net_val, pd.Series):
+                    net_val = net_val.iloc[0]
+                if isinstance(gross_val, pd.Series):
+                    gross_val = gross_val.iloc[0]
 
                 if pd.notna(net_val):
                     iter_sortino_net.append(net_val)
@@ -349,15 +351,33 @@ def merge_multi_period_results(
         risk_free_rate_annual=risk_free_rate_annual,
     )
 
-    net_mean = round(float(pd.Series(iter_sortino_net).mean()), 4) if iter_sortino_net else None
-    net_med = round(float(pd.Series(iter_sortino_net).median()), 4) if iter_sortino_net else None
-    gross_mean = round(float(pd.Series(iter_sortino_gross).mean()), 4) if iter_sortino_gross else None
-    gross_med = round(float(pd.Series(iter_sortino_gross).median()), 4) if iter_sortino_gross else None
+    net_mean = (
+        round(float(pd.Series(iter_sortino_net).mean()), 4)
+        if iter_sortino_net
+        else None
+    )
+    net_med = (
+        round(float(pd.Series(iter_sortino_net).median()), 4)
+        if iter_sortino_net
+        else None
+    )
+    gross_mean = (
+        round(float(pd.Series(iter_sortino_gross).mean()), 4)
+        if iter_sortino_gross
+        else None
+    )
+    gross_med = (
+        round(float(pd.Series(iter_sortino_gross).median()), 4)
+        if iter_sortino_gross
+        else None
+    )
 
-    new_stats = pd.DataFrame([
-        {"metric": "sortino_annual_mean", "net": net_mean, "gross": gross_mean},
-        {"metric": "sortino_annual_median", "net": net_med, "gross": gross_med}
-    ]).set_index("metric")
+    new_stats = pd.DataFrame(
+        [
+            {"metric": "sortino_annual_mean", "net": net_mean, "gross": gross_mean},
+            {"metric": "sortino_annual_median", "net": net_med, "gross": gross_med},
+        ]
+    ).set_index("metric")
 
     stats = pd.concat([stats, new_stats])
 
