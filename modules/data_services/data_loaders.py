@@ -2,6 +2,9 @@ from pathlib import Path
 import pandas as pd
 
 from modules.core.enums import Interval
+from modules.utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 def get_project_root() -> Path:
@@ -76,14 +79,32 @@ def load_data(
     """Load data for a list of assets and return as DataFrame."""
     base_dir = get_project_root() / data_dir
 
-    dfs = [load_single_ticker(t, start, end, interval, base_dir) for t in tickers]
+    dfs = []
 
-    data = pd.concat(dfs, axis=1)
+    for t in tickers:
+        df = load_single_ticker(t, start, end, interval, base_dir)
+
+        df = df.loc[~df.index.duplicated(keep='last')]
+        df_subset = df[(df.index > start) & (df.index <= end)].copy()
+
+        if df_subset.empty or df_subset.isna().any().any():
+            logger.warning(f"Rejected {t}: lack of data in {start} - {end}")
+            continue
+
+        dfs.append(df_subset)
+
+    try:
+        data = pd.concat(dfs, axis=1)
+    except Exception as e:
+        logger.error("Error during pd.concat")
+        raise e
+
     data = data[(data.index > start) & (data.index <= end)]
+    data = data.dropna(axis=1)
 
     if data.empty:
         raise ValueError(
-            f"No data available for tickers {tickers} in range {start} to {end}"
+            f"All assets was rejected ({start} to {end})"
         )
 
     return data

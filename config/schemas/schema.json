@@ -281,21 +281,14 @@
         },
         "entry_threshold": {
           "description": "Z-score threshold to open a position.",
+          "exclusiveMinimum": 0,
           "title": "Entry Threshold",
           "type": "number"
         },
         "exit_threshold": {
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "const": "-entry_threshold",
-              "type": "string"
-            }
-          ],
-          "description": "Z-score threshold to close a position. Can be positive or negative (also equals to -entry_threshold).",
-          "title": "Exit Threshold"
+          "description": "Z-score threshold to close a position.",
+          "title": "Exit Threshold",
+          "type": "number"
         },
         "stop_loss": {
           "anyOf": [
@@ -413,6 +406,16 @@
           "description": "Verbosity level in training.",
           "title": "Verbose",
           "type": "integer"
+        },
+        "freeze_std": {
+          "description": "Flag to use fixed std from entry while calculating in-position Z-Score in RL.",
+          "title": "Freeze Std",
+          "type": "boolean"
+        },
+        "time_decay_stop": {
+          "description": "Flag to always close position when time in position is >= Z-Score window.",
+          "title": "Time Decay Stop",
+          "type": "boolean"
         }
       },
       "required": [
@@ -421,7 +424,9 @@
         "obs_space_type",
         "passes_per_pair",
         "seed",
-        "verbose"
+        "verbose",
+        "freeze_std",
+        "time_decay_stop"
       ],
       "title": "RL",
       "type": "object"

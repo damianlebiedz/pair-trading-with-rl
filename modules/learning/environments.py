@@ -21,6 +21,8 @@ def build_multi_env(
     rl_reward: str,
     obs_space_type: ObsSpaceType,
     fee_rate: float,
+    freeze_std: bool,
+    time_decay_stop: bool,
     seed: int = None,
 ) -> DummyVecEnv:
     env_fns = []
@@ -38,6 +40,8 @@ def build_multi_env(
                 reward_scheme=reward_schema,
                 obs_space_type=obs_space_type,
                 fee_rate=fee_rate,
+                freeze_std=freeze_std,
+                time_decay_stop=time_decay_stop,
             )
             return Monitor(env)
 
@@ -80,6 +84,8 @@ class PairsTradingEnv(gym.Env):
         reward_scheme: RewardScheme,
         obs_space_type: ObsSpaceType,
         fee_rate: float,
+        freeze_std: bool,
+        time_decay_stop: bool,
     ):
         super(PairsTradingEnv, self).__init__()
 
@@ -88,6 +94,8 @@ class PairsTradingEnv(gym.Env):
         self.position_state = PositionState()
         self.action_space = spaces.Discrete(3)
         self.fee_rate = fee_rate
+        self.freeze_std = freeze_std
+        self.time_decay_stop = time_decay_stop
 
         obs_shape = AgentState.get_obs_shape(obs_space_type)
 
@@ -147,10 +155,15 @@ class PairsTradingEnv(gym.Env):
         price_x = row[self.result.ticker_x]
         price_y = row[self.result.ticker_y]
         position = row["position"]
+        exec_win = row["window"]
+
+        if self.time_decay_stop and self.position_state.position != 0:
+            if self.position_state.time_in_pos >= exec_win:
+                target_position = 0.0
 
         if (
-            self.position_state.position != 0
-            and self.position_state.entry_beta is not None
+                self.position_state.position != 0
+                and self.position_state.entry_beta is not None
         ):
             exec_beta = self.position_state.entry_beta
 
@@ -161,17 +174,17 @@ class PairsTradingEnv(gym.Env):
             source_y_col = f"{self.result.ticker_y}_{Source.LOG.value}"
 
             slice_x = (
-                self.df[source_x_col].iloc[start_idx : self.current_step + 1].values
+                self.df[source_x_col].iloc[start_idx: self.current_step + 1].values
             )
             slice_y = (
-                self.df[source_y_col].iloc[start_idx : self.current_step + 1].values
+                self.df[source_y_col].iloc[start_idx: self.current_step + 1].values
             )
 
             _, _, current_std = calculate_spread_statistics(
                 X_slice=slice_x, Y_slice=slice_y, beta=exec_beta
             )
 
-            exec_std = self.position_state.entry_std
+            exec_std = self.position_state.entry_std if self.freeze_std else current_std
         else:
             exec_beta = row["market_beta"]
             exec_std = row["market_std"]
@@ -293,11 +306,11 @@ class PairsTradingEnv(gym.Env):
                 self.df[source_y_col].iloc[start_idx : self.current_step + 1].values
             )
 
-            spread, mean, _ = calculate_spread_statistics(
+            spread, mean, current_std = calculate_spread_statistics(
                 X_slice=slice_x, Y_slice=slice_y, beta=self.position_state.entry_beta
             )
 
-            std = self.position_state.entry_std
+            std = self.position_state.entry_std if self.freeze_std else current_std
 
             z_score = calculate_z_score(spread=spread, mean=mean, std=std)
         else:

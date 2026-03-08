@@ -62,6 +62,12 @@ class RL(BaseModel):
     )
     seed: int = Field(description="Seed for random number generator.")
     verbose: int = Field(description="Verbosity level in training.")
+    freeze_std: bool = Field(
+        description="Flag to use fixed std from entry while calculating in-position Z-Score in RL."
+    )
+    time_decay_stop: bool = Field(
+        description="Flag to always close position when time in position is >= Z-Score window."
+    )
 
 
 class PairSelection(BaseModel):
@@ -84,9 +90,12 @@ class Performance(BaseModel):
         gt=0,
         description="Z-Score lookback window size.",
     )
-    entry_threshold: float = Field(description="Z-score threshold to open a position.")
-    exit_threshold: float | Literal["-entry_threshold"] = Field(
-        description="Z-score threshold to close a position. Can be positive or negative (also equals to -entry_threshold)."
+    entry_threshold: float = Field(
+        gt=0,
+        description="Z-score threshold to open a position."
+    )
+    exit_threshold: float = Field(
+        description="Z-score threshold to close a position."
     )
     stop_loss: float | None = Field(
         gt=1,
@@ -117,6 +126,12 @@ class Performance(BaseModel):
             raise ValueError("Test: 'start' date must be before 'end' date.")
         if pd.to_datetime(self.beta_start) >= pd.to_datetime(self.start):
             raise ValueError("Test: 'beta_start' date must be before 'start' date.")
+        return self
+
+    @model_validator(mode="after")
+    def validate_thresholds(self) -> "Performance":
+        if abs(self.exit_threshold) > self.entry_threshold:
+            raise ValueError("Test: abs(exit_threshold) cannot be bigger than entry_threshold.")
         return self
 
 

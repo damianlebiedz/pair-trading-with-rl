@@ -74,7 +74,7 @@ Below is an automatically generated list of all configuration parameters support
 - **`use_rl`**: Flag to use RL model during backtest.
 - **`z_score_window`**: Z-Score lookback window size.
 - **`entry_threshold`**: Z-score threshold to open a position.
-- **`exit_threshold`**: Z-score threshold to close a position. Can be positive or negative (also equals to -entry_threshold).
+- **`exit_threshold`**: Z-score threshold to close a position.
 - **`stop_loss`**: Stop loss multiplier (e.g., 1.05 for 5% from entry_threshold), null if trade without SL.
 - **`iterations`**: Number of backtest iterations (monthly).
 - **`beta_hedge`**: Hedge ratio mode. Options: ['no_hedge', 'static', 'rolling']
@@ -94,6 +94,8 @@ Below is an automatically generated list of all configuration parameters support
 - **`passes_per_pair`**: Number of passes per pair during training.
 - **`seed`**: Seed for random number generator.
 - **`verbose`**: Verbosity level in training.
+- **`freeze_std`**: Flag to use fixed std from entry while calculating in-position Z-Score in RL.
+- **`time_decay_stop`**: Flag to always close position when time in position is >= Z-Score window.
 
 
 ### RLAlgoDefault
