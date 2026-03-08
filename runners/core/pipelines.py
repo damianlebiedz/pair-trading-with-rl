@@ -297,6 +297,9 @@ def merge_multi_period_results(
     ewp_dfs = []
     btc_dfs = []
 
+    iter_sortino_net = []
+    iter_sortino_gross = []
+
     for d in iter_dirs:
         pattern = f"{prefix}returns_{ticker_x}_{ticker_y}_*.parquet"
         files = list(d.glob(pattern))
@@ -308,6 +311,19 @@ def merge_multi_period_results(
         file_stem = files[0].stem
         res = load_strategy_result(file_stem, directory=str(d))
         results.append(res)
+
+        if res.stats is not None and not res.stats.empty:
+            if "sortino_ratio_annual" in res.stats.index:
+                net_val = res.stats.loc["sortino_ratio_annual", "net"]
+                gross_val = res.stats.loc["sortino_ratio_annual", "gross"]
+
+                if isinstance(net_val, pd.Series): net_val = net_val.iloc[0]
+                if isinstance(gross_val, pd.Series): gross_val = gross_val.iloc[0]
+
+                if pd.notna(net_val):
+                    iter_sortino_net.append(net_val)
+                if pd.notna(gross_val):
+                    iter_sortino_gross.append(gross_val)
 
         if plot:
             iter_num = int(d.name)
@@ -332,6 +348,18 @@ def merge_multi_period_results(
         interval=results[0].interval,
         risk_free_rate_annual=risk_free_rate_annual,
     )
+
+    net_mean = round(float(pd.Series(iter_sortino_net).mean()), 4) if iter_sortino_net else None
+    net_med = round(float(pd.Series(iter_sortino_net).median()), 4) if iter_sortino_net else None
+    gross_mean = round(float(pd.Series(iter_sortino_gross).mean()), 4) if iter_sortino_gross else None
+    gross_med = round(float(pd.Series(iter_sortino_gross).median()), 4) if iter_sortino_gross else None
+
+    new_stats = pd.DataFrame([
+        {"metric": "sortino_annual_mean", "net": net_mean, "gross": gross_mean},
+        {"metric": "sortino_annual_median", "net": net_med, "gross": gross_med}
+    ]).set_index("metric")
+
+    stats = pd.concat([stats, new_stats])
 
     final_result = StrategyResult(
         data=final_df,
