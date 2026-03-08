@@ -162,8 +162,8 @@ class PairsTradingEnv(gym.Env):
                 target_position = 0.0
 
         if (
-                self.position_state.position != 0
-                and self.position_state.entry_beta is not None
+            self.position_state.position != 0
+            and self.position_state.entry_beta is not None
         ):
             exec_beta = self.position_state.entry_beta
 
@@ -174,10 +174,10 @@ class PairsTradingEnv(gym.Env):
             source_y_col = f"{self.result.ticker_y}_{Source.LOG.value}"
 
             slice_x = (
-                self.df[source_x_col].iloc[start_idx: self.current_step + 1].values
+                self.df[source_x_col].iloc[start_idx : self.current_step + 1].values
             )
             slice_y = (
-                self.df[source_y_col].iloc[start_idx: self.current_step + 1].values
+                self.df[source_y_col].iloc[start_idx : self.current_step + 1].values
             )
 
             _, _, current_std = calculate_spread_statistics(
