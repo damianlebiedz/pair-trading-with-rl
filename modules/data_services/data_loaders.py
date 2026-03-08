@@ -84,7 +84,7 @@ def load_data(
     for t in tickers:
         df = load_single_ticker(t, start, end, interval, base_dir)
 
-        df = df.loc[~df.index.duplicated(keep='last')]
+        df = df.loc[~df.index.duplicated(keep="last")]
         df_subset = df[(df.index > start) & (df.index <= end)].copy()
 
         if df_subset.empty or df_subset.isna().any().any():
@@ -103,9 +103,7 @@ def load_data(
     data = data.dropna(axis=1)
 
     if data.empty:
-        raise ValueError(
-            f"All assets was rejected ({start} to {end})"
-        )
+        raise ValueError(f"All assets was rejected ({start} to {end})")
 
     return data
 
