@@ -151,6 +151,13 @@ class PairsTradingEnv(gym.Env):
         mapping = {0: -1.0, 1: 0.0, 2: 1.0}
         target_position = mapping[int(action)]
 
+        if self.current_step > 0:
+            baseline_prev_eq = self.df["equity"].iloc[self.current_step - 1]
+            baseline_curr_eq = self.df["equity"].iloc[self.current_step]
+            baseline_step_pnl = baseline_curr_eq - baseline_prev_eq
+        else:
+            baseline_step_pnl = 0.0
+
         row = self.df.iloc[self.current_step]
         price_x = row[self.result.ticker_x]
         price_y = row[self.result.ticker_y]
@@ -268,6 +275,7 @@ class PairsTradingEnv(gym.Env):
             is_bankrupt=is_bankrupt,
             fee_rate=self.fee_rate,
             win=exec_win,
+            baseline_step_pnl=baseline_step_pnl,
         )
 
         return self._get_observation(), reward, terminated, truncated, info
@@ -282,10 +290,9 @@ class PairsTradingEnv(gym.Env):
     def _update_state_object(self):
         row = self.df.iloc[self.current_step]
 
-        window = row.get("window")
+        window = int(row.get("window"))
         market_z_score = row.get("market_z_score")
         market_beta = row.get("market_beta")
-        market_std = row.get("market_std")
         hurst = row.get("hurst")
         market_vol = row.get("market_vol")
         signal = row.get("position")
@@ -326,12 +333,9 @@ class PairsTradingEnv(gym.Env):
             drawdown_pct = (self.peak_equity - self.equity) / self.peak_equity
 
         self.state = AgentState(
-            market_z_score=float(market_z_score),
             z_score=float(z_score),
             market_beta=market_beta,
-            market_std=float(market_std),
             hurst=float(hurst),
-            window=int(window),
             position=float(self.position_state.position),
             signal=float(signal),
             norm_time_in_pos=float(norm_time),

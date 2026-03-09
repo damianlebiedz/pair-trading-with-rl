@@ -13,6 +13,7 @@ class RewardScheme(ABC):
         is_bankrupt: bool,
         fee_rate: float,
         win: int,
+        baseline_step_pnl: float = 0.0,
     ) -> float:
         pass
 
@@ -35,7 +36,8 @@ class PnLReward(RewardScheme):
         step_fees: float,
         is_bankrupt: bool,
         fee_rate: float | None,
-        market_win: int | None,
+        win: int | None,
+        baseline_step_pnl: float = 0.0,
     ) -> float:
         if is_bankrupt:
             return -1.0
@@ -46,13 +48,8 @@ class PnLReward(RewardScheme):
 
 class PnLSignalReward(RewardScheme):
     """
-    Reward = (step_pnl - step_fees - penalty) / equity
-
-    penalty = (multiplier * 2 * fee_rate * equity) / market_win
-        - multiplier = 2 if position != signal and position != 0 and signal != 0
-        - multiplier = 1 if position != signal and position == 0 or signal == 0
-
-    Reward = -1.0 if is_bankrupt
+    Pure Advantage (Benchmark Tracking)
+    Reward = (Agent_Net_PnL - Baseline_Step_PnL) / Equity
     """
 
     def calculate(
@@ -64,18 +61,13 @@ class PnLSignalReward(RewardScheme):
         step_fees: float,
         is_bankrupt: bool,
         fee_rate: float,
-        market_win: int,
+        win: int,
+        baseline_step_pnl: float = 0.0,
     ) -> float:
         if is_bankrupt:
             return -1.0
 
-        if position != signal:
-            multiplier = (
-                2.0 if (signal != 0 and position != 0 and signal != position) else 1.0
-            )
-            penalty = (multiplier * 2 * fee_rate * equity) / market_win
-        else:
-            penalty = 0.0
+        agent_net_pnl = step_pnl - step_fees
+        advantage = agent_net_pnl - baseline_step_pnl
 
-        net_pnl = step_pnl - step_fees - penalty
-        return net_pnl / equity
+        return advantage / equity

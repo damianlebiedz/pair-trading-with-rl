@@ -24,7 +24,10 @@ from runners.core.utils import save_hydra_config_snapshot, get_first_subdirector
 logger = logging.getLogger(__name__)
 load_dotenv()
 
-ALGO_MAP = {RLModelName.A2C_BASELINE: A2C, RLModelName.RECURRENT_PPO: RecurrentPPO}
+ALGO_MAP = {
+    RLModelName.A2C_BASELINE.value: A2C,
+    RLModelName.RECURRENT_PPO.value: RecurrentPPO,
+}
 
 
 class LogEquityCallback(BaseCallback):
@@ -114,8 +117,11 @@ def train_agent(cfg: DictConfig):
     set_random_seed(seed)
     logger.info(f"Random seed set to: {seed}")
 
+    run_name = f"{cfg.rl_algo.algo_name.value}_{cfg.rl.obs_space_type.value}_{cfg.rl.reward.value}"
+
     run = wandb.init(
         project=cfg.wandb.project,
+        name=run_name,
         mode=cfg.wandb.mode,
         config=config_dict,
         sync_tensorboard=True,
@@ -216,7 +222,7 @@ def train_agent(cfg: DictConfig):
     )
     vec_env = VecNormalize(vec_env, norm_obs=True, norm_reward=True, clip_obs=10.0)
 
-    algo_name = cfg.rl_algo.algo_name
+    algo_name = cfg.rl_algo.algo_name.value
     algo_class = ALGO_MAP.get(algo_name)
 
     if algo_class is None:
@@ -273,7 +279,7 @@ def train_agent(cfg: DictConfig):
     except KeyboardInterrupt:
         logger.info("Training interrupted manually. Saving current model...")
         final_model_name = (
-            f"{algo_name}_{cfg.rl.obs_space_type}_{run.id}_seed{seed}_interrupted"
+            f"{algo_name}_{cfg.rl.obs_space_type.value}_{run.id}_seed{seed}_interrupted"
         )
         save_path = f"{model_dir}/{final_model_name}"
         model.save(save_path)
@@ -281,9 +287,9 @@ def train_agent(cfg: DictConfig):
 
         if wandb.run is not None:
             model_artifact = wandb.Artifact(
-                name=f"{algo_name}_{cfg.rl.obs_space_type}_model_{run.id}_interrupted",
+                name=f"{algo_name}_{cfg.rl.obs_space_type.value}_model_{run.id}_interrupted",
                 type="model",
-                description=f"Interrupted {algo_name} (Space: {cfg.rl.obs_space_type})",
+                description=f"Interrupted {algo_name} (Space: {cfg.rl.obs_space_type.value})",
             )
             model_artifact.add_file(f"{save_path}.zip")
             model_artifact.add_file(f"{save_path}_normalize.pkl")
