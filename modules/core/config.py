@@ -244,6 +244,7 @@ class RecurrentPPO(BaseModel):
     clip_range: float = Field(
         description="Range for clipping the surrogate objective. Prevents overly large policy updates to ensure stability (typically 0.2)."
     )
+    policy_kwargs: PolicyKwargs | None = None
 
 
 class PPOAlgo(BaseModel):

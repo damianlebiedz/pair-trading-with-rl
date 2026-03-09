@@ -84,7 +84,7 @@ def train_agent(cfg: DictConfig):
     training_folder = cfg.rl.training_folder
 
     if not training_folder:
-        training_root = os.path.join(project_root, "data", "training_data")
+        training_root = os.path.join(project_root, "data", "rl_training")
         try:
             training_folder = get_first_subdirectory(training_root)
             logger.info(
@@ -95,7 +95,7 @@ def train_agent(cfg: DictConfig):
             return
 
     training_data_dir = os.path.join(
-        project_root, "data", "training_data", training_folder
+        project_root, "data", "rl_training", training_folder
     )
 
     model_dir = os.path.join(project_root, "data", "rl_models")
@@ -107,7 +107,8 @@ def train_agent(cfg: DictConfig):
 
     save_hydra_config_snapshot(cfg=cfg, root_dir=root)
 
-    cfg = Config(**OmegaConf.to_container(cfg, resolve=True))
+    config_dict = OmegaConf.to_container(cfg, resolve=True)
+    cfg = Config(**config_dict)
 
     seed = cfg.rl.seed
     set_random_seed(seed)
@@ -116,7 +117,7 @@ def train_agent(cfg: DictConfig):
     run = wandb.init(
         project=cfg.wandb.project,
         mode=cfg.wandb.mode,
-        config=OmegaConf.to_container(cfg, resolve=True),
+        config=config_dict,
         sync_tensorboard=True,
         monitor_gym=True,
         save_code=True,
@@ -152,7 +153,7 @@ def train_agent(cfg: DictConfig):
         "market_std",
         "market_beta",
         "hurst",
-        "market_win",
+        "window",
         "market_vol",
     ]
 
@@ -221,10 +222,10 @@ def train_agent(cfg: DictConfig):
     if algo_class is None:
         raise ValueError(f"RL algorithm not found: {algo_name}")
 
-    model_params = OmegaConf.to_container(cfg.rl_algo.params, resolve=True)
+    model_params = cfg.rl_algo.params.model_dump()
 
     model = algo_class(
-        policy=cfg.rl_algo.policy_type,
+        policy=cfg.rl_algo.policy_type.value,
         env=vec_env,
         verbose=cfg.rl.verbose,
         tensorboard_log=log_dir,

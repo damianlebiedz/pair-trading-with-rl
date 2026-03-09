@@ -370,6 +370,38 @@
       "title": "Performance",
       "type": "object"
     },
+    "PolicyKwargs": {
+      "properties": {
+        "lstm_hidden_size": {
+          "description": "Size of the hidden state in the LSTM cell.",
+          "title": "Lstm Hidden Size",
+          "type": "integer"
+        },
+        "n_lstm_layers": {
+          "description": "Number of stacked LSTM layers (usually 1 is sufficient).",
+          "title": "N Lstm Layers",
+          "type": "integer"
+        },
+        "shared_lstm": {
+          "description": "If true, uses a shared LSTM backbone for both Actor and Critic. If false, creates separate LSTMs.",
+          "title": "Shared Lstm",
+          "type": "boolean"
+        },
+        "enable_critic_lstm": {
+          "description": "If true, includes an LSTM layer in the Critic network (only relevant if shared_lstm is false).",
+          "title": "Enable Critic Lstm",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "lstm_hidden_size",
+        "n_lstm_layers",
+        "shared_lstm",
+        "enable_critic_lstm"
+      ],
+      "title": "PolicyKwargs",
+      "type": "object"
+    },
     "RL": {
       "properties": {
         "training_folder": {
@@ -495,6 +527,17 @@
           "description": "Range for clipping the surrogate objective. Prevents overly large policy updates to ensure stability (typically 0.2).",
           "title": "Clip Range",
           "type": "number"
+        },
+        "policy_kwargs": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PolicyKwargs"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [

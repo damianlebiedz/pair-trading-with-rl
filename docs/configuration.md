@@ -87,6 +87,13 @@ Below is an automatically generated list of all configuration parameters support
 - **`end`**: End date for test (YYYY-MM-DD).
 
 
+### PolicyKwargs
+- **`lstm_hidden_size`**: Size of the hidden state in the LSTM cell.
+- **`n_lstm_layers`**: Number of stacked LSTM layers (usually 1 is sufficient).
+- **`shared_lstm`**: If true, uses a shared LSTM backbone for both Actor and Critic. If false, creates separate LSTMs.
+- **`enable_critic_lstm`**: If true, includes an LSTM layer in the Critic network (only relevant if shared_lstm is false).
+
+
 ### RL
 - **`training_folder`**: Name of the folder with training data, if null take first one.
 - **`reward`**: Type of RL reward. Options: ['pnl', 'pnl_signal']
@@ -110,6 +117,7 @@ Below is an automatically generated list of all configuration parameters support
 - **`gamma`**: Discount factor for future rewards (between 0 and 1).
 - **`ent_coef`**: Entropy coefficient for the loss calculation. Higher values encourage more exploration.
 - **`clip_range`**: Range for clipping the surrogate objective. Prevents overly large policy updates to ensure stability (typically 0.2).
+- **`policy_kwargs`**: *No description provided*
 
 
 ### Settings
