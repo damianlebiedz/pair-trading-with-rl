@@ -22,7 +22,7 @@ from modules.data_services.merge_utils import (
 from modules.performance.pair_selector import PairSelector
 from modules.performance.stats import calculate_stats
 from modules.performance.strategy import Strategy
-from modules.utils.plots import plot_returns, plot_zscore_pos, plot_spread_pos
+from modules.utils.plots import plot_returns, plot_zscore_pos
 
 logger = logging.getLogger(__name__)
 
@@ -113,7 +113,6 @@ def execute_testing(
 
     if plot:
         plot_zscore_pos(result, directory=output_dir, save=True)
-        plot_spread_pos(result, directory=output_dir, save=True)
         btc_data = load_btc_benchmark(
             test_start=test_start,
             test_end=test_end,
