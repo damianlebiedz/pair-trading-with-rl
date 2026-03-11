@@ -66,32 +66,7 @@
       "title": "BetaHedge",
       "type": "string"
     },
-    "FetchHistoricalData": {
-      "properties": {
-        "interval": {
-          "$ref": "#/$defs/Interval",
-          "description": "Data timeframe for the fetcher. Options: ['1d', '4h', '1h', '30m', '15m', '5m', '3m', '1m']"
-        },
-        "limit_per_request": {
-          "default": 1000,
-          "description": "Maximum number of data points per single API request.",
-          "title": "Limit Per Request",
-          "type": "integer"
-        },
-        "timeout": {
-          "default": 30,
-          "description": "Network timeout in seconds for API calls.",
-          "title": "Timeout",
-          "type": "integer"
-        }
-      },
-      "required": [
-        "interval"
-      ],
-      "title": "FetchHistoricalData",
-      "type": "object"
-    },
-    "GenerateAssetsList": {
+    "DataFetchingPipeline": {
       "properties": {
         "top_n": {
           "description": "Number of top assets to select based on volume/liquidity.",
@@ -123,12 +98,6 @@
           "title": "Iterations",
           "type": "integer"
         },
-        "limit_per_request": {
-          "default": 1000,
-          "description": "API limit for asset listing requests.",
-          "title": "Limit Per Request",
-          "type": "integer"
-        },
         "whitelist": {
           "description": "List of tickers to forcibly include in the final list.",
           "items": {
@@ -153,7 +122,7 @@
         "test_end",
         "iterations"
       ],
-      "title": "GenerateAssetsList",
+      "title": "DataFetchingPipeline",
       "type": "object"
     },
     "Interval": {
@@ -205,7 +174,7 @@
     },
     "ObsSpaceType": {
       "enum": [
-        "minimal",
+        "autonomous",
         "standard",
         "full"
       ],
@@ -418,11 +387,11 @@
         },
         "reward": {
           "$ref": "#/$defs/RLRewards",
-          "description": "Type of RL reward. Options: ['pnl', 'pnl_signal']"
+          "description": "Type of RL reward. Options: ['PnLReward', 'AsymmetricReward', 'CompositeReward']"
         },
         "obs_space_type": {
           "$ref": "#/$defs/ObsSpaceType",
-          "description": "Type of observation space. Options: ['minimal', 'standard', 'full']"
+          "description": "Type of observation space. Options: ['autonomous', 'standard', 'full']"
         },
         "passes_per_pair": {
           "description": "Number of passes per pair during training.",
@@ -485,8 +454,9 @@
     },
     "RLRewards": {
       "enum": [
-        "pnl",
-        "pnl_signal"
+        "PnLReward",
+        "AsymmetricReward",
+        "CompositeReward"
       ],
       "title": "RLRewards",
       "type": "string"
@@ -738,29 +708,16 @@
       "default": null,
       "description": "Trading logic flags, SL types, and backtest execution parameters."
     },
-    "fetch_historical_data": {
+    "data_fetching_pipeline": {
       "anyOf": [
         {
-          "$ref": "#/$defs/FetchHistoricalData"
+          "$ref": "#/$defs/DataFetchingPipeline"
         },
         {
           "type": "null"
         }
       ],
-      "default": null,
-      "description": "Parameters for the historical data downloading utility."
-    },
-    "generate_assets_list": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/GenerateAssetsList"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Parameters for the asset universe generation and filtering utility."
+      "default": null
     },
     "rl": {
       "anyOf": [

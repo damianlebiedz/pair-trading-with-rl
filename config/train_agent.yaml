@@ -7,10 +7,10 @@ defaults:
 
 rl:
   training_folder: null
-  reward: pnl_signal
-  obs_space_type: minimal
+  reward: PnLReward
+  obs_space_type: standard
   passes_per_pair: 50
   seed: 42
   verbose: 1
   freeze_std: true
-  time_decay_stop: true
+  time_decay_stop: false

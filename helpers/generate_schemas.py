@@ -1,13 +1,12 @@
 import json
 from pathlib import Path
-from typing import Union, Any
+from typing import Any
 from pydantic import TypeAdapter
 
 from modules.core.config import (
     Config,
     RLAlgoConfig,
-    FetchHistoricalData,
-    GenerateAssetsList,
+    DataFetchingPipeline,
 )
 from modules.utils.logger import get_logger
 
@@ -39,10 +38,9 @@ def generate_schemas():
         json.dump(rl_adapter.json_schema(), f, indent=2)
     logger.debug(f"Schema saved to: {target_dir / "schema_rl_algo.json"}")
 
-    HelpersUnion = Union[FetchHistoricalData, GenerateAssetsList]
-    helpers_adapter = TypeAdapter(HelpersUnion)
+    helper_adapter = TypeAdapter(DataFetchingPipeline)
     with open(target_dir / "schema_helpers.json", "w", encoding="utf-8") as f:
-        json.dump(helpers_adapter.json_schema(), f, indent=2)
+        json.dump(helper_adapter.json_schema(), f, indent=2)
     logger.debug(f"Schema saved to: {target_dir / "schema_helpers.json"}")
 
     logger.info(f"Schemas saved to: {target_dir}")

@@ -13,7 +13,6 @@ from modules.data_services.data_loaders import load_data
 from modules.data_services.data_utils import save_strategy_result, save_dataframe
 from modules.performance.strategy import Strategy
 from runners.core.pipelines import (
-    execute_pair_selection,
     execute_testing,
     setup_run_environment,
     merge_multi_pair_results,
@@ -46,7 +45,7 @@ def run_backtest(cfg: DictConfig):
             f"Backtest results will be saved for training in: {training_session_dir}"
         )
 
-    json_path = os.path.join(project_root, "config/schemas/list_of_assets.json")
+    json_path = os.path.join(project_root, "config/schemas/list_of_assets_old.json")
 
     if not os.path.exists(json_path):
         logger.error(f"Error: file not found {json_path}")
@@ -75,41 +74,23 @@ def run_backtest(cfg: DictConfig):
     number_of_iterations = cfg.performance.iterations
     lists = generate_date_lists(config, number_of_iterations)
 
-    earliest_date = min(
-        pd.to_datetime(lists["pair_selection_start_list"][0]),
-        pd.to_datetime(lists["beta_test_start_list"][0]),
-        pd.to_datetime(lists["test_start_list"][0]),
-    ).strftime("%Y-%m-%d")
+    base_ps_dir = os.path.join(project_root, "data", "pair_selection")
 
-    latest_date = max(
-        pd.to_datetime(lists["pair_selection_end_list"][-1]),
-        pd.to_datetime(lists["test_end_list"][-1]),
-    ).strftime("%Y-%m-%d")
+    missing_files = []
+    for i in range(number_of_iterations):
+        ps_start = lists["pair_selection_start_list"][i]
+        ps_end = lists["pair_selection_end_list"][i]
+        month_key = pd.to_datetime(ps_start).strftime("%Y-%m")
 
-    logger.debug(
-        f"Pre-validating data availability from {earliest_date} to {latest_date}..."
-    )
-
-    try:
-        valid_keys = [k for k in universe_data.keys() if not k.startswith("_")]
-        if not valid_keys:
-            raise ValueError("No valid month keys found in universe JSON.")
-
-        first_month_key = sorted(valid_keys)[0]
-        first_ticker = universe_data[first_month_key]["assets"][0]
-
-        _validation_df = load_data(
-            tickers=[first_ticker],
-            start=earliest_date,
-            end=latest_date,
-            interval=cfg.market.interval,
+        expected_file = os.path.join(
+            base_ps_dir, month_key, f"pair_selection_{ps_start}_{ps_end}.parquet"
         )
-        del _validation_df
+        if not os.path.exists(expected_file):
+            missing_files.append(f"{month_key} ({ps_start})")
 
-    except ValueError as e:
-        logger.error(f"Validation failed: {e}")
-        raise SystemExit(
-            "Backtest aborted due to missing data or invalid JSON. Please check dates/JSON."
+    if missing_files:
+        raise ValueError(
+            f"Missed pair selection for: {', '.join(missing_files)}. Use run_pair_selection.py!"
         )
 
     logger.info(f"Saving results to: {root}")
@@ -145,16 +126,12 @@ def run_backtest(cfg: DictConfig):
 
         tickers_dict[i + 1] = current_iteration_tickers
 
-        ps_df = execute_pair_selection(
-            tickers=current_iteration_tickers,
-            ps_start=ps_start,
-            ps_end=ps_end,
-            beta_test_start=beta_start,
-            interval=cfg.market.interval,
-            top_n=cfg.pair_selection.top_n,
-            output_dir=output_dir,
-            beta_hedge=cfg.performance.beta_hedge,
+        ps_file = os.path.join(
+            base_ps_dir, month_key, f"pair_selection_{ps_start}_{ps_end}.parquet"
         )
+        ps_df = pd.read_parquet(ps_file)
+        if not ps_df.empty:
+            ps_df = ps_df.head(cfg.pair_selection.top_n)
 
         logger.info("\n%s", ps_df.to_string())
         selected_pairs_names = ps_df["pair"].tolist()
@@ -235,7 +212,11 @@ def run_backtest(cfg: DictConfig):
 
             valid_spaces = ObsSpaceType
             obs_space_type = next(
-                (space for space in valid_spaces if f"_{space}_" in rl_model_folder),
+                (
+                    space
+                    for space in valid_spaces
+                    if f"_{space.value.lower()}_" in rl_model_folder.lower()
+                ),
                 None,
             )
 

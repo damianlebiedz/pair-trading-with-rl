@@ -1,5 +1,0 @@
-# yaml-language-server: $schema=../schemas/schema_helpers.json
-
-interval: 1h
-limit_per_request: 1000
-timeout: 60

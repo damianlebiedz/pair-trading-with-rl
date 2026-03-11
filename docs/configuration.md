@@ -11,8 +11,7 @@ Below is an automatically generated list of all configuration parameters support
 - **`settings`**: General strategy parameters, including volatility and time decay bounds.
 - **`pair_selection`**: Configuration for statistical tests and top pair filtering.
 - **`performance`**: Trading logic flags, SL types, and backtest execution parameters.
-- **`fetch_historical_data`**: Parameters for the historical data downloading utility.
-- **`generate_assets_list`**: Parameters for the asset universe generation and filtering utility.
+- **`data_fetching_pipeline`**: *No description provided*
 - **`rl`**: Reinforcement Learning environment parameters and training settings.
 - **`rl_algo`**: RL algorithm selection (e.g., A2C, PPO) and its specific hyperparameters.
 - **`wandb`**: Weights & Biases configuration for experiment tracking and logging.
@@ -34,19 +33,12 @@ Below is an automatically generated list of all configuration parameters support
 - **`ent_coef`**: Entropy coefficient for the loss calculation. Higher values encourage more exploration.
 
 
-### FetchHistoricalData
-- **`interval`**: Data timeframe for the fetcher. Options: ['1d', '4h', '1h', '30m', '15m', '5m', '3m', '1m']
-- **`limit_per_request`**: Maximum number of data points per single API request.
-- **`timeout`**: Network timeout in seconds for API calls.
-
-
-### GenerateAssetsList
+### DataFetchingPipeline
 - **`top_n`**: Number of top assets to select based on volume/liquidity.
 - **`start`**: Start date for evaluating asset liquidity and volume (YYYY-MM-DD).
 - **`end`**: End date for evaluating asset liquidity and volume (YYYY-MM-DD).
 - **`test_end`**: End date for test (YYYY-MM-DD).
 - **`iterations`**: Number of iterations (monthly) to fetch historical data.
-- **`limit_per_request`**: API limit for asset listing requests.
 - **`whitelist`**: List of tickers to forcibly include in the final list.
 - **`blacklist`**: List of tickers to forcibly exclude from the final list.
 
@@ -96,8 +88,8 @@ Below is an automatically generated list of all configuration parameters support
 
 ### RL
 - **`training_folder`**: Name of the folder with training data, if null take first one.
-- **`reward`**: Type of RL reward. Options: ['pnl', 'pnl_signal']
-- **`obs_space_type`**: Type of observation space. Options: ['minimal', 'standard', 'full']
+- **`reward`**: Type of RL reward. Options: ['PnLReward', 'AsymmetricReward', 'CompositeReward']
+- **`obs_space_type`**: Type of observation space. Options: ['autonomous', 'standard', 'full']
 - **`passes_per_pair`**: Number of passes per pair during training.
 - **`seed`**: Seed for random number generator.
 - **`verbose`**: Verbosity level in training.

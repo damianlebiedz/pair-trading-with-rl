@@ -134,20 +134,7 @@ class Performance(BaseModel):
         return self
 
 
-class FetchHistoricalData(BaseModel):
-    interval: Interval = Field(
-        description=f"Data timeframe for the fetcher. Options: {[e.value for e in Interval]}"
-    )
-    limit_per_request: int = Field(
-        default=1000,
-        description="Maximum number of data points per single API request.",
-    )
-    timeout: int = Field(
-        default=30, description="Network timeout in seconds for API calls."
-    )
-
-
-class GenerateAssetsList(BaseModel):
+class DataFetchingPipeline(BaseModel):
     top_n: int = Field(
         gt=0, description="Number of top assets to select based on volume/liquidity."
     )
@@ -162,9 +149,6 @@ class GenerateAssetsList(BaseModel):
         gt=0,
         description="Number of iterations (monthly) to fetch historical data.",
     )
-    limit_per_request: int = Field(
-        default=1000, description="API limit for asset listing requests."
-    )
     whitelist: list[str] = Field(
         default_factory=list,
         description="List of tickers to forcibly include in the final list.",
@@ -175,7 +159,7 @@ class GenerateAssetsList(BaseModel):
     )
 
     @model_validator(mode="after")
-    def validate_dates(self) -> "GenerateAssetsList":
+    def validate_dates(self) -> "DataFetchingPipeline":
         if pd.to_datetime(self.start) >= pd.to_datetime(self.end):
             raise ValueError(
                 "GenerateAssetsList: 'start' date must be before 'end' date."
@@ -308,14 +292,7 @@ class Config(BaseModel):
         default=None,
         description="Trading logic flags, SL types, and backtest execution parameters.",
     )
-    fetch_historical_data: FetchHistoricalData | None = Field(
-        default=None,
-        description="Parameters for the historical data downloading utility.",
-    )
-    generate_assets_list: GenerateAssetsList | None = Field(
-        default=None,
-        description="Parameters for the asset universe generation and filtering utility.",
-    )
+    data_fetching_pipeline: DataFetchingPipeline | None = Field(default=None)
     rl: RL | None = Field(
         default=None,
         description="Reinforcement Learning environment parameters and training settings.",

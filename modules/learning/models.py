@@ -52,20 +52,19 @@ class AgentState:
         obs_space_type: ObsSpaceType,
     ) -> np.ndarray:
         """
-        obs_space_type == "minimal":
-            - state_arr: z_score, position, norm_time_in_pos, signal
+        obs_space_type == "autonomous":
+            - state_arr: z_score, position, norm_time_in_pos
         obs_space_type == "standard":
-            - state_arr: z_score, market_beta, hurst, position, norm_time_in_pos, signal
+            - state_arr: z_score, position, norm_time_in_pos, signal
         obs_space_type == "full":
-            - state_arr: z_score, market_beta, hurst, position, norm_time_in_pos, signal, drawdown_pct, current_market_vol
+            - state_arr: z_score, position, norm_time_in_pos, signal, hurst, drawdown_pct, current_market_vol
         """
-        if obs_space_type == ObsSpaceType.MINIMAL:
+        if obs_space_type == ObsSpaceType.AUTONOMOUS:
             return np.array(
                 [
                     self.z_score,
                     self.position,
                     self.norm_time_in_pos,
-                    self.signal,
                 ],
                 dtype=np.float32,
             )
@@ -74,8 +73,6 @@ class AgentState:
             return np.array(
                 [
                     self.z_score,
-                    self.market_beta,
-                    self.hurst,
                     self.position,
                     self.norm_time_in_pos,
                     self.signal,
@@ -87,11 +84,10 @@ class AgentState:
             return np.array(
                 [
                     self.z_score,
-                    self.market_beta,
-                    self.hurst,
                     self.position,
                     self.norm_time_in_pos,
                     self.signal,
+                    self.hurst,
                     self.drawdown_pct,
                     self.current_market_vol,
                 ],

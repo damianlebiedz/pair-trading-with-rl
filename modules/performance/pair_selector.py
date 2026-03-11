@@ -2,7 +2,7 @@ import logging
 import numpy as np
 import pandas as pd
 
-from modules.core.enums import Source, BetaHedge
+from modules.core.enums import Source
 from modules.core.indicators import (
     calculate_beta,
     calculate_hurst,
@@ -38,44 +38,53 @@ class PairSelector:
         tickers: list[str],
         ps_start: str,
         ps_end: str,
-        beta_test_start: str,
         interval: str,
-        top_n: int,
-        beta_hedge: BetaHedge,
     ) -> pd.DataFrame:
         """
-        Executes the Pair Selection pipeline using a Composite Score (Ranking & Validation) approach.
+        Executes the Pair Selection pipeline using a Composite Score with Penalty logic.
 
         The process prioritizes pairs that exhibit BOTH strong long-term equilibrium (Cointegration)
-        and strong short-term linear dependency (Correlation/$R^2$).
+        and strong short-term linear dependency (Correlation/R-squared). Instead of strict rejection
+        during validation, pairs that do not meet mean-reversion criteria are penalized.
 
         The process consists of two main phases:
-        1. **Scoring & Ranking**: Calculates a weighted score for all pairs on historical data (`ps_start` to `ps_end`).
-           Score = 0.5 * Norm(Cointegration) + 0.5 * R_Squared.
-        2. **Validation**: Verifies if the top candidates maintain mean-reverting properties
-           on the calibration data (`test_start` to `test_end`) using Beta and Hurst.
+        1. Scoring & Ranking: Calculates an initial weighted score for all pairs based on
+           historical data (ps_start to ps_end).
+        2. Validation & Penalty: Verifies if candidates maintain mean-reverting properties
+           on calibration data using Beta and Hurst. If pair fails these checks, its score
+           is reset to 0.0. Note: Validation metrics are calculated using data ending at
+           exactly 00:00:00 on the ps_end date.
+
+        Score Calculation Logic:
+        ------------------------
+        The final score is determined by the initial statistical quality and validation results:
+        - If Hurst is less than or equal to 0.5 AND Beta is greater than 0:
+          Score = (0.5 * Normalized Cointegration) + (0.5 * R-squared)
+        - If Hurst is greater than 0.5 OR Beta is less than or equal to 0:
+          Score = 0.0
 
         Algorithm Stages:
         -----------------
-        1. **Data Loading (Selection)**: Loads price data for the `ps_start` - `ps_end` period.
-        2. **Composite Scoring**:
-           - Runs Cointegration Test (EG) -> Normalizes result to 0-1 scale.
-           - Calculates Correlation ($R^2$) -> Already 0-1 scale.
-           - Computes `Score = (0.5 * Norm_Coint) + (0.5 * R_Squared)`.
-           - Sorts pairs by `Score` in descending order. This filters out pairs with high cointegration
-             but weak hedging capability (low beta/correlation).
-        3. **Data Loading (Validation)**: Loads price data for the `test_start` - `test_end` period.
-           This serves as the 'Calibration' period for trading parameters.
-        4. **Iterative Validation**:
-           Iterates through the top-scored candidates and checks on Validation Data:
-           - **Beta Check**: Rejects if Beta <= 0.
-        5. **Final Selection**: Picks the first `top_n` pairs that pass all validation filters.
+        1. Data Loading (Selection): Loads price data for the ps_start - ps_end period.
+        2. Composite Scoring:
+           - Runs Cointegration Test (EG) and normalizes the result to a 0-1 scale.
+           - Calculates Correlation (R-squared).
+           - Computes initial Score = (0.5 * Norm_Coint) + (0.5 * R_Squared).
+           - Sorts pairs by initial Score in descending order.
+        3. Data Loading (Validation): Loads price data for the beta_test_start - ps_end period.
+           Due to the SoC-EoO model, this calibration data concludes at exactly 00:00:00
+           of the ps_end date.
+        4. Validation & Penalty:
+           Iterates through candidates and checks metrics on Validation Data:
+           - Beta Check: If Beta is 0 or less, the pair's score is reset to 0.0.
+           - Hurst Check: If Hurst is greater than 0.5 (indicating a trend), the score is reset to 0.0.
+        5. Final Selection: Returns all processed pairs, re-sorted by their final Score,
+           allowing the strategy to select the top_n valid candidates.
 
         Returns:
-            pd.DataFrame: DataFrame containing the selected `top_n` pairs with their
-            validation metrics (Beta, Hurst, Window). Returns empty DataFrame if no pairs found.
+            pd.DataFrame: DataFrame containing all pairs with their validation metrics
+            (Beta, Hurst) and the final Score.
         """
-
         logger.debug(f"Loading data for Pair Selection: {ps_start} - {ps_end}")
         df_ps = load_data(
             tickers=tickers, start=ps_start, end=ps_end, interval=interval
@@ -91,20 +100,6 @@ class PairSelector:
             f"Pre-ranked {len(candidates)} pairs. Validating with Hurst, Beta & Window..."
         )
 
-        df_val = load_data(
-            tickers=tickers, start=beta_test_start, end=ps_end, interval=interval
-        )
-
-        numeric_cols = df_val.select_dtypes(include=["float64", "float32"])
-        log_df = np.log(numeric_cols)
-        log_df.columns = [f"{col}_{Source.LOG.value}" for col in numeric_cols.columns]
-        df_val = pd.concat([df_val, log_df], axis=1)
-
-        target_beta_date = pd.to_datetime(beta_test_start)
-        beta_start_pos = df_val.index.get_indexer([target_beta_date], method="bfill")[0]
-        if df_val.index[beta_start_pos] == target_beta_date:
-            beta_start_pos += 1
-
         validated_pairs = []
 
         for idx, row in candidates.iterrows():
@@ -115,30 +110,30 @@ class PairSelector:
                 source_x_col = f"{t_x}_{self.source}"
                 source_y_col = f"{t_y}_{self.source}"
 
-                X_vals_full = df_val[source_x_col].values
-                Y_vals_full = df_val[source_y_col].values
+                X_vals_full = df_ps[source_x_col].values
+                Y_vals_full = df_ps[source_y_col].values
 
-                X_vals_beta = X_vals_full[beta_start_pos:]
-                Y_vals_beta = Y_vals_full[beta_start_pos:]
+                res_row = row.to_dict()
 
-                if beta_hedge != BetaHedge.NO_HEDGE:
-                    beta = calculate_beta(X_slice=X_vals_beta, Y_slice=Y_vals_beta)
-                else:
-                    beta = 1
+                beta = calculate_beta(X_slice=X_vals_full, Y_slice=Y_vals_full)
 
                 if beta <= 0:
-                    logger.debug(f"Pair {pair} rejected. Beta {beta:.3f} <= 0")
-                    continue
+                    logger.debug(
+                        f"Pair {pair} penalized. Beta {beta:.3f} <= 0. Score reset to 0."
+                    )
+                    res_row["score"] = 0.0
 
                 hurst = calculate_hurst(
-                    X_slice=X_vals_beta,
-                    Y_slice=Y_vals_beta,
+                    X_slice=X_vals_full,
+                    Y_slice=Y_vals_full,
                     beta=beta,
                 )
 
                 if hurst > 0.5:
-                    logger.debug(f"Pair {pair} rejected. Hurst {hurst:.3f} > 0.5")
-                    continue
+                    logger.debug(
+                        f"Pair {pair} penalized. Beta {hurst:.3f} > 0.5. Score reset to 0."
+                    )
+                    res_row["score"] = 0.0
 
                 res_row = row.to_dict()
                 res_row.update(
@@ -148,9 +143,6 @@ class PairSelector:
                     }
                 )
                 validated_pairs.append(res_row)
-
-                if len(validated_pairs) >= top_n:
-                    break
 
             except Exception as e:
                 logger.error(f"Error validating {pair}: {e}")

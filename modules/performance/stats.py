@@ -114,8 +114,7 @@ def calculate_stats(
         max_drawdown = drawdown.min()
 
         # Calmar ratio
-        calmar_ratio = total_return / abs(max_drawdown) if max_drawdown != 0 else None
-        calmar_ratio_annual = (
+        calmar_ratio = (
             cagr / abs(max_drawdown) if max_drawdown != 0 and cagr is not None else None
         )
 
@@ -130,7 +129,6 @@ def calculate_stats(
             "sortino_ratio": sortino_ratio,
             "sortino_ratio_annual": sortino_ratio_annual,
             "calmar_ratio": calmar_ratio,
-            "calmar_ratio_annual": calmar_ratio_annual,
         }
 
     def calculate_trade_metrics(is_net: bool) -> dict:
@@ -234,7 +232,6 @@ def calculate_stats(
         "sortino_ratio",
         "sortino_ratio_annual",
         "calmar_ratio",
-        "calmar_ratio_annual",
     ]
 
     stats_df = pd.DataFrame(

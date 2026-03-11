@@ -340,20 +340,21 @@ class Strategy:
                     position_state.sl_lock = True
 
                 if self.agent:
-                    current_state = AgentState(
-                        market_z_score=market_z_score,
-                        z_score=z_score,
-                        market_std=market_std,
-                        market_beta=market_beta,
-                        hurst=market_hurst,
-                        window=z_score_window,
-                        position=position_state.position,
-                        signal=action,
-                        norm_time_in_pos=position_state.time_in_pos / z_score_window,
-                        drawdown_pct=drawdown_pct,
-                        current_market_vol=df["market_vol"].iloc[i],
-                    )
-                    action = self.agent.get_action(current_state)
+                    if z_score is None or pd.isna(z_score):
+                        action = 0.0
+                    else:
+                        current_state = AgentState(
+                            z_score=z_score,
+                            market_beta=market_beta,
+                            hurst=market_hurst,
+                            position=position_state.position,
+                            signal=action,
+                            norm_time_in_pos=position_state.time_in_pos
+                            / z_score_window,
+                            drawdown_pct=drawdown_pct,
+                            current_market_vol=df["market_vol"].iloc[i],
+                        )
+                        action = self.agent.get_action(current_state)
 
                 position_state.open_time = idx
 

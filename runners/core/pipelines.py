@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import Any
 import pandas as pd
 
-from modules.core.enums import BetaHedge
 from modules.performance.models import StrategyResult
 from modules.data_services.data_utils import (
     save_strategy_result,
@@ -143,11 +142,8 @@ def execute_pair_selection(
     tickers: list[str],
     ps_start: str,
     ps_end: str,
-    beta_test_start: str,
     interval: str,
-    top_n: float,
     output_dir: str,
-    beta_hedge: BetaHedge,
 ) -> pd.DataFrame:
     logger.info("Starting Pair Selection Pipeline.")
 
@@ -157,10 +153,7 @@ def execute_pair_selection(
         tickers=tickers,
         ps_start=ps_start,
         ps_end=ps_end,
-        beta_test_start=beta_test_start,
         interval=interval,
-        top_n=top_n,
-        beta_hedge=beta_hedge,
     )
 
     if final_df.empty:

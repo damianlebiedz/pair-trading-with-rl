@@ -4,7 +4,8 @@ import pandas as pd
 from gymnasium import spaces
 from stable_baselines3.common.monitor import Monitor
 
-from modules.core.enums import ObsSpaceType, RLRewards, Source
+import modules.learning.rewards as rewards_module
+from modules.core.enums import ObsSpaceType, Source, RLRewards
 from modules.core.indicators import calculate_z_score, calculate_spread_statistics
 from modules.performance.models import (
     StrategyResult,
@@ -12,13 +13,12 @@ from modules.performance.models import (
 )
 from modules.core.execution import TradeExecutor
 from modules.learning.models import AgentState
-from modules.learning.rewards import RewardScheme, PnLReward, PnLSignalReward
 from stable_baselines3.common.vec_env import DummyVecEnv
 
 
 def build_multi_env(
     results: list[StrategyResult],
-    rl_reward: str,
+    rl_reward: RLRewards,
     obs_space_type: ObsSpaceType,
     fee_rate: float,
     freeze_std: bool,
@@ -30,11 +30,9 @@ def build_multi_env(
     for res in results:
 
         def make_env(result=res):
-            reward_map = {
-                RLRewards.PNL: PnLReward,
-                RLRewards.PNL_SIGNAL: PnLSignalReward,
-            }
-            reward_schema = reward_map[rl_reward]()
+            reward_class = getattr(rewards_module, rl_reward.value)
+            reward_schema = reward_class()
+
             env = PairsTradingEnv(
                 result=result,
                 reward_scheme=reward_schema,
@@ -81,7 +79,7 @@ class PairsTradingEnv(gym.Env):
     def __init__(
         self,
         result: StrategyResult,
-        reward_scheme: RewardScheme,
+        reward_scheme: rewards_module.RewardScheme,
         obs_space_type: ObsSpaceType,
         fee_rate: float,
         freeze_std: bool,
@@ -150,13 +148,6 @@ class PairsTradingEnv(gym.Env):
 
         mapping = {0: -1.0, 1: 0.0, 2: 1.0}
         target_position = mapping[int(action)]
-
-        if self.current_step > 0:
-            baseline_prev_eq = self.df["equity"].iloc[self.current_step - 1]
-            baseline_curr_eq = self.df["equity"].iloc[self.current_step]
-            baseline_step_pnl = baseline_curr_eq - baseline_prev_eq
-        else:
-            baseline_step_pnl = 0.0
 
         row = self.df.iloc[self.current_step]
         price_x = row[self.result.ticker_x]
@@ -275,7 +266,6 @@ class PairsTradingEnv(gym.Env):
             is_bankrupt=is_bankrupt,
             fee_rate=self.fee_rate,
             win=exec_win,
-            baseline_step_pnl=baseline_step_pnl,
         )
 
         return self._get_observation(), reward, terminated, truncated, info
