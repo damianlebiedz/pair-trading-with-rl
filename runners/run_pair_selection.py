@@ -34,9 +34,7 @@ def run_pair_selection(cfg: DictConfig):
 
     save_hydra_config_snapshot(cfg=cfg, root_dir=base_output_dir)
 
-    json_path = os.path.join(
-        project_root, "config/schemas/list_of_assets.json"
-    )
+    json_path = os.path.join(project_root, "config/schemas/list_of_assets.json")
     with open(json_path, "r", encoding="utf-8") as f:
         universe_data = json.load(f)
 
