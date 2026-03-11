@@ -45,7 +45,7 @@ def run_backtest(cfg: DictConfig):
             f"Backtest results will be saved for training in: {training_session_dir}"
         )
 
-    json_path = os.path.join(project_root, "config/schemas/list_of_assets_old.json")
+    json_path = os.path.join(project_root, "config/schemas/list_of_assets.json")
 
     if not os.path.exists(json_path):
         logger.error(f"Error: file not found {json_path}")
