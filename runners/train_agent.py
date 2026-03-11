@@ -1,5 +1,6 @@
 import copy
 import logging
+import shutil
 from pathlib import Path
 import hydra
 import numpy as np
@@ -260,16 +261,21 @@ def train_agent(cfg: DictConfig):
         model.learn(total_timesteps=calculated_timesteps, callback=callbacks)
         logger.info("Training finished.")
 
-        final_model_name = f"{algo_name}_{cfg.rl.obs_space_type}_{run.id}_seed{seed}"
+        final_model_name = f"{algo_name}_{cfg.rl.obs_space_type.value}_{run.id}_seed{seed}"
         save_path = f"{model_dir}/{final_model_name}"
         model.save(save_path)
         vec_env.save(f"{save_path}_normalize.pkl")
 
+        checkpoint_dir = f"{model_dir}/{run.id}"
+        if os.path.exists(checkpoint_dir):
+            shutil.rmtree(checkpoint_dir)
+            logger.debug(f"Deleted checkpoint: {checkpoint_dir}")
+
         if wandb.run is not None:
             model_artifact = wandb.Artifact(
-                name=f"{algo_name}_{cfg.rl.obs_space_type}_model_{run.id}",
+                name=f"{algo_name}_{cfg.rl.obs_space_type.value}_model_{run.id}",
                 type="model",
-                description=f"Trained {algo_name} model (Space: {cfg.rl.obs_space_type})",
+                description=f"Trained {algo_name} model (Space: {cfg.rl.obs_space_type.value})",
             )
             model_artifact.add_file(f"{save_path}.zip")
             model_artifact.add_file(f"{save_path}_normalize.pkl")
@@ -284,6 +290,11 @@ def train_agent(cfg: DictConfig):
         save_path = f"{model_dir}/{final_model_name}"
         model.save(save_path)
         vec_env.save(f"{save_path}_normalize.pkl")
+
+        checkpoint_dir = f"{model_dir}/{run.id}"
+        if os.path.exists(checkpoint_dir):
+            shutil.rmtree(checkpoint_dir)
+            logger.debug(f"Deleted checkpoint: {checkpoint_dir}")
 
         if wandb.run is not None:
             model_artifact = wandb.Artifact(
