@@ -261,7 +261,9 @@ def train_agent(cfg: DictConfig):
         model.learn(total_timesteps=calculated_timesteps, callback=callbacks)
         logger.info("Training finished.")
 
-        final_model_name = f"{algo_name}_{cfg.rl.obs_space_type.value}_{run.id}_seed{seed}"
+        final_model_name = (
+            f"{algo_name}_{cfg.rl.obs_space_type.value}_{run.id}_seed{seed}"
+        )
         save_path = f"{model_dir}/{final_model_name}"
         model.save(save_path)
         vec_env.save(f"{save_path}_normalize.pkl")
