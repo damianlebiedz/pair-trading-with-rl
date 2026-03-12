@@ -285,6 +285,8 @@ def generate_and_fetch_pipeline(
         )
         expected_hours = len(expected_index)
 
+        logger.info("Validating the completeness of the data found...")
+
         for sym in sorted_symbols:
             if len(accepted_assets) >= top_n:
                 break
@@ -296,8 +298,6 @@ def generate_and_fetch_pipeline(
                 continue
 
             df_interval = df_interval.drop_duplicates(subset=["open_time"])
-
-            logger.info("Validating the completeness of the data found...")
 
             if len(df_interval) == expected_hours:
                 accepted_assets.append(sym)
