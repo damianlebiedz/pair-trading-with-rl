@@ -111,7 +111,7 @@ def calculate_stats(
         # Maximum drawdown
         cumulative_max = equity_curve.cummax()
         drawdown = (equity_curve - cumulative_max) / cumulative_max
-        max_drawdown = drawdown.min()
+        max_drawdown = abs(drawdown.min())
 
         # Calmar ratio
         calmar_ratio = (
@@ -138,7 +138,7 @@ def calculate_stats(
                 "win_count": 0,
                 "lose_count": 0,
                 "win_rate": None,
-                "avg_trade_duration": None,
+                "avg_trade_duration": 0.0,
                 "max_win": None,
                 "max_lose": None,
                 "avg_win_return": None,
@@ -147,19 +147,6 @@ def calculate_stats(
             }
 
         close_positions = exec_log_df[exec_log_df["position"] == 0.0].copy()
-
-        if close_positions.empty:
-            return {
-                "win_count": 0,
-                "lose_count": 0,
-                "win_rate": None,
-                "avg_trade_duration": None,
-                "max_win": None,
-                "max_lose": None,
-                "avg_win_return": None,
-                "avg_lose_return": None,
-                "avg_trade_return": None,
-            }
 
         if is_net:
             # Net: PnL - Fees
