@@ -297,6 +297,8 @@ def generate_and_fetch_pipeline(
 
             df_interval = df_interval.drop_duplicates(subset=["open_time"])
 
+            logger.info("Validating the completeness of the data found...")
+
             if len(df_interval) == expected_hours:
                 accepted_assets.append(sym)
                 logger.debug(f"  [+] Accepted: {sym} ({len(accepted_assets)}/{top_n})")
