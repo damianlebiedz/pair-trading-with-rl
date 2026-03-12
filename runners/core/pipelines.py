@@ -19,6 +19,7 @@ from modules.data_services.merge_utils import (
     aggregate_strategy_results,
     stitch_strategy_results,
 )
+from modules.performance.objectives import TDASortino
 from modules.performance.pair_selector import PairSelector
 from modules.performance.stats import calculate_stats
 from modules.performance.strategy import Strategy
@@ -372,6 +373,17 @@ def merge_multi_period_results(
     ).set_index("metric")
 
     stats = pd.concat([stats, new_stats])
+
+    tda_evaluator = TDASortino(drawdown_penalty_lambda=10.0)
+
+    tda_net = tda_evaluator.calculate(stats, metric_type="net")
+    tda_gross = tda_evaluator.calculate(stats, metric_type="gross")
+
+    tda_stats_df = pd.DataFrame(
+        [{"metric": "tda_sortino", "net": tda_net, "gross": tda_gross}]
+    ).set_index("metric")
+
+    stats = pd.concat([stats, tda_stats_df])
 
     final_result = StrategyResult(
         data=final_df,
