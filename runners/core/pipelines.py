@@ -372,7 +372,9 @@ def merge_multi_period_results(
         ]
     ).set_index("metric")
 
-    stats = pd.concat([stats, new_stats])
+    new_stats = new_stats.dropna(how='all')
+    if not new_stats.empty:
+        stats = pd.concat([stats, new_stats])
 
     tda_evaluator = TDASortino(drawdown_penalty_lambda=10.0)
 
@@ -383,7 +385,9 @@ def merge_multi_period_results(
         [{"metric": "tda_sortino", "net": tda_net, "gross": tda_gross}]
     ).set_index("metric")
 
-    stats = pd.concat([stats, tda_stats_df])
+    tda_stats_df = tda_stats_df.dropna(how='all')
+    if not tda_stats_df.empty:
+        stats = pd.concat([stats, tda_stats_df])
 
     final_result = StrategyResult(
         data=final_df,
