@@ -279,8 +279,6 @@ def generate_and_fetch_pipeline(
             monthly_volumes.keys(), key=lambda x: monthly_volumes[x], reverse=True
         )
 
-        logger.info("Validating the completeness of the data found...")
-
         expected_formation_index = pd.date_range(
             start=vol_start, end=vol_end, freq=interval, inclusive="left"
         )
@@ -315,7 +313,7 @@ def generate_and_fetch_pipeline(
                 if len(df_interval) < expected_full_hours:
                     broken_assets.append(sym)
                     logger.debug(
-                        f"  [+] Accepted (but dies in test): {sym} ({len(accepted_assets)}/{top_n})"
+                        f"  [+] Accepted (but delisted in test): {sym} ({len(accepted_assets)}/{top_n})"
                     )
                 else:
                     logger.debug(
@@ -333,7 +331,7 @@ def generate_and_fetch_pipeline(
             )
         else:
             logger.info(
-                f"Found complete data for {len(accepted_assets)}/{top_n} assets. {len(broken_assets)} die during the test window."
+                f"Found complete data for {len(accepted_assets)}/{top_n} assets. {len(broken_assets)} delisted during the test window."
             )
 
         universes[month_key] = {
