@@ -240,7 +240,6 @@ def generate_and_fetch_pipeline(
     all_symbols = get_all_futures_symbols()
 
     universes = {}
-    md_universes = {}
 
     if json_out.exists():
         with open(json_out, "r", encoding="utf-8") as f:
@@ -320,6 +319,9 @@ def generate_and_fetch_pipeline(
             "volume_window_end": vol_end.strftime("%Y-%m-%d %H:%M:%S"),
             "data_fetch_start": vol_start.strftime("%Y-%m-%d %H:%M:%S"),
             "data_fetch_end": data_end.strftime("%Y-%m-%d %H:%M:%S"),
+            "requested_count": top_n,
+            "found_count": len(accepted_assets),
+            "is_complete": len(accepted_assets) == top_n,
             "assets": accepted_assets,
         }
         with open(json_out, "w", encoding="utf-8") as f:
@@ -365,11 +367,11 @@ def generate_and_fetch_pipeline(
 
     logger.info("Parquets downloaded successfully.")
 
-    try:
-        shutil.rmtree(cache_dir)
-        logger.info("Deleted .cache folder.")
-    except Exception as e:
-        logger.warning(f"Failed to delete .cache folder: {e}")
+    # try:
+    #     shutil.rmtree(cache_dir)
+    #     logger.info("Deleted .cache folder.")
+    # except Exception as e:
+    #     logger.warning(f"Failed to delete .cache folder: {e}")
 
     logger.info(f"Generating Markdown documentation: {md_out}")
     md_content = f"# Traded Assets Universe (Top {cfg.top_n})\n\n"
@@ -380,16 +382,23 @@ def generate_and_fetch_pipeline(
         "--- \n\n"
     )
 
-    for label, (m_key, v_start, v_end, d_end, assets_vol) in md_universes.items():
-        md_content += f"### {label} (Key: {m_key})\n"
-        md_content += f"- **Volume Period:** {v_start.date()} to {v_end.date()}\n"
-        md_content += f"- **Full Data Window:** {v_start.date()} to {d_end.date()}\n\n"
+    for i, (m_key, u_data) in enumerate(final_universes.items()):
+        v_start = u_data["volume_window_start"][:10]
+        v_end = u_data["volume_window_end"][:10]
+        d_end = u_data["data_fetch_end"][:10]
+        assets = u_data["assets"]
 
-        if assets_vol:
-            formatted = [f"{sym} (${vol / 1e6:.1f}M)" for sym, vol in assets_vol]
-            md_content += f"**Final Assets:** {', '.join(formatted)}\n\n"
-        else:
-            md_content += "**Final Assets:** (Refer to JSON for resumed iterations)\n\n"
+        found = u_data.get("found_count", len(assets))
+        req = u_data.get("requested_count", cfg.top_n)
+
+        md_content += f"### Iteration {i + 1} (Key: {m_key})\n"
+        md_content += f"- **Volume Period:** {v_start} to {v_end}\n"
+        md_content += f"- **Full Data Window:** {v_start} to {d_end}\n\n"
+
+        if found < req:
+            md_content += f"> **DATA WARNING:** Found complete historical data for only **{found}/{req}** assets in this window. The universe is smaller than requested due to exchange limitations or asset delistings.\n\n"
+
+        md_content += f"**Final Assets:** {', '.join(assets)}\n\n"
 
     with open(md_out, "w", encoding="utf-8") as f:
         f.write(md_content)

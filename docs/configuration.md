@@ -4,6 +4,7 @@ Below is an automatically generated list of all configuration parameters support
 
 ## Root Parameters
 
+- **`clean_single_backtests`**: Flag to clean the single backtest data ('test' subdirs) during multi-pair/multi-iteration backtesting.
 - **`generate_plots`**: Generate plots if true.
 - **`save_for_training`**: Flag to auto-save backtest data in data/rl_training for RL training.
 - **`rl_model_folder`**: Name of the folder with RL model, if null take first one or run without RL.

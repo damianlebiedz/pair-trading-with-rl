@@ -265,11 +265,15 @@ class Config(BaseModel):
     defaults: list[str | RLAlgoDefault | dict[str, Any]] | None = Field(
         default=None, description="Hydra defaults list."
     )
+    clean_single_backtests: bool | None = Field(
+        default=False,
+        description="Flag to clean the single backtest data ('test' subdirs) during multi-pair/multi-iteration backtesting.",
+    )
     generate_plots: bool | None = Field(
-        default=None, description="Generate plots if true."
+        default=False, description="Generate plots if true."
     )
     save_for_training: bool | None = Field(
-        default=None,
+        default=False,
         description="Flag to auto-save backtest data in data/rl_training for RL training.",
     )
     rl_model_folder: str | None = Field(

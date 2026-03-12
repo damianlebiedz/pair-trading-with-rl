@@ -18,10 +18,6 @@
           "$ref": "#/$defs/A2CBaseline"
         }
       },
-      "required": [
-        "algo_name",
-        "params"
-      ],
       "title": "A2CAlgo",
       "type": "object"
     },
@@ -48,12 +44,6 @@
           "type": "number"
         }
       },
-      "required": [
-        "learning_rate",
-        "n_steps",
-        "gamma",
-        "ent_coef"
-      ],
       "title": "A2CBaseline",
       "type": "object"
     },
@@ -115,13 +105,6 @@
           "type": "array"
         }
       },
-      "required": [
-        "top_n",
-        "start",
-        "end",
-        "test_end",
-        "iterations"
-      ],
       "title": "DataFetchingPipeline",
       "type": "object"
     },
@@ -163,12 +146,6 @@
           "description": "Data timeframe used for the simulation. Options: ['1d', '4h', '1h', '30m', '15m', '5m', '3m', '1m']"
         }
       },
-      "required": [
-        "initial_cash",
-        "fee_rate",
-        "risk_free_rate_annual",
-        "interval"
-      ],
       "title": "Market",
       "type": "object"
     },
@@ -199,10 +176,6 @@
           "$ref": "#/$defs/RecurrentPPO"
         }
       },
-      "required": [
-        "algo_name",
-        "params"
-      ],
       "title": "PPOAlgo",
       "type": "object"
     },
@@ -227,11 +200,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "top_n",
-        "start",
-        "end"
-      ],
       "title": "PairSelection",
       "type": "object"
     },
@@ -320,22 +288,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "use_rl",
-        "z_score_window",
-        "entry_threshold",
-        "exit_threshold",
-        "stop_loss",
-        "iterations",
-        "beta_hedge",
-        "delayed_entry",
-        "sl_lock",
-        "time_decay_sl",
-        "freeze_std",
-        "beta_start",
-        "start",
-        "end"
-      ],
       "title": "Performance",
       "type": "object"
     },
@@ -362,12 +314,6 @@
           "type": "boolean"
         }
       },
-      "required": [
-        "lstm_hidden_size",
-        "n_lstm_layers",
-        "shared_lstm",
-        "enable_critic_lstm"
-      ],
       "title": "PolicyKwargs",
       "type": "object"
     },
@@ -419,16 +365,6 @@
           "type": "boolean"
         }
       },
-      "required": [
-        "training_folder",
-        "reward",
-        "obs_space_type",
-        "passes_per_pair",
-        "seed",
-        "verbose",
-        "freeze_std",
-        "time_decay_stop"
-      ],
       "title": "RL",
       "type": "object"
     },
@@ -438,9 +374,6 @@
           "$ref": "#/$defs/RLModelName"
         }
       },
-      "required": [
-        "rl_algo"
-      ],
       "title": "RLAlgoDefault",
       "type": "object"
     },
@@ -510,15 +443,6 @@
           "default": null
         }
       },
-      "required": [
-        "learning_rate",
-        "n_steps",
-        "batch_size",
-        "n_epochs",
-        "gamma",
-        "ent_coef",
-        "clip_range"
-      ],
       "title": "RecurrentPPO",
       "type": "object"
     },
@@ -543,11 +467,6 @@
           "type": "number"
         }
       },
-      "required": [
-        "vol_window",
-        "time_decay_min",
-        "time_decay_max"
-      ],
       "title": "Settings",
       "type": "object"
     },
@@ -563,10 +482,6 @@
           "description": "WandB tracking mode. Options: ['online', 'offline']"
         }
       },
-      "required": [
-        "project",
-        "mode"
-      ],
       "title": "Wandb",
       "type": "object"
     },
@@ -621,6 +536,19 @@
       "description": "Hydra defaults list.",
       "title": "Defaults"
     },
+    "clean_single_backtests": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": false,
+      "description": "Flag to clean the single backtest data ('test' subdirs) during multi-pair/multi-iteration backtesting.",
+      "title": "Clean Single Backtests"
+    },
     "generate_plots": {
       "anyOf": [
         {
@@ -630,7 +558,7 @@
           "type": "null"
         }
       ],
-      "default": null,
+      "default": false,
       "description": "Generate plots if true.",
       "title": "Generate Plots"
     },
@@ -643,7 +571,7 @@
           "type": "null"
         }
       ],
-      "default": null,
+      "default": false,
       "description": "Flag to auto-save backtest data in data/rl_training for RL training.",
       "title": "Save For Training"
     },

@@ -1,6 +1,8 @@
 import json
 import logging
 import os
+import shutil
+from pathlib import Path
 import hydra
 import pandas as pd
 from omegaconf import DictConfig, OmegaConf
@@ -97,6 +99,8 @@ def run_backtest(cfg: DictConfig):
 
     tickers_dict = {}
 
+    should_cleanup = number_of_iterations > 1
+
     for i in range(number_of_iterations):
         output_dir = os.path.join(root, f"{i + 1}")
         if number_of_iterations == 1:
@@ -135,6 +139,9 @@ def run_backtest(cfg: DictConfig):
 
         logger.info("\n%s", ps_df.to_string())
         selected_pairs_names = ps_df["pair"].tolist()
+
+        if len(selected_pairs_names) > 1:
+            should_cleanup = True
 
         if not selected_pairs_names:
             logger.warning(
@@ -344,6 +351,21 @@ def run_backtest(cfg: DictConfig):
             plot=cfg.generate_plots,
             tickers_dict=tickers_dict,
         )
+
+    if cfg.clean_single_backtests and should_cleanup:
+        logger.debug("Cleaning up nested 'test' subfolders...")
+        deleted_count = 0
+
+        for p in Path(root).rglob("test"):
+            if p.is_dir():
+                try:
+                    shutil.rmtree(p)
+                    deleted_count += 1
+                    logger.debug(f"Deleted subfolder: {p}")
+                except Exception as e:
+                    logger.error(f"Error during deleting {p}: {e}")
+
+        logger.info(f"Cleanup finished. Deleted {deleted_count} 'test' subdirs.")
 
     logger.info(f"Results saved in {root}.")
 
