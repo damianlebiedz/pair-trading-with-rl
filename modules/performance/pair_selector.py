@@ -41,54 +41,63 @@ class PairSelector:
         interval: str,
     ) -> pd.DataFrame:
         """
-        Executes the Pair Selection pipeline using a Composite Score with Penalty logic.
+        Executes the Pair Selection pipeline using a Two-Stage "Filter-then-Rank" methodology.
 
-        The process prioritizes pairs that exhibit BOTH strong long-term equilibrium (Cointegration)
-        and strong short-term linear dependency (Correlation/R-squared). Instead of strict rejection
-        during validation, pairs that do not meet mean-reversion criteria are penalized.
+        This process prioritizes pairs that exhibit strong long-term equilibrium (Cointegration)
+        and short-term linear dependency (R-squared), while strictly filtering out pairs that
+        lack tradable structural characteristics (Mean Reversion and valid Hedge Ratio).
 
-        The process consists of two main phases:
-        1. Scoring & Ranking: Calculates an initial weighted score for all pairs based on
-           historical data (ps_start to ps_end).
-        2. Validation & Penalty: Verifies if candidates maintain mean-reverting properties
-           on calibration data using Beta and Hurst. If pair fails these checks, its score
-           is reset to 0.0. Note: Validation metrics are calculated using data ending at
-           exactly 00:00:00 on the ps_end date.
+        The process consists of two main phases executed on the same historical data window:
+        1. Scoring (Quality Assessment): Calculates an initial composite score for all pairs.
+        2. Filtering (Structural Validation): Verifies if candidates are actually tradable
+           using the Hurst Exponent and Beta. Fails result in a strict penalty.
 
-        Score Calculation Logic:
-        ------------------------
-        The final score is determined by the initial statistical quality and validation results:
-        - If Hurst is less than or equal to 0.5 AND Beta is greater than 0:
-          Score = (0.5 * Normalized Cointegration) + (0.5 * R-squared)
-        - If Hurst is greater than 0.5 OR Beta is less than or equal to 0:
-          Score = 0.0
+        Score Calculation & Penalty Logic:
+        ----------------------------------
+        Initial Score = (0.5 * Normalized Cointegration) + (0.5 * R-squared)
+
+        A hard penalty (Score = 0.0) is applied if either structural constraint is violated:
+        - Hurst > 0.5: Indicates the spread is trending, violating mean-reversion assumptions.
+        - Beta <= 0: Indicates assets move inversely or lack a valid linear relationship for hedging.
 
         Algorithm Stages:
         -----------------
-        1. Data Loading (Selection): Loads price data for the ps_start - ps_end period.
-        2. Composite Scoring:
-           - Runs Cointegration Test (EG) and normalizes the result to a 0-1 scale.
-           - Calculates Correlation (R-squared).
-           - Computes initial Score = (0.5 * Norm_Coint) + (0.5 * R_Squared).
-           - Sorts pairs by initial Score in descending order.
-        3. Data Loading (Validation): Loads price data for the beta_test_start - ps_end period.
-           Due to the SoC-EoO model, this calibration data concludes at exactly 00:00:00
-           of the ps_end date.
-        4. Validation & Penalty:
-           Iterates through candidates and checks metrics on Validation Data:
-           - Beta Check: If Beta is 0 or less, the pair's score is reset to 0.0.
-           - Hurst Check: If Hurst is greater than 0.5 (indicating a trend), the score is reset to 0.0.
-        5. Final Selection: Returns all processed pairs, re-sorted by their final Score,
-           allowing the strategy to select the top_n valid candidates.
+        1. Data Loading: Loads and cleans price data for the ps_start to ps_end period.
+        2. Composite Scoring: Evaluates all possible asset combinations, calculates the
+           initial Score based on Engle-Granger and R-squared, and ranks them.
+        3. Validation & Penalty: Iterates through the ranked candidates. Computes Beta
+           and Hurst on the same data window. If constraints fail, the score is zeroed out.
+        4. Final Selection: Returns the processed dataframe, allowing the downstream
+           strategy to safely select the top_n viable candidates.
+
+        Args:
+            tickers (list[str]): List of asset tickers to evaluate.
+            ps_start (str): Start date for the selection data window.
+            ps_end (str): End date for the selection data window.
+            interval (str): Timeframe interval (e.g., '1h', '1d').
 
         Returns:
-            pd.DataFrame: DataFrame containing all pairs with their validation metrics
-            (Beta, Hurst) and the final Score.
+            pd.DataFrame: DataFrame containing all evaluated pairs, their validation metrics
+            (validation_beta, validation_hurst), and the final penalized score.
         """
         logger.debug(f"Loading data for Pair Selection: {ps_start} - {ps_end}")
         df_ps = load_data(
             tickers=tickers, start=ps_start, end=ps_end, interval=interval
         )
+
+        assets_with_nans = df_ps.columns[df_ps.isna().any()].tolist()
+        if assets_with_nans:
+            logger.warning(
+                f"Dropping assets with NaNs from Pair Selection: {assets_with_nans}"
+            )
+            df_ps = df_ps.dropna(axis=1)
+
+        if df_ps.shape[1] < 2:
+            logger.warning(
+                "Not enough valid assets left to form pairs after dropping NaNs."
+            )
+            return pd.DataFrame()
+
         source_df_ps = np.log(df_ps) if self.source == Source.LOG.value else df_ps
         candidates = self._run_scoring_ranking(source_df_ps)
 
@@ -107,11 +116,8 @@ class PairSelector:
             t_x, t_y = pair.split("-")
 
             try:
-                source_x_col = f"{t_x}_{self.source}"
-                source_y_col = f"{t_y}_{self.source}"
-
-                X_vals_full = df_ps[source_x_col].values
-                Y_vals_full = df_ps[source_y_col].values
+                X_vals_full = source_df_ps[t_x].values
+                Y_vals_full = source_df_ps[t_y].values
 
                 res_row = row.to_dict()
 
@@ -131,11 +137,10 @@ class PairSelector:
 
                 if hurst > 0.5:
                     logger.debug(
-                        f"Pair {pair} penalized. Beta {hurst:.3f} > 0.5. Score reset to 0."
+                        f"Pair {pair} penalized. Hurst {hurst:.3f} > 0.5. Score reset to 0."
                     )
                     res_row["score"] = 0.0
 
-                res_row = row.to_dict()
                 res_row.update(
                     {
                         "validation_beta": beta,
