@@ -65,7 +65,7 @@ RENAME_MAP = {
 
 
 def load_strategy_data(
-        base_dir: Path, strategy_name: str
+    base_dir: Path, strategy_name: str
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     strat_dir = base_dir / strategy_name
     if not strat_dir.exists():
@@ -78,7 +78,9 @@ def load_strategy_data(
     df_exec = pd.read_parquet(exec_files[0]) if exec_files else None
 
     stats_files = list(strat_dir.glob("stats_multi_pair_*.parquet"))
-    df_stats = pd.read_parquet(stats_files[0]).set_index("metric") if stats_files else None
+    df_stats = (
+        pd.read_parquet(stats_files[0]).set_index("metric") if stats_files else None
+    )
 
     return df_returns, df_exec, df_stats
 
@@ -91,7 +93,9 @@ def get_run_config(base_dir: Path, strategy_name: str) -> dict:
     return {}
 
 
-def build_stitched_ewp(base_dir: Path, strategy_name: str, interval: Interval, assets_dict: dict) -> pd.DataFrame:
+def build_stitched_ewp(
+    base_dir: Path, strategy_name: str, interval: Interval, assets_dict: dict
+) -> pd.DataFrame:
     strat_dir = base_dir / strategy_name
 
     iter_dirs = sorted(
@@ -117,12 +121,16 @@ def build_stitched_ewp(base_dir: Path, strategy_name: str, interval: Interval, a
         iter_tickers = assets_dict.get(iter_num) or assets_dict.get(str(iter_num))
 
         if not iter_tickers:
-            logger.warning(f"Warning: Lack of tickers for {iter_num} in 'list_of_assets.json'")
+            logger.warning(
+                f"Warning: Lack of tickers for {iter_num} in 'list_of_assets.json'"
+            )
             continue
 
         ewp_period = load_ewp_benchmark(iter_tickers, start_date, end_date, interval)
 
-        col_name = "portfolio_pct" if "portfolio_pct" in ewp_period.columns else "ewp_pct"
+        col_name = (
+            "portfolio_pct" if "portfolio_pct" in ewp_period.columns else "ewp_pct"
+        )
         ewp_dfs.append(ewp_period[[col_name]])
 
     if not ewp_dfs:
@@ -167,8 +175,12 @@ def generate_academic_report(strategies_map: dict):
             f"Loaded config -> Initial Capital: {initial_cash}, Fee Rate: {fee_rate * 100}%, Risk Free Rate: {risk_free_rate}"
         )
 
-        df_ret_is, df_exec_is, df_stats_is = load_strategy_data(results_dir, folders.get("IS"))
-        df_ret_oos, df_exec_oos, df_stats_oos = load_strategy_data(results_dir, folders.get("OOS"))
+        df_ret_is, df_exec_is, df_stats_is = load_strategy_data(
+            results_dir, folders.get("IS")
+        )
+        df_ret_oos, df_exec_oos, df_stats_oos = load_strategy_data(
+            results_dir, folders.get("OOS")
+        )
 
         if df_ret_is is None or df_ret_oos is None:
             logger.warning(f"Data not found for IS/OOS ({label}). Skipping...")
@@ -189,35 +201,64 @@ def generate_academic_report(strategies_map: dict):
         oos_ret = oos_ret - oos_ret.iloc[0]
 
         if df_stats_is is not None:
-            stats_dict["Baseline (In-Sample)"] = df_stats_is["net"].reindex(SELECTED_METRICS)
+            stats_dict["Baseline (In-Sample)"] = df_stats_is["net"].reindex(
+                SELECTED_METRICS
+            )
 
         if df_stats_oos is not None:
-            stats_dict["Baseline (Out-of-Sample)"] = df_stats_oos["net"].reindex(SELECTED_METRICS)
+            stats_dict["Baseline (Out-of-Sample)"] = df_stats_oos["net"].reindex(
+                SELECTED_METRICS
+            )
 
         fig = make_subplots(
-            rows=1, cols=2,
+            rows=1,
+            cols=2,
             shared_yaxes=True,
             horizontal_spacing=0.03,
-            subplot_titles=["Panel A: In-Sample Performance", "Panel B: Out-of-Sample Performance"]
+            subplot_titles=[
+                "Panel A: In-Sample Performance",
+                "Panel B: Out-of-Sample Performance",
+            ],
         )
 
-        fig.add_trace(go.Scatter(
-            x=is_ret.index, y=is_ret, mode="lines",
-            name=f"Baseline Model", legendgroup="Baseline", line=dict(color="#1f77b4", width=2.0),
-            hovertemplate="<b>Baseline (IS)</b><br>Return: %{y:.2%}<extra></extra>"
-        ), row=1, col=1)
+        fig.add_trace(
+            go.Scatter(
+                x=is_ret.index,
+                y=is_ret,
+                mode="lines",
+                name="Baseline Model",
+                legendgroup="Baseline",
+                line=dict(color="#1f77b4", width=2.0),
+                hovertemplate="<b>Baseline (IS)</b><br>Return: %{y:.2%}<extra></extra>",
+            ),
+            row=1,
+            col=1,
+        )
 
-        fig.add_trace(go.Scatter(
-            x=oos_ret.index, y=oos_ret, mode="lines",
-            name=f"Baseline Model", legendgroup="Baseline", line=dict(color="#1f77b4", width=2.0), showlegend=False,
-            hovertemplate="<b>Baseline (OOS)</b><br>Return: %{y:.2%}<extra></extra>"
-        ), row=1, col=2)
+        fig.add_trace(
+            go.Scatter(
+                x=oos_ret.index,
+                y=oos_ret,
+                mode="lines",
+                name="Baseline Model",
+                legendgroup="Baseline",
+                line=dict(color="#1f77b4", width=2.0),
+                showlegend=False,
+                hovertemplate="<b>Baseline (OOS)</b><br>Return: %{y:.2%}<extra></extra>",
+            ),
+            row=1,
+            col=2,
+        )
 
         empty_ex = pd.DataFrame(columns=["position", "pnl", "fees", "entry_equity"])
 
         try:
-            btc_is = load_btc_benchmark(full_start, split_date.strftime("%Y-%m-%d"), Interval.H1)
-            btc_oos = load_btc_benchmark(split_date.strftime("%Y-%m-%d"), full_end, Interval.H1)
+            btc_is = load_btc_benchmark(
+                full_start, split_date.strftime("%Y-%m-%d"), Interval.H1
+            )
+            btc_oos = load_btc_benchmark(
+                split_date.strftime("%Y-%m-%d"), full_end, Interval.H1
+            )
 
             col_btc_is = "close" if "close" in btc_is.columns else btc_is.columns[0]
             col_btc_oos = "close" if "close" in btc_oos.columns else btc_oos.columns[0]
@@ -225,16 +266,32 @@ def generate_academic_report(strategies_map: dict):
             btc_is_ret = (btc_is[col_btc_is] / btc_is[col_btc_is].iloc[0]) - 1
             btc_oos_ret = (btc_oos[col_btc_oos] / btc_oos[col_btc_oos].iloc[0]) - 1
 
-            fig.add_trace(go.Scatter(
-                x=btc_is_ret.index, y=btc_is_ret, mode="lines", name="BTC B&H",
-                legendgroup="BTC", line=dict(color="gray", width=1.5, dash="dash"),
-            ), row=1, col=1)
+            fig.add_trace(
+                go.Scatter(
+                    x=btc_is_ret.index,
+                    y=btc_is_ret,
+                    mode="lines",
+                    name="BTC B&H",
+                    legendgroup="BTC",
+                    line=dict(color="gray", width=1.5, dash="dash"),
+                ),
+                row=1,
+                col=1,
+            )
 
-            fig.add_trace(go.Scatter(
-                x=btc_oos_ret.index, y=btc_oos_ret, mode="lines",
-                name="BTC B&H", legendgroup="BTC", showlegend=False,
-                line=dict(color="gray", width=1.5, dash="dash"),
-            ), row=1, col=2)
+            fig.add_trace(
+                go.Scatter(
+                    x=btc_oos_ret.index,
+                    y=btc_oos_ret,
+                    mode="lines",
+                    name="BTC B&H",
+                    legendgroup="BTC",
+                    showlegend=False,
+                    line=dict(color="gray", width=1.5, dash="dash"),
+                ),
+                row=1,
+                col=2,
+            )
 
             df_btc = pd.DataFrame(index=btc_oos_ret.index)
             df_btc["total_pnl"] = btc_oos_ret * initial_cash
@@ -247,23 +304,47 @@ def generate_academic_report(strategies_map: dict):
             logger.error(f"Error during BTC data loading: {e}")
 
         try:
-            ewp_data_is = build_stitched_ewp(results_dir, folders.get("IS"), Interval.H1, list_of_assets)
-            ewp_data_oos = build_stitched_ewp(results_dir, folders.get("OOS"), Interval.H1, list_of_assets)
+            ewp_data_is = build_stitched_ewp(
+                results_dir, folders.get("IS"), Interval.H1, list_of_assets
+            )
+            ewp_data_oos = build_stitched_ewp(
+                results_dir, folders.get("OOS"), Interval.H1, list_of_assets
+            )
 
             if ewp_data_is is not None and ewp_data_oos is not None:
-                ewp_is_ret = ewp_data_is["ewp_return"] - ewp_data_is["ewp_return"].iloc[0]
-                ewp_oos_ret = ewp_data_oos["ewp_return"] - ewp_data_oos["ewp_return"].iloc[0]
+                ewp_is_ret = (
+                    ewp_data_is["ewp_return"] - ewp_data_is["ewp_return"].iloc[0]
+                )
+                ewp_oos_ret = (
+                    ewp_data_oos["ewp_return"] - ewp_data_oos["ewp_return"].iloc[0]
+                )
 
-                fig.add_trace(go.Scatter(
-                    x=ewp_is_ret.index, y=ewp_is_ret, mode="lines", name="EWP Portfolio",
-                    legendgroup="EWP", line=dict(color="black", width=1.0, dash="dot")
-                ), row=1, col=1)
+                fig.add_trace(
+                    go.Scatter(
+                        x=ewp_is_ret.index,
+                        y=ewp_is_ret,
+                        mode="lines",
+                        name="EWP Portfolio",
+                        legendgroup="EWP",
+                        line=dict(color="black", width=1.0, dash="dot"),
+                    ),
+                    row=1,
+                    col=1,
+                )
 
-                fig.add_trace(go.Scatter(
-                    x=ewp_oos_ret.index, y=ewp_oos_ret, mode="lines",
-                    name="EWP Portfolio", legendgroup="EWP", showlegend=False,
-                    line=dict(color="black", width=1.0, dash="dot")
-                ), row=1, col=2)
+                fig.add_trace(
+                    go.Scatter(
+                        x=ewp_oos_ret.index,
+                        y=ewp_oos_ret,
+                        mode="lines",
+                        name="EWP Portfolio",
+                        legendgroup="EWP",
+                        showlegend=False,
+                        line=dict(color="black", width=1.0, dash="dot"),
+                    ),
+                    row=1,
+                    col=2,
+                )
 
                 df_ewp = pd.DataFrame(index=ewp_oos_ret.index)
                 df_ewp["total_pnl"] = ewp_oos_ret * initial_cash
@@ -277,19 +358,64 @@ def generate_academic_report(strategies_map: dict):
             logger.error(f"Error during EWP data loading: {e}")
 
         fig.update_layout(
-            template="plotly_white", font=dict(family=FONT_SANS, color="black"),
+            template="plotly_white",
+            font=dict(family=FONT_SANS, color="black"),
             margin=dict(t=50, b=50, l=70, r=20),
-            legend=dict(orientation="h", yanchor="bottom", y=1.08, xanchor="center", x=0.5, font=dict(size=12)),
-            width=1000, height=450,
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.08,
+                xanchor="center",
+                x=0.5,
+                font=dict(size=12),
+            ),
+            width=1000,
+            height=450,
         )
 
-        fig.update_yaxes(title_text="Cumulative Return", tickformat=".0%", showline=True, linewidth=1,
-                         linecolor="black", gridcolor="#e5e5e5", mirror=True, zeroline=True, zerolinecolor="black",
-                         row=1, col=1)
-        fig.update_yaxes(tickformat=".0%", showline=True, linewidth=1, linecolor="black", gridcolor="#e5e5e5",
-                         mirror=True, zeroline=True, zerolinecolor="black", row=1, col=2)
-        fig.update_xaxes(showline=True, linewidth=1, linecolor="black", gridcolor="#e5e5e5", mirror=True, row=1, col=1)
-        fig.update_xaxes(showline=True, linewidth=1, linecolor="black", gridcolor="#e5e5e5", mirror=True, row=1, col=2)
+        fig.update_yaxes(
+            title_text="Cumulative Return",
+            tickformat=".0%",
+            showline=True,
+            linewidth=1,
+            linecolor="black",
+            gridcolor="#e5e5e5",
+            mirror=True,
+            zeroline=True,
+            zerolinecolor="black",
+            row=1,
+            col=1,
+        )
+        fig.update_yaxes(
+            tickformat=".0%",
+            showline=True,
+            linewidth=1,
+            linecolor="black",
+            gridcolor="#e5e5e5",
+            mirror=True,
+            zeroline=True,
+            zerolinecolor="black",
+            row=1,
+            col=2,
+        )
+        fig.update_xaxes(
+            showline=True,
+            linewidth=1,
+            linecolor="black",
+            gridcolor="#e5e5e5",
+            mirror=True,
+            row=1,
+            col=1,
+        )
+        fig.update_xaxes(
+            showline=True,
+            linewidth=1,
+            linecolor="black",
+            gridcolor="#e5e5e5",
+            mirror=True,
+            row=1,
+            col=2,
+        )
 
         try:
             pdf_path = pdf_dir / f"{label}_equity_subplots.pdf"
@@ -304,8 +430,15 @@ def generate_academic_report(strategies_map: dict):
             for idx in df_stats.index:
                 val = df_stats.loc[idx, col]
                 if pd.notna(val):
-                    if idx in ["CAGR", "Annual Volatility", "Max Drawdown", "Win Rate", "Avg Trade Return", "Avg Win",
-                               "Avg Lose"]:
+                    if idx in [
+                        "CAGR",
+                        "Annual Volatility",
+                        "Max Drawdown",
+                        "Win Rate",
+                        "Avg Trade Return",
+                        "Avg Win",
+                        "Avg Lose",
+                    ]:
                         df_stats.loc[idx, col] = f"{val:.2%}"
                     elif idx in ["Win Count", "Loss Count"]:
                         df_stats.loc[idx, col] = f"{int(val)}"
@@ -315,7 +448,11 @@ def generate_academic_report(strategies_map: dict):
                     df_stats.loc[idx, col] = "-"
 
         with open(report_output_dir / f"{label}_table.tex", "w") as f:
-            f.write(df_stats.to_latex(column_format="l" + "r" * len(df_stats.columns), escape=False))
+            f.write(
+                df_stats.to_latex(
+                    column_format="l" + "r" * len(df_stats.columns), escape=False
+                )
+            )
 
         html_content = f"""
         <!DOCTYPE html>
@@ -345,7 +482,7 @@ def generate_academic_report(strategies_map: dict):
         </html>
         """
         with open(
-                report_output_dir / f"{label}_report.html", "w", encoding="utf-8"
+            report_output_dir / f"{label}_report.html", "w", encoding="utf-8"
         ) as f:
             f.write(html_content)
         logger.info("IS-OOS Pipeline completed successfully.")

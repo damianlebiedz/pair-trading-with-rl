@@ -128,8 +128,12 @@ def generate_reports(folder_name: str, baseline_dict: dict):
             ts_df = pd.read_parquet(ts_files[0])
 
             def get_cfg(key):
-                return config.get(key,
-                                  config.get("performance", {}).get(key, config.get("pair_selection", {}).get(key)))
+                return config.get(
+                    key,
+                    config.get("performance", {}).get(
+                        key, config.get("pair_selection", {}).get(key)
+                    ),
+                )
 
             params = {k: get_cfg(k) for k in (SENSITIVITY_PARAMS + ASSUMPTIONS)}
 
@@ -154,7 +158,9 @@ def generate_reports(folder_name: str, baseline_dict: dict):
                 "TDA-Sortino": get_stat("tda_sortino"),
             }
 
-            ret_series = (ts_df["total_pnl"] - ts_df["total_fees"]) * LEVERAGE / initial_cash
+            ret_series = (
+                (ts_df["total_pnl"] - ts_df["total_fees"]) * LEVERAGE / initial_cash
+            )
 
             return {
                 "params": params,
@@ -170,7 +176,9 @@ def generate_reports(folder_name: str, baseline_dict: dict):
     base_oos = get_run_data(oos_base_dir / baseline_dict["OOS"])
 
     if not base_is or not base_oos:
-        raise ValueError("Error loading Baseline (IS or OOS). Make sure the winner folders exist.")
+        raise ValueError(
+            "Error loading Baseline (IS or OOS). Make sure the winner folders exist."
+        )
 
     base_is_series = base_is["ret_series"] - base_is["ret_series"].iloc[0]
     base_oos_series = base_oos["ret_series"] - base_oos["ret_series"].iloc[0]
@@ -178,13 +186,19 @@ def generate_reports(folder_name: str, baseline_dict: dict):
     sensitivity_results, assumptions_results = [], []
     sensitivity_plots, mechanism_plots = [], []
 
-    base_entry = {**base_oos["params"], **base_oos["metrics"], "Variation": "Baseline Model", "Group": "Baseline"}
+    base_entry = {
+        **base_oos["params"],
+        **base_oos["metrics"],
+        "Variation": "Baseline Model",
+        "Group": "Baseline",
+    }
     sensitivity_results.append(base_entry)
     assumptions_results.append(base_entry)
 
     def is_different(val1, val2):
         s1, s2 = str(val1).lower().strip(), str(val2).lower().strip()
-        if s1 == s2: return False
+        if s1 == s2:
+            return False
         try:
             return float(val1) != float(val2)
         except (ValueError, TypeError):
@@ -198,7 +212,9 @@ def generate_reports(folder_name: str, baseline_dict: dict):
         is_run_dir = is_base_dir / var_name
 
         if not is_run_dir.exists():
-            logger.warning(f"Variation {var_name} found in OOS, but missing in IS. Skipping.")
+            logger.warning(
+                f"Variation {var_name} found in OOS, but missing in IS. Skipping."
+            )
             continue
 
         run_is = get_run_data(is_run_dir)
@@ -207,8 +223,11 @@ def generate_reports(folder_name: str, baseline_dict: dict):
         if not run_is or not run_oos:
             continue
 
-        diffs = [k for k in (SENSITIVITY_PARAMS + ASSUMPTIONS) if
-                 is_different(run_oos["params"][k], base_oos["params"][k])]
+        diffs = [
+            k
+            for k in (SENSITIVITY_PARAMS + ASSUMPTIONS)
+            if is_different(run_oos["params"][k], base_oos["params"][k])
+        ]
 
         if len(diffs) == 1:
             p_name = diffs[0]
@@ -221,10 +240,15 @@ def generate_reports(folder_name: str, baseline_dict: dict):
             plot_item = {
                 "series_is": is_series,
                 "series_oos": oos_series,
-                "name": var_label
+                "name": var_label,
             }
 
-            entry = {**run_oos["params"], **run_oos["metrics"], "Variation": var_label, "Group": p_name}
+            entry = {
+                **run_oos["params"],
+                **run_oos["metrics"],
+                "Variation": var_label,
+                "Group": p_name,
+            }
 
             if p_name in SENSITIVITY_PARAMS:
                 sensitivity_plots.append(plot_item)
@@ -242,53 +266,136 @@ def generate_reports(folder_name: str, baseline_dict: dict):
         df_raw.to_parquet(paper_out_dir / f"{prefix}_stats.parquet", index=False)
 
         fig = make_subplots(
-            rows=1, cols=2,
+            rows=1,
+            cols=2,
             shared_yaxes=True,
             horizontal_spacing=0.03,
-            subplot_titles=["Panel A: In-Sample Performance", "Panel B: Out-of-Sample Performance"]
+            subplot_titles=[
+                "Panel A: In-Sample Performance",
+                "Panel B: Out-of-Sample Performance",
+            ],
         )
 
         for p in plots:
-            fig.add_trace(go.Scatter(
-                x=p["series_is"].index, y=p["series_is"].values,
-                mode="lines", line=dict(color=variant_color, width=1.5), opacity=0.3,
-                name=p["name"], legendgroup=p["name"],
-                hovertemplate=f"<b>{p['name']} (IS)</b><br>Return: %{{y:.2%}}<extra></extra>",
-            ), row=1, col=1)
+            fig.add_trace(
+                go.Scatter(
+                    x=p["series_is"].index,
+                    y=p["series_is"].values,
+                    mode="lines",
+                    line=dict(color=variant_color, width=1.5),
+                    opacity=0.3,
+                    name=p["name"],
+                    legendgroup=p["name"],
+                    hovertemplate=f"<b>{p['name']} (IS)</b><br>Return: %{{y:.2%}}<extra></extra>",
+                ),
+                row=1,
+                col=1,
+            )
 
-            fig.add_trace(go.Scatter(
-                x=p["series_oos"].index, y=p["series_oos"].values,
-                mode="lines", line=dict(color=variant_color, width=1.5), opacity=0.3,
-                name=p["name"], legendgroup=p["name"], showlegend=False,
-                hovertemplate=f"<b>{p['name']} (OOS)</b><br>Return: %{{y:.2%}}<extra></extra>",
-            ), row=1, col=2)
+            fig.add_trace(
+                go.Scatter(
+                    x=p["series_oos"].index,
+                    y=p["series_oos"].values,
+                    mode="lines",
+                    line=dict(color=variant_color, width=1.5),
+                    opacity=0.3,
+                    name=p["name"],
+                    legendgroup=p["name"],
+                    showlegend=False,
+                    hovertemplate=f"<b>{p['name']} (OOS)</b><br>Return: %{{y:.2%}}<extra></extra>",
+                ),
+                row=1,
+                col=2,
+            )
 
-        fig.add_trace(go.Scatter(
-            x=base_is_series.index, y=base_is_series.values, mode="lines", line=dict(color="black", width=2.5),
-            name="Baseline Model", legendgroup="Baseline",
-            hovertemplate="<b>Baseline (IS)</b><br>Return: %{y:.2%}<extra></extra>",
-        ), row=1, col=1)
-
-        fig.add_trace(go.Scatter(
-            x=base_oos_series.index, y=base_oos_series.values, mode="lines", line=dict(color="black", width=2.5),
-            name="Baseline Model", legendgroup="Baseline", showlegend=False,
-            hovertemplate="<b>Baseline (OOS)</b><br>Return: %{y:.2%}<extra></extra>",
-        ), row=1, col=2)
-
-        fig.update_layout(
-            template="plotly_white", font=dict(family=FONT_SANS, color="black"),
-            margin=dict(t=50, b=50, l=70, r=20),
-            legend=dict(orientation="h", yanchor="bottom", y=1.08, xanchor="center", x=0.5, font=dict(size=11)),
-            width=1000, height=450,
+        fig.add_trace(
+            go.Scatter(
+                x=base_is_series.index,
+                y=base_is_series.values,
+                mode="lines",
+                line=dict(color="black", width=2.5),
+                name="Baseline Model",
+                legendgroup="Baseline",
+                hovertemplate="<b>Baseline (IS)</b><br>Return: %{y:.2%}<extra></extra>",
+            ),
+            row=1,
+            col=1,
         )
 
-        fig.update_yaxes(title_text="Cumulative Return", tickformat=".0%", showline=True, linewidth=1,
-                         linecolor="black", gridcolor="#e5e5e5", mirror=True, zeroline=True, zerolinecolor="black",
-                         row=1, col=1)
-        fig.update_yaxes(tickformat=".0%", showline=True, linewidth=1, linecolor="black", gridcolor="#e5e5e5",
-                         mirror=True, zeroline=True, zerolinecolor="black", row=1, col=2)
-        fig.update_xaxes(showline=True, linewidth=1, linecolor="black", gridcolor="#e5e5e5", mirror=True, row=1, col=1)
-        fig.update_xaxes(showline=True, linewidth=1, linecolor="black", gridcolor="#e5e5e5", mirror=True, row=1, col=2)
+        fig.add_trace(
+            go.Scatter(
+                x=base_oos_series.index,
+                y=base_oos_series.values,
+                mode="lines",
+                line=dict(color="black", width=2.5),
+                name="Baseline Model",
+                legendgroup="Baseline",
+                showlegend=False,
+                hovertemplate="<b>Baseline (OOS)</b><br>Return: %{y:.2%}<extra></extra>",
+            ),
+            row=1,
+            col=2,
+        )
+
+        fig.update_layout(
+            template="plotly_white",
+            font=dict(family=FONT_SANS, color="black"),
+            margin=dict(t=50, b=50, l=70, r=20),
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.08,
+                xanchor="center",
+                x=0.5,
+                font=dict(size=11),
+            ),
+            width=1000,
+            height=450,
+        )
+
+        fig.update_yaxes(
+            title_text="Cumulative Return",
+            tickformat=".0%",
+            showline=True,
+            linewidth=1,
+            linecolor="black",
+            gridcolor="#e5e5e5",
+            mirror=True,
+            zeroline=True,
+            zerolinecolor="black",
+            row=1,
+            col=1,
+        )
+        fig.update_yaxes(
+            tickformat=".0%",
+            showline=True,
+            linewidth=1,
+            linecolor="black",
+            gridcolor="#e5e5e5",
+            mirror=True,
+            zeroline=True,
+            zerolinecolor="black",
+            row=1,
+            col=2,
+        )
+        fig.update_xaxes(
+            showline=True,
+            linewidth=1,
+            linecolor="black",
+            gridcolor="#e5e5e5",
+            mirror=True,
+            row=1,
+            col=1,
+        )
+        fig.update_xaxes(
+            showline=True,
+            linewidth=1,
+            linecolor="black",
+            gridcolor="#e5e5e5",
+            mirror=True,
+            row=1,
+            col=2,
+        )
 
         try:
             pdf_path = pdf_dir / f"{prefix}_spaghetti_subplots.pdf"
@@ -304,15 +411,22 @@ def generate_reports(folder_name: str, baseline_dict: dict):
             for metric in formatted_df.columns:
                 val = df_tab.loc[variation, metric]
                 if pd.notnull(val):
-                    formatted_df.loc[variation, metric] = FORMAT_MAP.get(metric, "{:.2f}").format(val)
+                    formatted_df.loc[variation, metric] = FORMAT_MAP.get(
+                        metric, "{:.2f}"
+                    ).format(val)
                 else:
                     formatted_df.loc[variation, metric] = "-"
 
         with open(paper_out_dir / f"{prefix}_table.tex", "w") as f:
-            f.write(formatted_df.to_latex(column_format="l" + "r" * len(formatted_df.columns), escape=False))
+            f.write(
+                formatted_df.to_latex(
+                    column_format="l" + "r" * len(formatted_df.columns), escape=False
+                )
+            )
 
-        main_table_html = formatted_df.reset_index().to_html(classes="elsevier-table", border=0, index=False,
-                                                             justify="center")
+        main_table_html = formatted_df.reset_index().to_html(
+            classes="elsevier-table", border=0, index=False, justify="center"
+        )
 
         css_style = f"""
         <style>
@@ -341,12 +455,26 @@ def generate_reports(folder_name: str, baseline_dict: dict):
         </body></html>
         """
 
-        with open(paper_out_dir / f"{prefix}_interactive_report.html", "w", encoding="utf-8") as f:
+        with open(
+            paper_out_dir / f"{prefix}_interactive_report.html", "w", encoding="utf-8"
+        ) as f:
             f.write(report_html)
         logger.info(f"Generated HTML report: {prefix}_interactive_report.html")
 
-    save_combined_report(sensitivity_results, sensitivity_plots, "sensitivity", "Sensitivity Analysis", "#1f77b4")
-    save_combined_report(assumptions_results, mechanism_plots, "mechanism", "Assumptions Verification", "#d62728")
+    save_combined_report(
+        sensitivity_results,
+        sensitivity_plots,
+        "sensitivity",
+        "Sensitivity Analysis",
+        "#1f77b4",
+    )
+    save_combined_report(
+        assumptions_results,
+        mechanism_plots,
+        "mechanism",
+        "Assumptions Verification",
+        "#d62728",
+    )
 
 
 if __name__ == "__main__":

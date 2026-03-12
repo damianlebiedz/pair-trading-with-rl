@@ -63,7 +63,7 @@ RENAME_MAP = {
 
 
 def load_strategy_data(
-        base_dir: Path, strategy_name: str
+    base_dir: Path, strategy_name: str
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     strat_dir = base_dir / strategy_name
     if not strat_dir.exists():
@@ -76,7 +76,9 @@ def load_strategy_data(
     df_exec = pd.read_parquet(exec_files[0]) if exec_files else None
 
     stats_files = list(strat_dir.glob("stats_multi_pair_*.parquet"))
-    df_stats = pd.read_parquet(stats_files[0]).set_index("metric") if stats_files else None
+    df_stats = (
+        pd.read_parquet(stats_files[0]).set_index("metric") if stats_files else None
+    )
 
     return df_returns, df_exec, df_stats
 
@@ -89,7 +91,9 @@ def get_run_config(base_dir: Path, strategy_name: str) -> dict:
     return {}
 
 
-def build_stitched_ewp(base_dir: Path, strategy_name: str, interval: Interval, assets_dict: dict) -> pd.DataFrame:
+def build_stitched_ewp(
+    base_dir: Path, strategy_name: str, interval: Interval, assets_dict: dict
+) -> pd.DataFrame:
     strat_dir = base_dir / strategy_name
 
     iter_dirs = sorted(
@@ -115,12 +119,16 @@ def build_stitched_ewp(base_dir: Path, strategy_name: str, interval: Interval, a
         iter_tickers = assets_dict.get(iter_num) or assets_dict.get(str(iter_num))
 
         if not iter_tickers:
-            logger.warning(f"Warning: Lack of tickers for {iter_num} in 'list_of_assets.json'")
+            logger.warning(
+                f"Warning: Lack of tickers for {iter_num} in 'list_of_assets.json'"
+            )
             continue
 
         ewp_period = load_ewp_benchmark(iter_tickers, start_date, end_date, interval)
 
-        col_name = "portfolio_pct" if "portfolio_pct" in ewp_period.columns else "ewp_pct"
+        col_name = (
+            "portfolio_pct" if "portfolio_pct" in ewp_period.columns else "ewp_pct"
+        )
         ewp_dfs.append(ewp_period[[col_name]])
 
     if not ewp_dfs:
@@ -192,10 +200,15 @@ def generate_comparison_report(strategies_map: dict):
         pnl_series = (df_ret["total_pnl"] - df_ret["total_fees"]) * LEVERAGE
         ret_series = pnl_series / initial_cash
 
-        fig.add_trace(go.Scatter(
-            x=ret_series.index, y=ret_series, mode="lines",
-            name=f"{label}", line=dict(color=colors[color_idx % len(colors)], width=2.0),
-        ))
+        fig.add_trace(
+            go.Scatter(
+                x=ret_series.index,
+                y=ret_series,
+                mode="lines",
+                name=f"{label}",
+                line=dict(color=colors[color_idx % len(colors)], width=2.0),
+            )
+        )
 
         if df_stats is not None:
             stats_dict[label] = df_stats["net"].reindex(SELECTED_METRICS)
@@ -217,10 +230,15 @@ def generate_comparison_report(strategies_map: dict):
 
         btc_ret = (btc_data[col_btc] / btc_data[col_btc].iloc[0]) - 1
 
-        fig.add_trace(go.Scatter(
-            x=btc_ret.index, y=btc_ret, mode="lines", name="BTC B&H",
-            line=dict(color="gray", width=1.5, dash="dash"),
-        ))
+        fig.add_trace(
+            go.Scatter(
+                x=btc_ret.index,
+                y=btc_ret,
+                mode="lines",
+                name="BTC B&H",
+                line=dict(color="gray", width=1.5, dash="dash"),
+            )
+        )
 
         df_btc = pd.DataFrame(index=btc_ret.index)
         df_btc["total_pnl"] = btc_ret * common_initial_cash
@@ -233,15 +251,22 @@ def generate_comparison_report(strategies_map: dict):
         logger.error(f"Error during BTC data loading: {e}")
 
     try:
-        ewp_data = build_stitched_ewp(results_dir, first_strategy_folder, Interval.H1, list_of_assets)
+        ewp_data = build_stitched_ewp(
+            results_dir, first_strategy_folder, Interval.H1, list_of_assets
+        )
 
         if ewp_data is not None:
             ewp_ret = ewp_data["ewp_return"]
 
-            fig.add_trace(go.Scatter(
-                x=ewp_ret.index, y=ewp_ret, mode="lines", name="EWP Portfolio",
-                line=dict(color="black", width=1.5)
-            ))
+            fig.add_trace(
+                go.Scatter(
+                    x=ewp_ret.index,
+                    y=ewp_ret,
+                    mode="lines",
+                    name="EWP Portfolio",
+                    line=dict(color="black", width=1.5),
+                )
+            )
 
             df_ewp = pd.DataFrame(index=ewp_ret.index)
             df_ewp["total_pnl"] = ewp_ret * common_initial_cash
@@ -256,15 +281,35 @@ def generate_comparison_report(strategies_map: dict):
         logger.error(f"Error during EWP data loading: {e}")
 
     fig.update_layout(
-        template="plotly_white", font=dict(family=FONT_SANS, color="black"),
+        template="plotly_white",
+        font=dict(family=FONT_SANS, color="black"),
         margin=dict(t=50, b=50, l=70, r=20),
-        legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="center", x=0.5, font=dict(size=12)),
-        width=900, height=450,
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.05,
+            xanchor="center",
+            x=0.5,
+            font=dict(size=12),
+        ),
+        width=900,
+        height=450,
     )
 
-    fig.update_yaxes(title="Cumulative Return", tickformat=".0%", showline=True, linewidth=1, linecolor="black",
-                     gridcolor="#e5e5e5", mirror=True, zeroline=True, zerolinecolor="black")
-    fig.update_xaxes(showline=True, linewidth=1, linecolor="black", gridcolor="#e5e5e5", mirror=True)
+    fig.update_yaxes(
+        title="Cumulative Return",
+        tickformat=".0%",
+        showline=True,
+        linewidth=1,
+        linecolor="black",
+        gridcolor="#e5e5e5",
+        mirror=True,
+        zeroline=True,
+        zerolinecolor="black",
+    )
+    fig.update_xaxes(
+        showline=True, linewidth=1, linecolor="black", gridcolor="#e5e5e5", mirror=True
+    )
 
     try:
         pdf_path = pdf_dir / "multi_strategy_comparison.pdf"
@@ -279,8 +324,15 @@ def generate_comparison_report(strategies_map: dict):
         for idx in df_stats.index:
             val = df_stats.loc[idx, col]
             if pd.notna(val):
-                if idx in ["CAGR", "Annual Volatility", "Max Drawdown", "Win Rate", "Avg Trade Return", "Avg Win",
-                           "Avg Loss"]:
+                if idx in [
+                    "CAGR",
+                    "Annual Volatility",
+                    "Max Drawdown",
+                    "Win Rate",
+                    "Avg Trade Return",
+                    "Avg Win",
+                    "Avg Loss",
+                ]:
                     df_stats.loc[idx, col] = f"{val:.2%}"
                 elif idx in ["Win Count", "Loss Count"]:
                     df_stats.loc[idx, col] = f"{int(val)}"
@@ -290,7 +342,11 @@ def generate_comparison_report(strategies_map: dict):
                 df_stats.loc[idx, col] = "-"
 
     with open(report_output_dir / "comparison_table.tex", "w") as f:
-        f.write(df_stats.to_latex(column_format="l" + "r" * len(df_stats.columns), escape=False))
+        f.write(
+            df_stats.to_latex(
+                column_format="l" + "r" * len(df_stats.columns), escape=False
+            )
+        )
 
     html_content = f"""
     <!DOCTYPE html>

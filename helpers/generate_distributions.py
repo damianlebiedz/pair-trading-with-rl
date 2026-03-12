@@ -22,7 +22,7 @@ SELECTED_METRICS = [
     "Avg Trade Duration",
     "Max Drawdown",
     "Sortino Ratio Median",
-    "TDA-Sortino"
+    "TDA-Sortino",
 ]
 
 RENAME_MAP = {
@@ -35,7 +35,7 @@ RENAME_MAP = {
     "Avg Trade Duration": "Avg Trade Duration",
     "Max Drawdown": "Max Drawdown",
     "Sortino Ratio Median": "Sortino Ratio Median",
-    "TDA-Sortino": "TDA-Sortino"
+    "TDA-Sortino": "TDA-Sortino",
 }
 
 FORMAT_MAP = {}
@@ -294,7 +294,11 @@ def generate_distributions():
                 return None
 
             row_data = {
-                "Run_ID": stats_file.parent.name if stats_file.parent.name.isdigit() else run_dir.name,
+                "Run_ID": (
+                    stats_file.parent.name
+                    if stats_file.parent.name.isdigit()
+                    else run_dir.name
+                ),
                 "Entry": entry,
                 "Exit": exit_t,
                 "SL": stop_loss,
@@ -304,7 +308,7 @@ def generate_distributions():
                 "Annual Volatility": get_metric("volatility_annual", "net"),
                 "Max Drawdown": get_metric("max_drawdown", "net"),
                 "Total Trades": int(get_metric("win_count", "net") or 0)
-                                + int(get_metric("lose_count", "net") or 0),
+                + int(get_metric("lose_count", "net") or 0),
                 "Avg Trade Duration": get_metric("avg_trade_duration", "net"),
                 "Sortino Ratio": get_metric("sortino_ratio_annual", "net"),
                 "Sortino Ratio Mean": get_metric("sortino_annual_mean", "net"),
@@ -333,20 +337,24 @@ def generate_distributions():
     for col in df_tex.columns:
         if col in FORMAT_MAP:
             fmt = FORMAT_MAP[col]
-            df_tex[col] = df_tex[col].apply(lambda x: fmt.format(x) if pd.notna(x) else "-")
+            df_tex[col] = df_tex[col].apply(
+                lambda x: fmt.format(x) if pd.notna(x) else "-"
+            )
         else:
             if pd.api.types.is_numeric_dtype(df_tex[col]):
-                df_tex[col] = df_tex[col].apply(lambda x: f"{x:.4f}" if pd.notna(x) else "-")
+                df_tex[col] = df_tex[col].apply(
+                    lambda x: f"{x:.4f}" if pd.notna(x) else "-"
+                )
 
     df_tex = df_tex.rename(columns=RENAME_MAP)
     tex_path = run_dir / "top_grid_search_results.tex"
 
     with open(tex_path, "w") as f:
-        f.write(df_tex.head(TOP_N_ROWS).to_latex(
-            index=False,
-            column_format="c" * len(df_tex.columns),
-            escape=False
-        ))
+        f.write(
+            df_tex.head(TOP_N_ROWS).to_latex(
+                index=False, column_format="c" * len(df_tex.columns), escape=False
+            )
+        )
     logger.info(f"Saved LaTeX table (Top {TOP_N_ROWS}): {tex_path}")
 
     cols_to_str = [

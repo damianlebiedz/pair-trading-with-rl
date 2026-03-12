@@ -401,11 +401,11 @@ def generate_and_fetch_pipeline(
 
     logger.info("Parquets downloaded successfully.")
 
-    # try:
-    #     shutil.rmtree(cache_dir)
-    #     logger.info("Deleted .cache folder.")
-    # except Exception as e:
-    #     logger.warning(f"Failed to delete .cache folder: {e}")
+    try:
+        shutil.rmtree(cache_dir)
+        logger.info("Deleted .cache folder.")
+    except Exception as e:
+        logger.warning(f"Failed to delete .cache folder: {e}")
 
     logger.info(f"Generating Markdown documentation: {md_out}")
     md_content = f"# Traded Assets Universe (Top {cfg.top_n})\n\n"
