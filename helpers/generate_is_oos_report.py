@@ -1,0 +1,355 @@
+import json
+import sys
+import yaml
+import pandas as pd
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+from pathlib import Path
+
+from modules.data_services.data_utils import load_btc_benchmark, load_ewp_benchmark
+from modules.performance.stats import calculate_stats
+from modules.core.enums import Interval
+from modules.utils.logger import get_logger
+
+logger = get_logger(__name__)
+
+STRATEGY = {
+    "Rolling Beta-Hedge": {
+        "IS": "winner_is",
+        "OOS": "winner_oos",
+    }
+}
+
+LEVERAGE = 10.0
+
+FONT_SANS = "Arial, sans-serif"
+FONT_SERIF = "Times New Roman, serif"
+
+current_file = Path(__file__).resolve()
+project_root = current_file.parent.parent
+sys.path.append(str(project_root))
+
+SELECTED_METRICS = [
+    "cagr",
+    "volatility_annual",
+    "max_drawdown",
+    "win_count",
+    "lose_count",
+    "win_rate",
+    "avg_win",
+    "avg_lose",
+    "avg_trade_return",
+    "avg_trade_duration",
+    "sharpe_ratio_annual",
+    "sortino_ratio_annual",
+    "calmar_ratio_annual",
+    "tda_sortino",
+]
+
+RENAME_MAP = {
+    "cagr": "CAGR",
+    "volatility_annual": "Annual Volatility",
+    "max_drawdown": "Max Drawdown",
+    "win_count": "Win Count",
+    "lose_count": "Loss Count",
+    "win_rate": "Win Rate",
+    "avg_win": "Avg Win",
+    "avg_lose": "Avg Lose",
+    "avg_trade_return": "Avg Trade Return",
+    "avg_trade_duration": "Avg Trade Duration",
+    "sharpe_ratio_annual": "Sharpe Ratio",
+    "sortino_ratio_annual": "Sortino Ratio",
+    "calmar_ratio_annual": "Calmar Ratio",
+    "tda_sortino": "TDA-Sortino",
+}
+
+
+def load_strategy_data(
+        base_dir: Path, strategy_name: str
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    strat_dir = base_dir / strategy_name
+    if not strat_dir.exists():
+        return None, None, None
+
+    returns_files = list(strat_dir.glob("returns_*.parquet"))
+    df_returns = pd.read_parquet(returns_files[0]) if returns_files else None
+
+    exec_files = list(strat_dir.glob("exec_logger_*.parquet"))
+    df_exec = pd.read_parquet(exec_files[0]) if exec_files else None
+
+    stats_files = list(strat_dir.glob("stats_multi_pair_*.parquet"))
+    df_stats = pd.read_parquet(stats_files[0]).set_index("metric") if stats_files else None
+
+    return df_returns, df_exec, df_stats
+
+
+def get_run_config(base_dir: Path, strategy_name: str) -> dict:
+    config_path = base_dir / strategy_name / ".hydra" / "config.yaml"
+    if config_path.exists():
+        with open(config_path, "r", encoding="utf-8") as f:
+            return yaml.safe_load(f)
+    return {}
+
+
+def build_stitched_ewp(base_dir: Path, strategy_name: str, interval: Interval, assets_dict: dict) -> pd.DataFrame:
+    strat_dir = base_dir / strategy_name
+
+    iter_dirs = sorted(
+        [d for d in strat_dir.iterdir() if d.is_dir() and d.name.isdigit()],
+        key=lambda x: int(x.name),
+    )
+
+    ewp_dfs = []
+
+    for d in iter_dirs:
+        returns_files = list(d.glob("returns_*.parquet"))
+        if not returns_files:
+            continue
+
+        df = pd.read_parquet(returns_files[0])
+        if df.empty:
+            continue
+
+        start_date = df.index[0].strftime("%Y-%m-%d")
+        end_date = df.index[-1].strftime("%Y-%m-%d")
+        iter_num = int(d.name)
+
+        iter_tickers = assets_dict.get(iter_num) or assets_dict.get(str(iter_num))
+
+        if not iter_tickers:
+            logger.warning(f"Warning: Lack of tickers for {iter_num} in 'list_of_assets.json'")
+            continue
+
+        ewp_period = load_ewp_benchmark(iter_tickers, start_date, end_date, interval)
+
+        col_name = "portfolio_pct" if "portfolio_pct" in ewp_period.columns else "ewp_pct"
+        ewp_dfs.append(ewp_period[[col_name]])
+
+    if not ewp_dfs:
+        return None
+
+    final_ewp = pd.concat(ewp_dfs).sort_index()
+    final_ewp = final_ewp[~final_ewp.index.duplicated(keep="first")]
+
+    col_name = "portfolio_pct" if "portfolio_pct" in final_ewp.columns else "ewp_pct"
+    final_ewp["ewp_return"] = (1 + final_ewp[col_name]).cumprod() - 1
+
+    return final_ewp
+
+
+def generate_academic_report(strategies_map: dict):
+    results_dir = project_root / "results"
+
+    report_output_dir = results_dir / "final_paper_is_oos"
+    pdf_dir = report_output_dir / "pdfs"
+    report_output_dir.mkdir(parents=True, exist_ok=True)
+    pdf_dir.mkdir(parents=True, exist_ok=True)
+
+    assets_file = project_root / "config" / "list_of_assets.json"
+    list_of_assets = {}
+    if assets_file.exists():
+        with open(assets_file, "r", encoding="utf-8") as f:
+            list_of_assets = json.load(f)
+    else:
+        logger.error(f"'list_of_assets.json' not found: {assets_file}")
+
+    for label, folders in strategies_map.items():
+        logger.info(f"Generating report for: {label}")
+
+        run_config = get_run_config(results_dir, folders.get("OOS"))
+        market_cfg = run_config.get("market", {})
+
+        initial_cash = float(market_cfg.get("initial_cash"))
+        fee_rate = float(market_cfg.get("fee_rate"))
+        risk_free_rate = float(market_cfg.get("risk_free_rate_annual"))
+
+        logger.info(
+            f"Loaded config -> Initial Capital: {initial_cash}, Fee Rate: {fee_rate * 100}%, Risk Free Rate: {risk_free_rate}"
+        )
+
+        df_ret_is, df_exec_is, df_stats_is = load_strategy_data(results_dir, folders.get("IS"))
+        df_ret_oos, df_exec_oos, df_stats_oos = load_strategy_data(results_dir, folders.get("OOS"))
+
+        if df_ret_is is None or df_ret_oos is None:
+            logger.warning(f"Data not found for IS/OOS ({label}). Skipping...")
+            continue
+
+        split_date = df_ret_oos.index[0]
+        full_start = df_ret_is.index[0].strftime("%Y-%m-%d")
+        full_end = df_ret_oos.index[-1].strftime("%Y-%m-%d")
+
+        stats_dict = {}
+
+        is_pnl = (df_ret_is["total_pnl"] - df_ret_is["total_fees"]) * LEVERAGE
+        is_ret = is_pnl / initial_cash
+        is_ret = is_ret - is_ret.iloc[0]
+
+        oos_pnl = (df_ret_oos["total_pnl"] - df_ret_oos["total_fees"]) * LEVERAGE
+        oos_ret = oos_pnl / initial_cash
+        oos_ret = oos_ret - oos_ret.iloc[0]
+
+        if df_stats_is is not None:
+            stats_dict["Baseline (In-Sample)"] = df_stats_is["net"].reindex(SELECTED_METRICS)
+
+        if df_stats_oos is not None:
+            stats_dict["Baseline (Out-of-Sample)"] = df_stats_oos["net"].reindex(SELECTED_METRICS)
+
+        fig = make_subplots(
+            rows=1, cols=2,
+            shared_yaxes=True,
+            horizontal_spacing=0.03,
+            subplot_titles=["Panel A: In-Sample Performance", "Panel B: Out-of-Sample Performance"]
+        )
+
+        fig.add_trace(go.Scatter(
+            x=is_ret.index, y=is_ret, mode="lines",
+            name=f"Baseline Model", legendgroup="Baseline", line=dict(color="#1f77b4", width=2.0),
+            hovertemplate="<b>Baseline (IS)</b><br>Return: %{y:.2%}<extra></extra>"
+        ), row=1, col=1)
+
+        fig.add_trace(go.Scatter(
+            x=oos_ret.index, y=oos_ret, mode="lines",
+            name=f"Baseline Model", legendgroup="Baseline", line=dict(color="#1f77b4", width=2.0), showlegend=False,
+            hovertemplate="<b>Baseline (OOS)</b><br>Return: %{y:.2%}<extra></extra>"
+        ), row=1, col=2)
+
+        empty_ex = pd.DataFrame(columns=["position", "pnl", "fees", "entry_equity"])
+
+        try:
+            btc_is = load_btc_benchmark(full_start, split_date.strftime("%Y-%m-%d"), Interval.H1)
+            btc_oos = load_btc_benchmark(split_date.strftime("%Y-%m-%d"), full_end, Interval.H1)
+
+            col_btc_is = "close" if "close" in btc_is.columns else btc_is.columns[0]
+            col_btc_oos = "close" if "close" in btc_oos.columns else btc_oos.columns[0]
+
+            btc_is_ret = (btc_is[col_btc_is] / btc_is[col_btc_is].iloc[0]) - 1
+            btc_oos_ret = (btc_oos[col_btc_oos] / btc_oos[col_btc_oos].iloc[0]) - 1
+
+            fig.add_trace(go.Scatter(
+                x=btc_is_ret.index, y=btc_is_ret, mode="lines", name="BTC B&H",
+                legendgroup="BTC", line=dict(color="gray", width=1.5, dash="dash"),
+            ), row=1, col=1)
+
+            fig.add_trace(go.Scatter(
+                x=btc_oos_ret.index, y=btc_oos_ret, mode="lines",
+                name="BTC B&H", legendgroup="BTC", showlegend=False,
+                line=dict(color="gray", width=1.5, dash="dash"),
+            ), row=1, col=2)
+
+            df_btc = pd.DataFrame(index=btc_oos_ret.index)
+            df_btc["total_pnl"] = btc_oos_ret * initial_cash
+            df_btc["total_net_pnl"] = df_btc["total_pnl"]
+
+            stats_dict["BTC B&H (OOS)"] = calculate_stats(
+                df_btc, empty_ex, initial_cash, Interval.H1, risk_free_rate
+            )["net"].reindex(SELECTED_METRICS)
+        except Exception as e:
+            logger.error(f"Error during BTC data loading: {e}")
+
+        try:
+            ewp_data_is = build_stitched_ewp(results_dir, folders.get("IS"), Interval.H1, list_of_assets)
+            ewp_data_oos = build_stitched_ewp(results_dir, folders.get("OOS"), Interval.H1, list_of_assets)
+
+            if ewp_data_is is not None and ewp_data_oos is not None:
+                ewp_is_ret = ewp_data_is["ewp_return"] - ewp_data_is["ewp_return"].iloc[0]
+                ewp_oos_ret = ewp_data_oos["ewp_return"] - ewp_data_oos["ewp_return"].iloc[0]
+
+                fig.add_trace(go.Scatter(
+                    x=ewp_is_ret.index, y=ewp_is_ret, mode="lines", name="EWP Portfolio",
+                    legendgroup="EWP", line=dict(color="black", width=1.0, dash="dot")
+                ), row=1, col=1)
+
+                fig.add_trace(go.Scatter(
+                    x=ewp_oos_ret.index, y=ewp_oos_ret, mode="lines",
+                    name="EWP Portfolio", legendgroup="EWP", showlegend=False,
+                    line=dict(color="black", width=1.0, dash="dot")
+                ), row=1, col=2)
+
+                df_ewp = pd.DataFrame(index=ewp_oos_ret.index)
+                df_ewp["total_pnl"] = ewp_oos_ret * initial_cash
+                df_ewp["total_net_pnl"] = df_ewp["total_pnl"]
+                stats_dict["EWP Portfolio (OOS)"] = calculate_stats(
+                    df_ewp, empty_ex, initial_cash, Interval.H1, risk_free_rate
+                )["net"].reindex(SELECTED_METRICS)
+            else:
+                logger.error("EWP data not found)")
+        except Exception as e:
+            logger.error(f"Error during EWP data loading: {e}")
+
+        fig.update_layout(
+            template="plotly_white", font=dict(family=FONT_SANS, color="black"),
+            margin=dict(t=50, b=50, l=70, r=20),
+            legend=dict(orientation="h", yanchor="bottom", y=1.08, xanchor="center", x=0.5, font=dict(size=12)),
+            width=1000, height=450,
+        )
+
+        fig.update_yaxes(title_text="Cumulative Return", tickformat=".0%", showline=True, linewidth=1,
+                         linecolor="black", gridcolor="#e5e5e5", mirror=True, zeroline=True, zerolinecolor="black",
+                         row=1, col=1)
+        fig.update_yaxes(tickformat=".0%", showline=True, linewidth=1, linecolor="black", gridcolor="#e5e5e5",
+                         mirror=True, zeroline=True, zerolinecolor="black", row=1, col=2)
+        fig.update_xaxes(showline=True, linewidth=1, linecolor="black", gridcolor="#e5e5e5", mirror=True, row=1, col=1)
+        fig.update_xaxes(showline=True, linewidth=1, linecolor="black", gridcolor="#e5e5e5", mirror=True, row=1, col=2)
+
+        try:
+            pdf_path = pdf_dir / f"{label}_equity_subplots.pdf"
+            fig.write_image(str(pdf_path), format="pdf", engine="kaleido")
+            logger.info(f"PDF saved: {pdf_path}")
+        except Exception as e:
+            logger.error(f"Error during PDF export: {e}")
+
+        df_stats = pd.DataFrame(stats_dict).rename(index=RENAME_MAP)
+
+        for col in df_stats.columns:
+            for idx in df_stats.index:
+                val = df_stats.loc[idx, col]
+                if pd.notna(val):
+                    if idx in ["CAGR", "Annual Volatility", "Max Drawdown", "Win Rate", "Avg Trade Return", "Avg Win",
+                               "Avg Lose"]:
+                        df_stats.loc[idx, col] = f"{val:.2%}"
+                    elif idx in ["Win Count", "Loss Count"]:
+                        df_stats.loc[idx, col] = f"{int(val)}"
+                    else:
+                        df_stats.loc[idx, col] = f"{val:.4f}"
+                else:
+                    df_stats.loc[idx, col] = "-"
+
+        with open(report_output_dir / f"{label}_table.tex", "w") as f:
+            f.write(df_stats.to_latex(column_format="l" + "r" * len(df_stats.columns), escape=False))
+
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body {{ font-family: "{FONT_SERIF}"; padding: 30px; max-width: 1200px; margin: auto; background-color: #fcfcfc; }}
+                .report-container {{ background-color: white; padding: 30px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }}
+                h2, h3 {{ text-align: center; color: #333; }}
+                .elsevier-table {{ width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 11pt; }}
+                .elsevier-table thead tr {{ border-top: 2px solid black; border-bottom: 1px solid black; }}
+                .elsevier-table th, .elsevier-table td {{ padding: 8px; text-align: right; }}
+                .elsevier-table td:first-child, .elsevier-table th:first-child {{ text-align: left; font-weight: bold; width: 200px; }}
+                .elsevier-table tbody tr:last-child td {{ border-bottom: 2px solid black; }}
+                .elsevier-table tbody tr:hover {{ background-color: #f5f5f5; }}
+            </style>
+        </head>
+        <body>
+            <div class="report-container">
+                <h2>{label} - In-Sample vs Out-of-Sample</h2>
+                <div>{fig.to_html(full_html=False, include_plotlyjs='cdn')}</div>
+                <br><br>
+                <h3>Table 1: Performance Summary</h3>
+                {df_stats.to_html(classes="elsevier-table", border=0, justify="center")}
+            </div>
+        </body>
+        </html>
+        """
+        with open(
+                report_output_dir / f"{label}_report.html", "w", encoding="utf-8"
+        ) as f:
+            f.write(html_content)
+        logger.info("IS-OOS Pipeline completed successfully.")
+
+
+if __name__ == "__main__":
+    generate_academic_report(STRATEGY)
