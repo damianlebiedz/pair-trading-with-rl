@@ -372,7 +372,7 @@ def merge_multi_period_results(
         ]
     ).set_index("metric")
 
-    new_stats = new_stats.dropna(how='all')
+    new_stats = new_stats.dropna(how="all")
     if not new_stats.empty:
         stats = pd.concat([stats, new_stats])
 
@@ -385,7 +385,7 @@ def merge_multi_period_results(
         [{"metric": "tda_sortino", "net": tda_net, "gross": tda_gross}]
     ).set_index("metric")
 
-    tda_stats_df = tda_stats_df.dropna(how='all')
+    tda_stats_df = tda_stats_df.dropna(how="all")
     if not tda_stats_df.empty:
         stats = pd.concat([stats, tda_stats_df])
 
