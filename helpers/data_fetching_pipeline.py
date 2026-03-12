@@ -279,13 +279,22 @@ def generate_and_fetch_pipeline(
             monthly_volumes.keys(), key=lambda x: monthly_volumes[x], reverse=True
         )
 
-        accepted_assets = []
-        expected_index = pd.date_range(
+        logger.info("Validating the completeness of the data found...")
+
+        expected_formation_index = pd.date_range(
+            start=vol_start, end=vol_end, freq=interval, inclusive="left"
+        )
+        expected_formation_hours = len(expected_formation_index)
+
+        expected_full_index = pd.date_range(
             start=vol_start, end=data_end, freq=interval, inclusive="left"
         )
-        expected_hours = len(expected_index)
+        expected_full_hours = len(expected_full_index)
 
-        logger.info("Validating the completeness of the data found...")
+        logger.info("Validating data completeness (must survive formation window)...")
+
+        accepted_assets = []
+        broken_assets = []
 
         for sym in sorted_symbols:
             if len(accepted_assets) >= top_n:
@@ -299,12 +308,23 @@ def generate_and_fetch_pipeline(
 
             df_interval = df_interval.drop_duplicates(subset=["open_time"])
 
-            if len(df_interval) == expected_hours:
+            df_formation = df_interval[df_interval["open_time"] < vol_end]
+
+            if len(df_formation) == expected_formation_hours:
                 accepted_assets.append(sym)
-                logger.debug(f"  [+] Accepted: {sym} ({len(accepted_assets)}/{top_n})")
+                if len(df_interval) < expected_full_hours:
+                    broken_assets.append(sym)
+                    logger.debug(
+                        f"  [+] Accepted (but dies in test): {sym} ({len(accepted_assets)}/{top_n})"
+                    )
+                else:
+                    logger.debug(
+                        f"  [+] Accepted: {sym} ({len(accepted_assets)}/{top_n})"
+                    )
             else:
+                missing = expected_formation_hours - len(df_formation)
                 logger.debug(
-                    f"  [-] Rejected: {sym} (missing {expected_hours - len(df_interval)}h)"
+                    f"  [-] Rejected: {sym} (missing {missing}h in formation window)"
                 )
 
         if len(accepted_assets) < top_n:
@@ -313,7 +333,7 @@ def generate_and_fetch_pipeline(
             )
         else:
             logger.info(
-                f"Found complete data for {len(accepted_assets)}/{top_n} assets ({month_key}) in iteration {i + 1}/{cfg.iterations}"
+                f"Found complete data for {len(accepted_assets)}/{top_n} assets. {len(broken_assets)} die during the test window."
             )
 
         universes[month_key] = {
@@ -323,6 +343,7 @@ def generate_and_fetch_pipeline(
             "data_fetch_end": data_end.strftime("%Y-%m-%d %H:%M:%S"),
             "requested_count": top_n,
             "found_count": len(accepted_assets),
+            "broken_in_test": broken_assets,
             "is_complete": len(accepted_assets) == top_n,
             "assets": accepted_assets,
         }
@@ -343,6 +364,9 @@ def generate_and_fetch_pipeline(
 
     for sym, ranges in symbol_ranges.items():
         sym_dfs = []
+        global_min_dt = min([r[0] for r in ranges])
+        global_max_dt = max([r[1] for r in ranges])
+
         for s_dt, e_dt in ranges:
             df_part = fetch_data_for_period(sym, interval, s_dt, e_dt, cache_dir)
             sym_dfs.append(df_part)
@@ -352,11 +376,21 @@ def generate_and_fetch_pipeline(
             "open_time"
         )
 
+        full_index = pd.date_range(
+            start=global_min_dt, end=global_max_dt, freq=interval, inclusive="left"
+        )
+        final_df = (
+            final_df.set_index("open_time")
+            .reindex(full_index)
+            .rename_axis("open_time")
+            .reset_index()
+        )
+
         num_cols = ["open", "high", "low", "close", "volume", "quote_asset_volume"]
         final_df[num_cols] = final_df[num_cols].astype(float)
 
-        file_start_str = final_df["open_time"].min().strftime("%Y%m%d")
-        file_end_str = final_df["open_time"].max().strftime("%Y%m%d")
+        file_start_str = global_min_dt.strftime("%Y%m%d")
+        file_end_str = global_max_dt.strftime("%Y%m%d")
 
         for old_file in list(data_dir.glob(f"{sym}_{interval}_*.parquet")):
             old_file.unlink()
@@ -392,13 +426,17 @@ def generate_and_fetch_pipeline(
 
         found = u_data.get("found_count", len(assets))
         req = u_data.get("requested_count", cfg.top_n)
+        broken = u_data.get("broken_in_test", [])
 
         md_content += f"### Iteration {i + 1} (Key: {m_key})\n"
         md_content += f"- **Volume Period:** {v_start} to {v_end}\n"
         md_content += f"- **Full Data Window:** {v_start} to {d_end}\n\n"
 
         if found < req:
-            md_content += f"> **DATA WARNING:** Found complete historical data for only **{found}/{req}** assets in this window. The universe is smaller than requested due to exchange limitations or asset delistings.\n\n"
+            md_content += f"> **DATA WARNING:** Found complete historical data for only **{found}/{req}** assets in the formation window. Universe is smaller than requested.\n\n"
+
+        if broken:
+            md_content += f"> **SURVIVORSHIP NOTE:** Out of {found} accepted assets, **{len(broken)}** stopped trading during the test phase ({', '.join(broken)}). Their missing rows are padded with `NaN`s to ensure predictable DataFrame shapes.\n\n"
 
         md_content += f"**Final Assets:** {', '.join(assets)}\n\n"
 

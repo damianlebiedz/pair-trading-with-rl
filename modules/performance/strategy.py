@@ -20,6 +20,9 @@ from modules.performance.models import (
 )
 from modules.performance.stats import calculate_stats
 from modules.learning.models import AgentState
+from modules.utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class Strategy:
@@ -209,7 +212,10 @@ class Strategy:
         else:
             stop_loss_thr = None
 
+        total_net_pnl = 0.0
+        drawdown_pct = 0.0
         is_bankrupt = False
+        is_delisted = False
         results_buffer = []
 
         for i in range(test_start_pos, len(df)):
@@ -220,6 +226,68 @@ class Strategy:
             z_score = spread = mean = std = None
             market_z_score = market_spread = market_mean = market_std = None
             market_hurst = None
+
+            if pd.isna(price_x) or pd.isna(price_y):
+                if not is_delisted:
+                    is_delisted = True
+                    logger.info(
+                        f"[{idx}] Asset delisted/NaN price detected! Force closing position for {self.ticker_x}-{self.ticker_y}."
+                    )
+                    if position_state.position != 0:
+                        prev_px = df[x_col].iloc[i - 1]
+                        prev_py = df[y_col].iloc[i - 1]
+                        pnl, fees = TradeExecutor.call_close_position(
+                            fee_rate=self.fee_rate,
+                            position_state=position_state,
+                            price_x=prev_px,
+                            price_y=prev_py,
+                            exec_logger=exec_logger,
+                        )
+                        total_pnl += pnl
+                        total_fees += fees
+                        total_net_pnl = total_pnl - total_fees
+                        equity = initial_cash + total_net_pnl
+                        position_state.clear_position()
+
+                results_buffer.append(
+                    {
+                        "index": idx,
+                        "z_score": None,
+                        "spread": None,
+                        "mean": None,
+                        "std": None,
+                        "beta": (
+                            position_state.entry_beta or market_beta
+                            if not is_bankrupt
+                            else None
+                        ),
+                        "market_z_score": None,
+                        "market_spread": None,
+                        "market_mean": None,
+                        "market_std": None,
+                        "market_beta": None,
+                        "hurst": None,
+                        "window": z_score_window,
+                        "entry_thr": entry_threshold,
+                        "exit_thr": exit_threshold,
+                        "sl_thr": None,
+                        "sl_lock": 0,
+                        "q_x": 0,
+                        "q_y": 0,
+                        "w_x": None,
+                        "w_y": None,
+                        "signal": 0,
+                        "position": 0,
+                        "equity": equity,
+                        "total_pnl": total_pnl,
+                        "total_fees": total_fees,
+                        "total_net_pnl": total_net_pnl,
+                        "total_return": total_pnl / initial_cash,
+                        "total_net_return": total_net_pnl / initial_cash,
+                        "drawdown_pct": drawdown_pct,
+                    }
+                )
+                continue
 
             if is_bankrupt:
                 total_net_pnl = -initial_cash

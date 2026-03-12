@@ -87,9 +87,14 @@ def load_data(
         df = df.loc[~df.index.duplicated(keep="last")]
         df_subset = df[(df.index > start) & (df.index <= end)].copy()
 
-        if df_subset.empty or df_subset.isna().any().any():
+        if df_subset.empty:
             logger.warning(f"Rejected {t}: lack of data in {start} - {end}")
             continue
+
+        if df_subset.isna().any().any():
+            logger.warning(
+                f"{t} contains missing data (likely delisted) in window {start} - {end}. NaNs preserved."
+            )
 
         dfs.append(df_subset)
 
@@ -100,10 +105,9 @@ def load_data(
         raise e
 
     data = data[(data.index > start) & (data.index <= end)]
-    data = data.dropna(axis=1)
 
     if data.empty:
-        raise ValueError(f"All assets was rejected ({start} to {end})")
+        raise ValueError(f"All assets were rejected ({start} to {end})")
 
     return data
 
