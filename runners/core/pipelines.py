@@ -422,7 +422,7 @@ def merge_multi_period_results(
 
         final_ewp = pd.concat(ewp_dfs).sort_index()
         final_ewp = final_ewp[~final_ewp.index.duplicated(keep="first")]
-        final_ewp["ewp_return"] = (1 + final_ewp["portfolio_pct"]).cumprod() - 1
+        final_ewp["ewp_return"] = (1 + final_ewp["ewp_pct"]).cumprod() - 1
 
         plot_returns(
             result=final_result,
