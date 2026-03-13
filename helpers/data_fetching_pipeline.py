@@ -412,7 +412,7 @@ def generate_and_fetch_pipeline(
     md_content += (
         "**Methodology Note:** Universes generated from **Binance Data Vision (Futures USD-M)**. "
         "Assets selected based on highest average daily quote volume. Assets with any data gaps in the "
-        f"{interval} timeframe were automatically excluded and replaced by the next highest volume asset to ensure data integrity.\n\n"
+        f"{interval} timeframe IN THE PAIR SELECTION PERIOD were automatically excluded and replaced by the next highest volume asset to ensure data integrity.\n\n"
         "--- \n\n"
     )
 

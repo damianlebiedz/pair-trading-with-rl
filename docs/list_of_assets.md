@@ -1,6 +1,6 @@
 # Traded Assets Universe (Top 100)
 
-**Methodology Note:** Universes generated from **Binance Data Vision (Futures USD-M)**. Assets selected based on highest average daily quote volume. Assets with any data gaps in the 1h timeframe were automatically excluded and replaced by the next highest volume asset to ensure data integrity.
+**Methodology Note:** Universes generated from **Binance Data Vision (Futures USD-M)**. Assets selected based on highest average daily quote volume. Assets with any data gaps in the 1h timeframe IN THE PAIR SELECTION PERIOD were automatically excluded and replaced by the next highest volume asset to ensure data integrity.
 
 --- 
 
