@@ -70,9 +70,9 @@ def execute_testing(
     beta_test_start: str,
     test_start: str,
     test_end: str,
-    interval: str,
     plot: bool,
-    tickers: list[str],
+    btc_data: pd.DataFrame,
+    ewp_data: pd.DataFrame,
     subdir: str | None = None,
 ) -> StrategyResult:
 
@@ -114,17 +114,6 @@ def execute_testing(
 
     if plot:
         plot_zscore_pos(result, directory=output_dir, save=True)
-        btc_data = load_btc_benchmark(
-            test_start=test_start,
-            test_end=test_end,
-            interval=interval,
-        )
-        ewp_data = load_ewp_benchmark(
-            tickers=tickers,
-            test_start=test_start,
-            test_end=test_end,
-            interval=interval,
-        )
         plot_returns(
             result=result,
             btc_data=btc_data,
@@ -178,9 +167,9 @@ def merge_multi_pair_results(
     risk_free_rate_annual: float,
     test_start: str,
     test_end: str,
-    interval: str,
     plot: bool,
-    tickers: list[str],
+    btc_data: pd.DataFrame,
+    ewp_data: pd.DataFrame,
     prefix: str | None = "",
 ) -> StrategyResult:
     """Merges multiple StrategyResult objects into one aggregate result and saves it."""
@@ -228,17 +217,6 @@ def merge_multi_pair_results(
     )
 
     if plot:
-        btc_data = load_btc_benchmark(
-            test_start=final_result.start,
-            test_end=final_result.end,
-            interval=interval,
-        )
-        ewp_data = load_ewp_benchmark(
-            tickers=tickers,
-            test_start=final_result.start,
-            test_end=final_result.end,
-            interval=interval,
-        )
         plot_returns(
             result=final_result,
             btc_data=btc_data,
@@ -328,7 +306,7 @@ def merge_multi_period_results(
             ewp_period = load_ewp_benchmark(iter_tickers, res.start, res.end, interval)
 
             btc_dfs.append(btc_period[["BTC_pct"]])
-            ewp_dfs.append(ewp_period[["portfolio_pct"]])
+            ewp_dfs.append(ewp_period[["ewp_pct"]])
 
     if not results:
         logger.warning("No results collected for merging.")

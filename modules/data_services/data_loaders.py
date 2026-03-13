@@ -44,6 +44,7 @@ def load_single_ticker(
     df = pd.read_parquet(files[0])
 
     df["timestamp"] = df["close_time"].dt.ceil("s")
+    df = df.dropna(subset=["timestamp"])
 
     start_dt = pd.Timestamp(start)
     end_dt = pd.Timestamp(end)
@@ -64,9 +65,18 @@ def load_single_ticker(
             f"Available in file: {actual_first} to {actual_last}"
         )
 
-    df = df.set_index("timestamp")[["close"]].rename(columns={"close": ticker})
+    df = df.set_index("timestamp")
+    df = df.loc[~df.index.duplicated(keep="last")]
 
-    return df.loc[expected_first:end_dt]
+    freq = "h" if interval == Interval.H1 else "D"
+    full_index = pd.date_range(start=expected_first, end=end_dt, freq=freq)
+
+    df_reindexed = df.reindex(full_index)
+    df_reindexed.index.name = "timestamp"
+
+    df_final = df_reindexed[["close"]].rename(columns={"close": ticker})
+
+    return df_final
 
 
 def load_data(

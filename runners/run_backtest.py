@@ -12,7 +12,12 @@ from modules.core.config import Config
 from modules.learning.agents import RLAgentAdapter
 from modules.performance.models import StrategyResult
 from modules.data_services.data_loaders import load_data
-from modules.data_services.data_utils import save_strategy_result, save_dataframe
+from modules.data_services.data_utils import (
+    save_strategy_result,
+    save_dataframe,
+    load_btc_benchmark,
+    load_ewp_benchmark,
+)
 from modules.performance.strategy import Strategy
 from runners.core.pipelines import (
     execute_testing,
@@ -292,6 +297,21 @@ def run_backtest(cfg: DictConfig):
             f"--- Testing {len(selected_pairs_names)} Pairs (Test Window: {test_start} to {test_end}) ---"
         )
 
+        btc_data = None
+        ewp_data = None
+        if cfg.generate_plots:
+            btc_data = load_btc_benchmark(
+                test_start=test_start,
+                test_end=test_end,
+                interval=cfg.market.interval,
+            )
+            ewp_data = load_ewp_benchmark(
+                tickers=current_iteration_tickers,
+                test_start=test_start,
+                test_end=test_end,
+                interval=cfg.market.interval,
+            )
+
         for pair_name in selected_pairs_names:
             ticker_x, ticker_y = pair_name.split("-")
             bt = strategies_map[pair_name]
@@ -312,9 +332,9 @@ def run_backtest(cfg: DictConfig):
                 test_start=test_start,
                 test_end=test_end,
                 subdir="test",
-                interval=cfg.market.interval,
                 plot=cfg.generate_plots,
-                tickers=current_iteration_tickers,
+                btc_data=btc_data,
+                ewp_data=ewp_data,
             )
 
             test_results.append(result_test)
@@ -335,9 +355,9 @@ def run_backtest(cfg: DictConfig):
                 risk_free_rate_annual=cfg.market.risk_free_rate_annual,
                 test_start=test_start,
                 test_end=test_end,
-                interval=cfg.market.interval,
                 plot=cfg.generate_plots,
-                tickers=current_iteration_tickers,
+                btc_data=btc_data,
+                ewp_data=ewp_data,
             )
 
     if number_of_iterations > 1:

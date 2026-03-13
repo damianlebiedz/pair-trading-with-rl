@@ -128,9 +128,7 @@ def build_stitched_ewp(
 
         ewp_period = load_ewp_benchmark(iter_tickers, start_date, end_date, interval)
 
-        col_name = (
-            "portfolio_pct" if "portfolio_pct" in ewp_period.columns else "ewp_pct"
-        )
+        col_name = "ewp_pct"
         ewp_dfs.append(ewp_period[[col_name]])
 
     if not ewp_dfs:
@@ -139,7 +137,7 @@ def build_stitched_ewp(
     final_ewp = pd.concat(ewp_dfs).sort_index()
     final_ewp = final_ewp[~final_ewp.index.duplicated(keep="first")]
 
-    col_name = "portfolio_pct" if "portfolio_pct" in final_ewp.columns else "ewp_pct"
+    col_name = "ewp_pct"
     final_ewp["ewp_return"] = (1 + final_ewp[col_name]).cumprod() - 1
 
     return final_ewp
