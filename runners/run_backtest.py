@@ -304,12 +304,14 @@ def run_backtest(cfg: DictConfig):
                 test_start=test_start,
                 test_end=test_end,
                 interval=cfg.market.interval,
+                fee_rate=cfg.market.fee_rate,
             )
             ewp_data = load_ewp_benchmark(
                 tickers=current_iteration_tickers,
                 test_start=test_start,
                 test_end=test_end,
                 interval=cfg.market.interval,
+                fee_rate=cfg.market.fee_rate,
             )
 
         for pair_name in selected_pairs_names:

@@ -19,18 +19,23 @@ def load_single_ticker(
     ticker: str, start: str, end: str, interval: Interval, base_dir: Path
 ) -> pd.DataFrame:
     """
-    Load data for a single asset and return as a DataFrame.
+    Load data for a single asset and return as a DataFrame containing 'open' and 'close' prices.
 
     To strictly prevent look-ahead bias and support the "Signal on Close, Execute on Open" (SoC-EoO)
     execution model, this loader alters the default Binance timestamping logic.
 
-    - Raw Binance data labels candles by `open_time` (e.g., 00:00:00 for the 00:00-00:59 candle).
-    - This loader extracts the `close_time` (e.g., 00:59:59.999) and rounds it up to the nearest
-      second (e.g., 01:00:00) to act as the DataFrame's main index.
+    - Raw Binance data labels candles by `open_time` (e.g., 15:00:00 for the 15:00-15:59 candle).
+    - This loader extracts the `close_time` (e.g., 15:59:59.999) and rounds it up to the nearest
+      second (e.g., 16:00:00) to act as the DataFrame's main index.
 
-    Result: A row indexed at `01:00:00` contains the `close` price that was finalized exactly
-    at that precise moment (the culmination of the 00:00-01:00 trading hour). When the strategy
-    loop processes the `01:00:00` step, it is accessing strictly historical, fully-formed data.
+    Result: A row indexed at `16:00:00` represents the completed 15:00-16:00 period and contains:
+      - The `close` price finalized exactly at 15:59:59.999 (used for evaluating indicators/signals).
+      - The `open` price recorded at 15:00:00.000.
+
+    When the strategy loop processes the `16:00:00` step, it is accessing strictly historical data.
+    By shifting the open prices (`shift(-1)`), the strategy can accurately simulate executing
+    a market order at the exact open of the *next* candle (16:00:00.000) based on the signal
+    generated from the current candle's close.
     """
     if not base_dir.exists():
         raise FileNotFoundError(f"Directory not found: {base_dir}")
@@ -74,7 +79,9 @@ def load_single_ticker(
     df_reindexed = df.reindex(full_index)
     df_reindexed.index.name = "timestamp"
 
-    df_final = df_reindexed[["close"]].rename(columns={"close": ticker})
+    df_final = df_reindexed[["open", "close"]].rename(
+        columns={"close": ticker, "open": f"open_{ticker}"}
+    )
 
     return df_final
 

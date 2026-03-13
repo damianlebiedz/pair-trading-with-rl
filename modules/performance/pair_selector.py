@@ -70,6 +70,12 @@ class PairSelector:
         4. Final Selection: Returns the processed dataframe, allowing the downstream
            strategy to safely select the top_n viable candidates.
 
+        Methodological Notes:
+        - Closing Prices: All statistical tests (Cointegration, Correlation, Hurst, Beta)
+          are evaluated strictly on historical closing prices to eliminate intraday noise.
+        - Logarithmic Transformation: Price series are transformed into natural logarithms
+          prior to analysis so that the spread and hedge ratio reflect proportional relationships.
+
         Args:
             tickers (list[str]): List of asset tickers to evaluate.
             ps_start (str): Start date for the selection data window.

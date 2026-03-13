@@ -302,8 +302,19 @@ def merge_multi_period_results(
             iter_num = int(d.name)
             iter_tickers = tickers_dict[iter_num]
 
-            btc_period = load_btc_benchmark(res.start, res.end, interval)
-            ewp_period = load_ewp_benchmark(iter_tickers, res.start, res.end, interval)
+            btc_period = load_btc_benchmark(
+                test_start=res.start,
+                test_end=res.end,
+                interval=interval,
+                fee_rate=results[0].fee_rate,
+            )
+            ewp_period = load_ewp_benchmark(
+                tickers=iter_tickers,
+                test_start=res.start,
+                test_end=res.end,
+                interval=interval,
+                fee_rate=results[0].fee_rate,
+            )
 
             btc_dfs.append(btc_period[["BTC_pct"]])
             ewp_dfs.append(ewp_period[["ewp_pct"]])

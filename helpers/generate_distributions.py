@@ -9,7 +9,7 @@ from modules.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-FOLDER = "3x grid"
+FOLDER = "new 3x grid"
 TOP_N_ROWS = 10
 
 SELECTED_METRICS = [

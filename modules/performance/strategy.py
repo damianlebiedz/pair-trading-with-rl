@@ -118,6 +118,9 @@ class Strategy:
         source_x_col = f"{x_col}_{self.source}"
         source_y_col = f"{y_col}_{self.source}"
 
+        df[f"next_open_{x_col}"] = df[f"open_{x_col}"].shift(-1).ffill()
+        df[f"next_open_{y_col}"] = df[f"open_{y_col}"].shift(-1).ffill()
+
         offset = pd.Timedelta(self.interval.value)
 
         beta_start_dt = pd.to_datetime(beta_test_start)
@@ -221,6 +224,10 @@ class Strategy:
         for i in range(test_start_pos, len(df)):
             price_x = df[x_col].iloc[i]
             price_y = df[y_col].iloc[i]
+
+            exec_px = df[f"next_open_{x_col}"].iloc[i]
+            exec_py = df[f"next_open_{y_col}"].iloc[i]
+
             idx = df.index[i]
 
             z_score = spread = mean = std = None
@@ -234,15 +241,17 @@ class Strategy:
                         f"[{idx}] Asset delisted/NaN price detected! Force closing position for {self.ticker_x}-{self.ticker_y}."
                     )
                     if position_state.position != 0:
-                        prev_px = df[x_col].iloc[i - 1]
-                        prev_py = df[y_col].iloc[i - 1]
+                        prev_exec_px = df[f"next_open_{x_col}"].iloc[i - 1]
+                        prev_exec_py = df[f"next_open_{y_col}"].iloc[i - 1]
+
                         pnl, fees = TradeExecutor.call_close_position(
                             fee_rate=self.fee_rate,
                             position_state=position_state,
-                            price_x=prev_px,
-                            price_y=prev_py,
+                            price_x=prev_exec_px,
+                            price_y=prev_exec_py,
                             exec_logger=exec_logger,
                         )
+
                         total_pnl += pnl
                         total_fees += fees
                         total_net_pnl = total_pnl - total_fees
@@ -431,8 +440,8 @@ class Strategy:
                     position_state=position_state,
                     action=action,
                     stop_loss_thr=stop_loss_thr,
-                    price_x=price_x,
-                    price_y=price_y,
+                    price_x=exec_px,
+                    price_y=exec_py,
                     beta=beta,
                     equity=equity,
                     exec_logger=exec_logger,

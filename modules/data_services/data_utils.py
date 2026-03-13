@@ -55,7 +55,10 @@ def merge_by_pair(dfs: list[pd.DataFrame], keep_cols: list[list[str]]) -> pd.Dat
 
 
 def load_btc_benchmark(
-    test_start: str, test_end: str, interval: Interval
+    test_start: str,
+    test_end: str,
+    interval: Interval,
+    fee_rate: float,
 ) -> pd.DataFrame:
     """
     Generates a Bitcoin buy-and-hold benchmark.
@@ -63,7 +66,8 @@ def load_btc_benchmark(
     The benchmark represents a passive long-only investment in Bitcoin (BTC/USDT)
     over the test period. Returns are calculated from the BTC price series by
     computing period-to-period percentage changes and compounding them to obtain
-    the cumulative return (equity curve).
+    the cumulative return (equity curve). Transaction costs (fee_rate) are applied
+    at the entry (initial purchase) and exit (final liquidation) of the investment.
 
     This benchmark serves as a simple market reference for comparing the strategy's
     performance against the dominant asset in the cryptocurrency market.
@@ -74,15 +78,23 @@ def load_btc_benchmark(
         end=test_end,
         interval=interval,
     )
-    btc_data["BTC_pct"] = btc_data["BTCUSDT"].pct_change()
+
+    invested_data = (btc_data["BTCUSDT"] / btc_data["BTCUSDT"].iloc[0]) * (1 - fee_rate)
+    invested_data.iloc[-1] *= 1 - fee_rate
+
+    btc_data["BTC_return"] = invested_data - 1.0
+    btc_data["BTC_pct"] = invested_data.pct_change()
     btc_data.loc[btc_data.index[0], "BTC_pct"] = 0.0
-    btc_data["BTC_return"] = (1 + btc_data["BTC_pct"]).cumprod() - 1
 
     return btc_data
 
 
 def load_ewp_benchmark(
-    tickers: list[str], test_start: str, test_end: str, interval: Interval
+    tickers: list[str],
+    test_start: str,
+    test_end: str,
+    interval: Interval,
+    fee_rate: float,
 ) -> pd.DataFrame:
     """
     Generates an Equal-Weight Buy & Hold portfolio benchmark.
@@ -98,13 +110,13 @@ def load_ewp_benchmark(
     2. Buy & Hold Strategy: No rebalancing occurs after the initial allocation.
        Asset weights are allowed to drift naturally according to their relative
        performance.
-    3. Zero Transaction Costs: The benchmark represents a theoretical frictionless
-       portfolio and does not account for trading commissions, bid-ask spreads,
-       or execution slippage.
+    3. Transaction Costs: Commissions are deducted at portfolio creation (entry)
+       and upon final liquidation (exit).
     4. Delisting Handling: If an asset is delisted (missing data) during the
        test period, its last known valuation is frozen using forward-fill.
-       This simulates a forced liquidation at the last available price, with
-       the recovered capital held as uninvested cash for the remainder of the backtest.
+       This simulates a forced liquidation at the last available price (incurring
+       an exit fee), with the recovered capital held as uninvested cash for the
+       remainder of the backtest.
     """
     all_data = load_data(
         tickers=tickers,
@@ -112,13 +124,23 @@ def load_ewp_benchmark(
         end=test_end,
         interval=interval,
     )
-    normalized_data = all_data.div(all_data.iloc[0])
-    normalized_data = normalized_data.ffill()
-    portfolio_cum = normalized_data.mean(axis=1)
+
+    invested_data = all_data.div(all_data.iloc[0]) * (1 - fee_rate)
+
+    forward_filled = invested_data.ffill()
+    is_delisted = all_data.isna()
+
+    portfolio_values = invested_data.copy()
+    portfolio_values[is_delisted] = forward_filled[is_delisted] * (1 - fee_rate)
+
+    last_idx = portfolio_values.index[-1]
+    active_assets = ~is_delisted.loc[last_idx]
+    portfolio_values.loc[last_idx, active_assets] *= 1 - fee_rate
+
+    portfolio_cum = portfolio_values.mean(axis=1)
 
     benchmark = pd.DataFrame(index=all_data.index)
-    benchmark["ewp_return"] = portfolio_cum - 1
-
+    benchmark["ewp_return"] = portfolio_cum - 1.0
     benchmark["ewp_pct"] = portfolio_cum.pct_change()
     benchmark.loc[benchmark.index[0], "ewp_pct"] = 0.0
 
