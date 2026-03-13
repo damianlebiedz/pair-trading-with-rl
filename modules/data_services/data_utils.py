@@ -101,6 +101,10 @@ def load_ewp_benchmark(
     3. Zero Transaction Costs: The benchmark represents a theoretical frictionless
        portfolio and does not account for trading commissions, bid-ask spreads,
        or execution slippage.
+    4. Delisting Handling: If an asset is delisted (missing data) during the
+       test period, its last known valuation is frozen using forward-fill.
+       This simulates a forced liquidation at the last available price, with
+       the recovered capital held as uninvested cash for the remainder of the backtest.
     """
     all_data = load_data(
         tickers=tickers,
@@ -108,7 +112,9 @@ def load_ewp_benchmark(
         end=test_end,
         interval=interval,
     )
-    portfolio_cum = all_data.div(all_data.iloc[0]).mean(axis=1)
+    normalized_data = all_data.div(all_data.iloc[0])
+    normalized_data = normalized_data.ffill()
+    portfolio_cum = normalized_data.mean(axis=1)
 
     benchmark = pd.DataFrame(index=all_data.index)
     benchmark["ewp_return"] = portfolio_cum - 1
