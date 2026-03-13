@@ -8,8 +8,8 @@ specifically for the USD-M Futures market.
 Key Features & Design Principles:
 1. Zero Survivorship Bias: Retrieves the complete list of assets from the S3 archive,
    including delisted or bankrupt projects.
-2. Strict Data Integrity: Rejects assets with missing data points (e.g., hourly gaps),
-   automatically replacing them with the next most liquid market.
+2. Strict Data Integrity: Rejects assets with missing data points (e.g., hourly gaps)
+   in the Pair Selection period, automatically replacing them with the next most liquid market.
 3. Fault Tolerance & Local Caching: Utilizes a local disk cache (.cache) storing data
    in Parquet format. Each month/asset is downloaded exactly once. In case of interruption,
    the script resumes instantly without redownloading.
