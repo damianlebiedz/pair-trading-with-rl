@@ -365,27 +365,21 @@ def merge_multi_period_results(
         else None
     )
 
-    new_stats = pd.DataFrame(
-        [
-            {"metric": "sortino_annual_mean", "net": net_mean, "gross": gross_mean},
-            {"metric": "sortino_annual_median", "net": net_med, "gross": gross_med},
-        ]
-    ).set_index("metric")
-
-    new_stats = new_stats.astype(float)
-    stats = pd.concat([stats, new_stats])
+    stats.loc["sortino_annual_mean"] = pd.Series(
+        {"net": net_mean, "gross": gross_mean}, dtype=float
+    )
+    stats.loc["sortino_annual_median"] = pd.Series(
+        {"net": net_med, "gross": gross_med}, dtype=float
+    )
 
     tda_evaluator = TDASortino(drawdown_penalty_lambda=10.0)
 
     tda_net = tda_evaluator.calculate(stats, metric_type="net")
     tda_gross = tda_evaluator.calculate(stats, metric_type="gross")
 
-    tda_stats_df = pd.DataFrame(
-        [{"metric": "tda_sortino", "net": tda_net, "gross": tda_gross}]
-    ).set_index("metric")
-
-    tda_stats_df = tda_stats_df.astype(float)
-    stats = pd.concat([stats, tda_stats_df])
+    stats.loc["tda_sortino"] = pd.Series(
+        {"net": tda_net, "gross": tda_gross}, dtype=float
+    )
 
     final_result = StrategyResult(
         data=final_df,

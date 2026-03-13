@@ -9,7 +9,7 @@ from modules.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-FOLDER = "grid"
+FOLDER = "3x grid"
 TOP_N_ROWS = 10
 
 SELECTED_METRICS = [
@@ -88,6 +88,15 @@ def plot_distribution(
     df = df.copy()
     df[target_metric] = pd.to_numeric(df[target_metric], errors="coerce")
 
+    for param in valid_params:
+        df[f"{param}_str"] = (
+            df[param]
+            .astype(str)
+            .replace({"nan": "None", "NaN": "None", "<NA>": "None"})
+        )
+
+    df_valid = df.dropna(subset=[target_metric]).copy()
+
     font_family = "Arial, sans-serif"
     pdf_width = 380
     pdf_height = 320
@@ -96,24 +105,21 @@ def plot_distribution(
         r = (i // cols) + 1
         c = (i % cols) + 1
 
-        df[f"{param}_str"] = (
-            df[param]
-            .astype(str)
-            .replace({"nan": "None", "NaN": "None", "<NA>": "None"})
-        )
+        counts_full = df[f"{param}_str"].value_counts()
+        unique_vals = sorted(counts_full.index, key=lambda x: (x.lower() == "none", x))
 
-        counts = df[f"{param}_str"].value_counts()
-        unique_vals = sorted(counts.index, key=lambda x: (x.lower() == "none", x))
-        max_count = counts.max() if not counts.empty else 1
+        counts_valid = df_valid[f"{param}_str"].value_counts()
+        max_obs = counts_valid.max() if not counts_valid.empty else 1
 
         ordered_x_labels = []
         traces = []
 
         for val in unique_vals:
-            subset = df[df[f"{param}_str"] == val]
-            n_obs = counts[val]
+            subset = df_valid[df_valid[f"{param}_str"] == val]
+            n_obs = len(subset)
 
-            box_width = 0.8 * math.sqrt(n_obs / max_count) if max_count > 0 else 0.8
+            box_width = 0.8 * math.sqrt(n_obs / max_obs) if max_obs > 0 else 0.8
+
             x_label = f"{val}<br>(N={n_obs})"
             ordered_x_labels.append(x_label)
 
@@ -122,6 +128,7 @@ def plot_distribution(
                 x=[x_label] * len(subset),
                 name=x_label,
                 width=box_width,
+                offsetgroup="1",
                 fillcolor="#E0E0E0",
                 line=dict(color="black", width=1.5),
                 marker=dict(color="black", size=5, symbol="circle-open"),
@@ -130,16 +137,6 @@ def plot_distribution(
             )
             traces.append(trace)
             fig_html.add_trace(trace, row=r, col=c)
-
-        fig_html.add_hline(
-            y=0,
-            line_dash="dash",
-            line_color="black",
-            line_width=1,
-            opacity=0.7,
-            row=r,
-            col=c,
-        )
 
         fig_html.update_xaxes(
             categoryorder="array",
@@ -155,6 +152,7 @@ def plot_distribution(
             tickcolor="black",
             tickwidth=1,
             showgrid=False,
+            range=[-0.5, len(ordered_x_labels) - 0.5],
         )
         fig_html.update_yaxes(
             title_text=target_metric,
@@ -170,12 +168,12 @@ def plot_distribution(
             showgrid=True,
             gridcolor="#E5E5E5",
             gridwidth=1,
+            zeroline=True,
+            zerolinecolor="#E5E5E5",
+            zerolinewidth=1,
         )
 
         fig_pdf = go.Figure(data=traces)
-        fig_pdf.add_hline(
-            y=0, line_dash="dash", line_color="black", line_width=1, opacity=0.7
-        )
 
         fig_pdf.update_xaxes(
             categoryorder="array",
@@ -191,6 +189,7 @@ def plot_distribution(
             showgrid=False,
             title_font=dict(size=12, color="black"),
             tickfont=dict(size=10, color="black"),
+            range=[-0.5, len(ordered_x_labels) - 0.5],
         )
         fig_pdf.update_yaxes(
             title_text=target_metric,
@@ -206,6 +205,9 @@ def plot_distribution(
             gridwidth=1,
             title_font=dict(size=12, color="black"),
             tickfont=dict(size=10, color="black"),
+            zeroline=True,
+            zerolinecolor="#E5E5E5",
+            zerolinewidth=1,
         )
 
         fig_pdf.update_layout(
@@ -220,7 +222,7 @@ def plot_distribution(
 
         pdf_path = pdf_dir / f"{param}.pdf"
         try:
-            fig_pdf.write_image(str(pdf_path), format="pdf", engine="kaleido")
+            fig_pdf.write_image(str(pdf_path), format="pdf")
         except Exception as e:
             logger.error(
                 f"Failed to save PDF for {param}. Make sure 'kaleido' is installed. Error: {e}"
@@ -246,6 +248,8 @@ def generate_distributions():
     script_dir = Path(__file__).resolve().parent
     project_root = script_dir.parent
     run_dir = project_root / "results" / f"{FOLDER}"
+    output_dir = project_root / "results" / f"{FOLDER} distribution"
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     if not run_dir.exists():
         raise ValueError(f"Directory {run_dir} not found. Run analysis first.")
@@ -266,12 +270,20 @@ def generate_distributions():
     if not stats_files:
         raise ValueError(f"{stats_path} not found in {run_dir}")
 
-        # Iterujemy po wszystkich znalezionych plikach stats (dla Grid Search!)
     for stats_file in stats_files:
         try:
-            # Próba znalezienia powiązanego configu w tym samym folderze lub głównym
-            local_config = stats_file.parent / ".hydra" / "config.yaml"
-            cfg_to_load = local_config if local_config.exists() else config_path
+            cfg_local = stats_file.parent / ".hydra" / "config.yaml"
+            cfg_parent = stats_file.parents[1] / ".hydra" / "config.yaml"
+
+            if cfg_local.exists():
+                cfg_to_load = cfg_local
+            elif cfg_parent.exists():
+                cfg_to_load = cfg_parent
+            elif config_path.exists():
+                cfg_to_load = config_path
+            else:
+                logger.error(f"Config not found for {stats_file}")
+                continue
 
             with open(cfg_to_load, "r", encoding="utf-8") as f:
                 config = yaml.safe_load(f)
@@ -328,9 +340,6 @@ def generate_distributions():
         drop=True
     )
 
-    # ==============================================================
-    # GENEROWANIE TABELI LATEX (ZANIM ZMIENIMY TYPY NA STRINGI)
-    # ==============================================================
     available_metrics = [m for m in SELECTED_METRICS if m in df_summary.columns]
     df_tex = df_summary[available_metrics].copy()
 
@@ -347,7 +356,7 @@ def generate_distributions():
                 )
 
     df_tex = df_tex.rename(columns=RENAME_MAP)
-    tex_path = run_dir / "top_grid_search_results.tex"
+    tex_path = output_dir / "top_grid_search_results.tex"
 
     with open(tex_path, "w") as f:
         f.write(
@@ -368,11 +377,11 @@ def generate_distributions():
         if col in df_summary.columns:
             df_summary[col] = df_summary[col].astype(str)
 
-    output_parquet = run_dir / "summary_distribution.parquet"
+    output_parquet = output_dir / "summary_distribution.parquet"
     df_summary.to_parquet(output_parquet, engine="pyarrow", index=False)
     logger.info(f"Saved summary: {output_parquet}")
 
-    output_html = run_dir / "plots_distribution.html"
+    output_html = output_dir / "plots_distribution.html"
     plot_distribution(
         df_summary,
         title="TDA-Sortino Distribution",

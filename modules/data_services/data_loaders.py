@@ -57,7 +57,7 @@ def load_single_ticker(
     actual_first = df["timestamp"].min()
     actual_last = df["timestamp"].max()
 
-    if actual_first > expected_first or actual_last < end_dt:
+    if actual_first > expected_first:
         raise ValueError(
             f"Data for {ticker} not found! "
             f"Required: {expected_first} to {end_dt}. "
