@@ -69,7 +69,7 @@ class AsymmetricReward(RewardScheme):
     Formula:
         r_t = (PnL_t - Fees_t) / Equity_t
         R_t = r_t if r_t >= 0 else r_t * lambda
-        (where lambda = 2.0)
+        (where lambda = 1.5)
     """
 
     def reset(self):
@@ -91,7 +91,7 @@ class AsymmetricReward(RewardScheme):
 
         reward = (step_pnl - step_fees) / equity
         if reward < 0:
-            reward *= 2.0
+            reward *= 1.5
 
         return float(reward)
 
@@ -104,8 +104,8 @@ class CompositeReward(RewardScheme):
 
     Formula:
         r_t = (PnL_t - Fees_t) / Equity_t
-        R_t = (r_t if r_t >= 0 else r_t * 2.0) - (c * I[a_t != a_{t-1}])
-        (where c is a fraction of the standard fee rate, e.g., 0.2 * fee_rate)
+        R_t = (r_t if r_t >= 0 else r_t * 1.25) - (c * I[a_t != a_{t-1}])
+        (where c is a fraction of the standard fee rate, e.g., 0.1 * fee_rate)
     """
 
     def __init__(self):
@@ -131,12 +131,11 @@ class CompositeReward(RewardScheme):
 
         reward = (step_pnl - step_fees) / equity
 
-        # 1. Asymmetric Loss Aversion
         if reward < 0:
-            reward *= 2.0
+            reward *= 1.25
 
         if position != self.prev_position:
-            reward -= fee_rate * 0.2
+            reward -= fee_rate * 0.1
 
         self.prev_position = position
         return float(reward)
