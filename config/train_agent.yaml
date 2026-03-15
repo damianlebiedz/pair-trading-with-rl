@@ -13,4 +13,4 @@ rl:
   seed: 42
   verbose: 1
   freeze_std: true
-  time_decay_stop: false
+  time_decay_stop: true
