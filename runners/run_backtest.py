@@ -141,7 +141,7 @@ def run_backtest(cfg: DictConfig):
         ps_df = pd.read_parquet(ps_file)
         if not ps_df.empty:
             ps_df = ps_df.sort_values(by="score", ascending=False)
-            ps_df = ps_df.head(cfg.pair_selection.top_n)
+            ps_df = ps_df.head(cfg.pair_selection.top_n).reset_index(drop=True)
         logger.info("\n%s", ps_df.to_string())
         selected_pairs_names = ps_df["pair"].tolist()
 
