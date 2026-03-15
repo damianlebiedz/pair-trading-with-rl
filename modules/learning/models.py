@@ -11,7 +11,6 @@ class AgentState:
 
     Attributes:
         z_score (float): Z-Score based on entry beta-hedge and std (when in-position), equals to market_z_score when out-of-position.
-        market_beta (float): Market hedge-ratio between two assets, used to size positions.
         hurst (float): Hurst Exponent value.
         position (float): Current position in the strategy (-1, 0, 1 scaled by capital).
         signal (float): Position (signal) from non-RL backtest.
@@ -26,11 +25,10 @@ class AgentState:
     """
 
     z_score: float
-    market_beta: float
-    hurst: float
     position: float
-    signal: float
     norm_time_in_pos: float
+    signal: float
+    hurst: float
     drawdown_pct: float
     current_market_vol: float
 

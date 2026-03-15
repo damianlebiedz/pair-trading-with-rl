@@ -13,7 +13,7 @@ class TradeExecutor:
         signal: float,
         z_score: float | None,
         exit_threshold: float | None,
-    ) -> tuple[float, bool]:
+    ) -> tuple[float, bool, bool]:
         """
         Determines the target position based on strategy rules (Z-score, TP, SL).
         Used by heuristic strategies. RL agents skip this and provide 'action' directly.
@@ -22,32 +22,32 @@ class TradeExecutor:
         stop_loss_thr = position_state.sl_thr
 
         if z_score is None:
-            return 0.0, False
+            return 0.0, False, False
 
         if exit_threshold is None:
-            return signal, False
+            return signal, False, False
 
         if prev_position != 0:
             is_long = prev_position > 0
 
             if (is_long and signal < 0) or (not is_long and signal > 0):
-                return signal, False
+                return signal, False, False
 
             if is_long:
                 hit_tp = z_score >= -exit_threshold
                 hit_sl = stop_loss_thr is not None and z_score <= -stop_loss_thr
                 if hit_tp or hit_sl:
-                    return 0.0, hit_sl
+                    return 0.0, hit_sl, hit_tp
             else:
                 hit_tp = z_score <= exit_threshold
                 hit_sl = stop_loss_thr is not None and z_score >= stop_loss_thr
                 if hit_tp or hit_sl:
-                    return 0.0, hit_sl
+                    return 0.0, hit_sl, hit_tp
 
-            return prev_position, False
+            return prev_position, False, False
 
         else:
-            return signal, False
+            return signal, False, False
 
     @classmethod
     def execute(
@@ -62,13 +62,13 @@ class TradeExecutor:
         equity: float,
         exec_logger: ExecLogger | None,
         std: float | None,
-        sl_lock: bool,
     ) -> tuple[float, float]:
         """
         Mechanically aligns the portfolio with the target 'action'.
         Handles Open, Close, Hold, and Reversal logic.
         """
         prev_position = position_state.prev_position
+        sl_lock = position_state.sl_lock
 
         if action == prev_position:
             if prev_position != 0:

@@ -200,7 +200,6 @@ class PairsTradingEnv(gym.Env):
             equity=self.equity,
             exec_logger=None,
             std=exec_std,
-            sl_lock=False,
         )
 
         self.equity += step_pnl - step_fees
@@ -282,7 +281,6 @@ class PairsTradingEnv(gym.Env):
 
         window = int(row.get("window"))
         market_z_score = row.get("market_z_score")
-        market_beta = row.get("market_beta")
         hurst = row.get("hurst")
         market_vol = row.get("market_vol")
         signal = row.get("position")
@@ -324,7 +322,6 @@ class PairsTradingEnv(gym.Env):
 
         self.state = AgentState(
             z_score=float(z_score),
-            market_beta=market_beta,
             hurst=float(hurst),
             position=float(self.position_state.position),
             signal=float(signal),

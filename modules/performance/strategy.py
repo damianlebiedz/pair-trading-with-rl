@@ -407,31 +407,31 @@ class Strategy:
 
                 market_hurst = precalc_hurst_free[i]
 
-                action, sl_lock = TradeExecutor.decide(
+                action, hit_sl, hit_tp = TradeExecutor.decide(
                     position_state=position_state,
                     signal=signal,
                     z_score=z_score,
                     exit_threshold=exit_threshold,
                 )
-                if sl_lock and self.sl_lock:
+                if hit_sl and self.sl_lock:
                     position_state.sl_lock = True
 
                 if self.agent:
-                    if z_score is None or pd.isna(z_score):
+                    if z_score is None or pd.isna(z_score) or hit_sl or hit_tp:
                         action = 0.0
                     else:
                         current_state = AgentState(
                             z_score=z_score,
-                            market_beta=market_beta,
                             hurst=market_hurst,
                             position=position_state.position,
                             signal=action,
-                            norm_time_in_pos=position_state.time_in_pos
-                            / z_score_window,
+                            norm_time_in_pos=position_state.time_in_pos / z_score_window,
                             drawdown_pct=drawdown_pct,
                             current_market_vol=df["market_vol"].iloc[i],
                         )
-                        action = self.agent.get_action(current_state)
+                        raw_action = self.agent.get_action(current_state)
+                        mapping = {0: -1.0, 1: 0.0, 2: 1.0}
+                        action = mapping[int(raw_action)]
 
                 position_state.open_time = idx
 
@@ -446,7 +446,6 @@ class Strategy:
                     equity=equity,
                     exec_logger=exec_logger,
                     std=std,
-                    sl_lock=position_state.sl_lock,
                 )
 
                 prev_z_score = z_score
