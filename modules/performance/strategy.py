@@ -425,7 +425,8 @@ class Strategy:
                             hurst=market_hurst,
                             position=position_state.position,
                             signal=action,
-                            norm_time_in_pos=position_state.time_in_pos / z_score_window,
+                            norm_time_in_pos=position_state.time_in_pos
+                            / z_score_window,
                             drawdown_pct=drawdown_pct,
                             current_market_vol=df["market_vol"].iloc[i],
                         )
