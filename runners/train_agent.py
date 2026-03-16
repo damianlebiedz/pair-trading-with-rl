@@ -118,7 +118,12 @@ def train_agent(cfg: DictConfig):
     set_random_seed(seed)
     logger.info(f"Random seed set to: {seed}")
 
-    run_name = f"{cfg.rl_algo.algo_name.value}_{cfg.rl.obs_space_type.value}_{cfg.rl.reward.value}"
+    if cfg.rl.reward_lambda is not None:
+        reward_lambda_str = f"_{cfg.rl.reward_lambda}"
+    else:
+        reward_lambda_str = ""
+
+    run_name = f"{cfg.rl_algo.algo_name.value}_{cfg.rl.obs_space_type.value}_{cfg.rl.reward.value}{reward_lambda_str}"
 
     run = wandb.init(
         project=cfg.wandb.project,
@@ -247,11 +252,6 @@ def train_agent(cfg: DictConfig):
 
     checkpoint_dir = f"{model_dir}/{run.id}_checkpoints"
     os.makedirs(checkpoint_dir, exist_ok=True)
-
-    if cfg.rl.reward_lambda is not None:
-        reward_lambda_str = f"_{cfg.rl.reward_lambda}"
-    else:
-        reward_lambda_str = ""
 
     checkpoint_callback = CheckpointCallback(
         save_freq=100_000,
