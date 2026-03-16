@@ -24,6 +24,7 @@ def build_multi_env(
     freeze_std: bool,
     time_decay_stop: bool,
     reward_lambda: float = 1.0,
+    fee_multiplier: float = 0.2,
     seed: int = None,
 ) -> DummyVecEnv:
     env_fns = []
@@ -32,7 +33,9 @@ def build_multi_env(
 
         def make_env(result=res):
             reward_class = getattr(rewards_module, rl_reward.value)
-            reward_schema = reward_class(reward_lambda=reward_lambda)
+            reward_schema = reward_class(
+                reward_lambda=reward_lambda, fee_multiplier=fee_multiplier
+            )
 
             env = PairsTradingEnv(
                 result=result,
@@ -145,7 +148,8 @@ class PairsTradingEnv(gym.Env):
         return self.state.get_state_arr(self.obs_space_type), {}
 
     def step(self, action):
-        self.position_state.prev_position = self.position_state.position
+        prev_pos = self.position_state.position
+        self.position_state.prev_position = prev_pos
 
         mapping = {0: -1.0, 1: 0.0, 2: 1.0}
         target_position = mapping[int(action)]
@@ -153,7 +157,7 @@ class PairsTradingEnv(gym.Env):
         row = self.df.iloc[self.current_step]
         price_x = row[f"next_open_{self.result.ticker_x}"]
         price_y = row[f"next_open_{self.result.ticker_y}"]
-        position = row["position"]
+        position_signal = row["position"]
         exec_win = row["window"]
 
         if self.time_decay_stop and self.position_state.position != 0:
@@ -218,6 +222,7 @@ class PairsTradingEnv(gym.Env):
             self.current_trade_duration += 1
 
         trade_ended = (prev_pos != 0) and (curr_pos != prev_pos)
+        final_trade_pnl = self.current_trade_net_pnl if trade_ended else 0.0
 
         if trade_ended:
             self.ep_trades += 1
@@ -225,11 +230,7 @@ class PairsTradingEnv(gym.Env):
                 self.ep_wins += 1
             self.ep_total_hold_time += self.current_trade_duration
 
-            self.current_trade_net_pnl = 0.0
-            self.current_trade_duration = 0
-
         self.current_step += 1
-
         is_bankrupt = self.equity <= 0.0
         terminated = (self.current_step >= len(self.df) - 1) or is_bankrupt
         truncated = False
@@ -248,25 +249,29 @@ class PairsTradingEnv(gym.Env):
             "step_fees": step_fees,
             "is_bankrupt": is_bankrupt,
             "ep_total_fees": self.ep_total_fees,
+            "win_rate": self.ep_wins / self.ep_trades if self.ep_trades > 0 else 0.0,
+            "avg_hold_time": (
+                self.ep_total_hold_time / self.ep_trades if self.ep_trades > 0 else 0.0
+            ),
         }
-
-        if self.ep_trades > 0:
-            info["win_rate"] = self.ep_wins / self.ep_trades
-            info["avg_hold_time"] = self.ep_total_hold_time / self.ep_trades
-        else:
-            info["win_rate"] = 0.0
-            info["avg_hold_time"] = 0.0
 
         reward = self.reward_scheme.calculate(
             step_pnl=step_pnl,
             equity=self.equity,
-            position=self.position_state.position,
-            signal=position,
+            prev_position=prev_pos,
+            curr_position=curr_pos,
+            signal=position_signal,
             step_fees=step_fees,
             is_bankrupt=is_bankrupt,
             fee_rate=self.fee_rate,
+            trade_ended=trade_ended,
+            trade_pnl=final_trade_pnl,
             win=exec_win,
         )
+
+        if trade_ended:
+            self.current_trade_net_pnl = 0.0
+            self.current_trade_duration = 0
 
         return self._get_observation(), reward, terminated, truncated, info
 

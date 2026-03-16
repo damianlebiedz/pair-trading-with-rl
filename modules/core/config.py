@@ -54,8 +54,9 @@ class RL(BaseModel):
     reward: RLRewards = Field(
         description=f"Type of RL reward. Options: {[e.value for e in RLRewards]}"
     )
-    reward_lambda: float | None = Field(
-        description="Lambda in Asymmetric reward function."
+    reward_lambda: float | None = Field(description="Lambda for reward function.")
+    fee_multiplier: float | None = Field(
+        description="Fee Multiplier for reward function."
     )
     obs_space_type: ObsSpaceType = Field(
         description=f"Type of observation space. Options: {[e.value for e in ObsSpaceType]}"

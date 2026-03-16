@@ -30,7 +30,7 @@ class RewardScheme(ABC):
         raise NotImplementedError
 
 
-class AsymmetricReward(RewardScheme):
+class StepPnLReward(RewardScheme):
     """
     Universal reward function with configurable Asymmetric Loss Aversion.
     Based on Prospect Theory (Kahneman & Tversky).
@@ -55,12 +55,8 @@ class AsymmetricReward(RewardScheme):
         self,
         step_pnl: float,
         equity: float,
-        position: float,
-        signal: float,
         step_fees: float,
         is_bankrupt: bool,
-        fee_rate: float,
-        win: int,
     ) -> float:
         if is_bankrupt:
             return -1.0
@@ -69,5 +65,81 @@ class AsymmetricReward(RewardScheme):
 
         if reward < 0:
             reward *= self.reward_lambda
+
+        return float(reward)
+
+
+class TradePnLReward(RewardScheme):
+    """
+    TODO
+    """
+
+    def __init__(self, reward_lambda: float = 1.0):
+        super().__init__()
+        self.reward_lambda = reward_lambda
+
+    def calculate(
+        self,
+        equity: float,
+        is_bankrupt: bool,
+        trade_ended: bool,
+        trade_pnl: float,
+    ) -> float:
+        if is_bankrupt:
+            return -1.0
+
+        if not trade_ended:
+            return 0.0
+
+        reward = trade_pnl / equity
+
+        if reward < 0:
+            reward *= self.reward_lambda
+
+        return float(reward)
+
+
+class HybridActionReward(RewardScheme):
+    """
+    TODO
+    """
+
+    def __init__(self, reward_lambda: float = 1.0, fee_multiplier: float = 0.2):
+        super().__init__()
+        self.reward_lambda = reward_lambda
+        self.fee_multiplier = fee_multiplier
+
+    def calculate(
+        self,
+        equity,
+        prev_position,
+        curr_position,
+        signal,
+        is_bankrupt,
+        fee_rate,
+        trade_ended=False,
+        trade_pnl=0.0,
+    ):
+        if is_bankrupt:
+            return -1.0
+
+        reward = 0.0
+        total_entry_fee = fee_rate * 2.0
+        dynamic_action_bonus = total_entry_fee * self.fee_multiplier
+
+        if prev_position == 0.0:
+            if signal != 0.0:
+                if curr_position == signal:
+                    reward += dynamic_action_bonus
+                elif curr_position == 0.0:
+                    reward -= dynamic_action_bonus
+                else:
+                    reward -= dynamic_action_bonus * 2
+
+        if trade_ended:
+            base_reward = trade_pnl / equity
+            reward += (
+                base_reward if base_reward > 0 else base_reward * self.reward_lambda
+            )
 
         return float(reward)

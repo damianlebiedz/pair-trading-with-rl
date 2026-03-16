@@ -34,7 +34,9 @@ class RLModelName(str, Enum):
 
 
 class RLRewards(str, Enum):
-    ASYMMETRIC = "AsymmetricReward"
+    STEP_PNL_REWARD = "StepPnLReward"
+    TRADE_PNL_REWARD = "TradePnLReward"
+    HYBRID_ACTION_REWARD = "HybridActionReward"
 
 
 class RLPolicyType(str, Enum):

@@ -333,7 +333,7 @@
         },
         "reward": {
           "$ref": "#/$defs/RLRewards",
-          "description": "Type of RL reward. Options: ['AsymmetricReward']"
+          "description": "Type of RL reward. Options: ['StepPnLReward', 'TradePnLReward', 'HybridActionReward']"
         },
         "reward_lambda": {
           "anyOf": [
@@ -344,8 +344,20 @@
               "type": "null"
             }
           ],
-          "description": "Lambda in Asymmetric reward function.",
+          "description": "Lambda for reward function.",
           "title": "Reward Lambda"
+        },
+        "fee_multiplier": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Fee Multiplier for reward function.",
+          "title": "Fee Multiplier"
         },
         "obs_space_type": {
           "$ref": "#/$defs/ObsSpaceType",
@@ -399,7 +411,9 @@
     },
     "RLRewards": {
       "enum": [
-        "AsymmetricReward"
+        "StepPnLReward",
+        "TradePnLReward",
+        "HybridActionReward"
       ],
       "title": "RLRewards",
       "type": "string"
