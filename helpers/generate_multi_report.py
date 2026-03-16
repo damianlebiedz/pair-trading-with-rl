@@ -10,18 +10,28 @@ from modules.data_services.data_utils import load_btc_benchmark, load_ewp_benchm
 from modules.performance.stats import calculate_stats
 from modules.core.enums import Interval
 from modules.utils.logger import get_logger
+from runners.core.utils import generate_date_lists
 
 logger = get_logger(__name__)
 
 STRATEGIES = {
-    "WINNER_1_baseline": "Fixed | No Hedge",
-    "WINNER_5_hybrid_fixed": "Fixed | Rolling Beta-Hedge",
+    "winner_rl_oos 1": "Winner 1",
+    "winner_rl_oos 2 (time_delay_stop training)": "Winner 2",
 }
 
-LEVERAGE = 10.0
-
-FONT_SANS = "Arial, sans-serif"
+LEVERAGE = 10
+ELSEVIER_FONT = "Arial, sans-serif"
 FONT_SERIF = "Times New Roman, serif"
+FONT_SIZE_TICK = 10
+FONT_SIZE_LABEL = 12
+FONT_SIZE_TITLE = 13
+COLOR_BLACK = "black"
+
+PUBLICATION_COLORS = ["#1f77b4", "#d62728", "#2ca02c", "#9467bd", "#ff7f0e", "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22",
+                      "#17becf"]
+
+PDF_WIDTH = 720
+PDF_HEIGHT = 400
 
 current_file = Path(__file__).resolve()
 project_root = current_file.parent.parent
@@ -34,13 +44,13 @@ SELECTED_METRICS = [
     "win_count",
     "lose_count",
     "win_rate",
-    "avg_win",
-    "avg_lose",
+    "avg_win_return",
+    "avg_lose_return",
     "avg_trade_return",
     "avg_trade_duration",
     "sharpe_ratio_annual",
     "sortino_ratio_annual",
-    "calmar_ratio_annual",
+    "calmar_ratio",
     "tda_sortino",
 ]
 
@@ -51,36 +61,51 @@ RENAME_MAP = {
     "win_count": "Win Count",
     "lose_count": "Loss Count",
     "win_rate": "Win Rate",
-    "avg_win": "Avg Win",
-    "avg_lose": "Avg Loss",
+    "avg_win_return": "Avg Win",
+    "avg_lose_return": "Avg Loss",
     "avg_trade_return": "Avg Trade Return",
     "avg_trade_duration": "Avg Trade Duration",
     "sharpe_ratio_annual": "Sharpe Ratio",
     "sortino_ratio_annual": "Sortino Ratio",
-    "calmar_ratio_annual": "Calmar Ratio",
+    "calmar_ratio": "Calmar Ratio",
     "tda_sortino": "TDA-Sortino",
 }
 
+# --- STYLES ---
+axis_style_x = dict(
+    showline=True, linewidth=1, linecolor=COLOR_BLACK, mirror=True,
+    ticks="inside", tickcolor=COLOR_BLACK, tickwidth=1,
+    tickfont=dict(family=ELSEVIER_FONT, size=FONT_SIZE_TICK, color=COLOR_BLACK),
+    title_font=dict(family=ELSEVIER_FONT, size=FONT_SIZE_LABEL, color=COLOR_BLACK),
+    showgrid=False,
+)
 
-def load_strategy_data(
-    base_dir: Path, strategy_name: str
-) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+axis_style_y = dict(
+    showline=True, linewidth=1, linecolor=COLOR_BLACK, mirror=True,
+    ticks="inside", tickcolor=COLOR_BLACK, tickwidth=1,
+    tickfont=dict(family=ELSEVIER_FONT, size=FONT_SIZE_TICK, color=COLOR_BLACK),
+    title_font=dict(family=ELSEVIER_FONT, size=FONT_SIZE_LABEL, color=COLOR_BLACK),
+    showgrid=True, gridcolor="#E5E5E5", gridwidth=0.5,
+    zeroline=True, zerolinecolor=COLOR_BLACK, zerolinewidth=1,
+)
+
+legend_style = dict(
+    orientation="h", yanchor="top", y=-0.15, xanchor="center", x=0.5,
+    font=dict(family=ELSEVIER_FONT, size=FONT_SIZE_TICK, color=COLOR_BLACK),
+    bgcolor="rgba(255, 255, 255, 0)", borderwidth=0,
+)
+
+
+def load_strategy_data(base_dir: Path, strategy_name: str):
     strat_dir = base_dir / strategy_name
-    if not strat_dir.exists():
-        return None, None, None
+    if not strat_dir.exists(): return None, None
 
-    returns_files = list(strat_dir.glob("returns_*.parquet"))
-    df_returns = pd.read_parquet(returns_files[0]) if returns_files else None
-
+    ret_files = list(strat_dir.glob("returns_*.parquet"))
     exec_files = list(strat_dir.glob("exec_logger_*.parquet"))
+
+    df_ret = pd.read_parquet(ret_files[0]) if ret_files else None
     df_exec = pd.read_parquet(exec_files[0]) if exec_files else None
-
-    stats_files = list(strat_dir.glob("stats_multi_pair_*.parquet"))
-    df_stats = (
-        pd.read_parquet(stats_files[0]).set_index("metric") if stats_files else None
-    )
-
-    return df_returns, df_exec, df_stats
+    return df_ret, df_exec
 
 
 def get_run_config(base_dir: Path, strategy_name: str) -> dict:
@@ -91,66 +116,77 @@ def get_run_config(base_dir: Path, strategy_name: str) -> dict:
     return {}
 
 
-def build_stitched_ewp(
-    base_dir: Path, strategy_name: str, interval: Interval, assets_dict: dict
-) -> pd.DataFrame:
+def build_stitched_ewp(base_dir: Path, strategy_name: str, interval: Interval, assets_dict: dict,
+                       fee_rate: float) -> pd.DataFrame:
     strat_dir = base_dir / strategy_name
 
-    iter_dirs = sorted(
-        [d for d in strat_dir.iterdir() if d.is_dir() and d.name.isdigit()],
-        key=lambda x: int(x.name),
-    )
+    run_config = get_run_config(base_dir, strategy_name)
+    if not run_config:
+        logger.warning(f"Run config not found for {strategy_name}")
+        return None
 
+    config_dict = {
+        "pair_selection_start": run_config["pair_selection"]["start"],
+        "pair_selection_end": run_config["pair_selection"]["end"],
+        "beta_test_start": run_config["performance"]["beta_start"],
+        "test_start": run_config["performance"]["start"],
+        "test_end": run_config["performance"]["end"],
+    }
+    lists = generate_date_lists(config_dict, run_config["performance"]["iterations"])
+
+    iter_dirs = sorted([d for d in strat_dir.iterdir() if d.is_dir() and d.name.isdigit()], key=lambda x: int(x.name))
     ewp_dfs = []
 
     for d in iter_dirs:
         returns_files = list(d.glob("returns_*.parquet"))
-        if not returns_files:
-            continue
+        if not returns_files: continue
 
         df = pd.read_parquet(returns_files[0])
-        if df.empty:
-            continue
+        if df.empty: continue
 
         start_date = df.index[0].strftime("%Y-%m-%d")
         end_date = df.index[-1].strftime("%Y-%m-%d")
         iter_num = int(d.name)
 
-        iter_tickers = assets_dict.get(iter_num) or assets_dict.get(str(iter_num))
+        ps_start = lists["pair_selection_start_list"][iter_num - 1]
+        month_key = pd.to_datetime(ps_start).strftime("%Y-%m")
+
+        month_data = assets_dict.get(month_key)
+        iter_tickers = month_data.get("assets") if month_data else None
 
         if not iter_tickers:
-            logger.warning(
-                f"Warning: Lack of tickers for {iter_num} in 'list_of_assets.json'"
-            )
+            logger.warning(f"Warning: Lack of tickers for {month_key} (iter {iter_num}) in 'list_of_assets.json'")
             continue
 
-        ewp_period = load_ewp_benchmark(iter_tickers, start_date, end_date, interval)
+        ewp_period = load_ewp_benchmark(
+            tickers=iter_tickers,
+            test_start=start_date,
+            test_end=end_date,
+            interval=interval,
+            fee_rate=fee_rate,
+        )
 
         col_name = "ewp_pct"
         ewp_dfs.append(ewp_period[[col_name]])
 
-    if not ewp_dfs:
-        return None
+    if not ewp_dfs: return None
 
     final_ewp = pd.concat(ewp_dfs).sort_index()
     final_ewp = final_ewp[~final_ewp.index.duplicated(keep="first")]
-
-    col_name = "ewp_pct"
-    final_ewp["ewp_return"] = (1 + final_ewp[col_name]).cumprod() - 1
+    final_ewp["ewp_return"] = (1 + final_ewp["ewp_pct"]).cumprod() - 1
 
     return final_ewp
 
 
 def generate_comparison_report(strategies_map: dict):
     results_dir = project_root / "results"
-
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    report_output_dir = results_dir / f"final_paper_comparison_{timestamp}"
+    report_output_dir = results_dir / f"final_comparison_report_{timestamp}"
     pdf_dir = report_output_dir / "pdfs"
     report_output_dir.mkdir(parents=True, exist_ok=True)
     pdf_dir.mkdir(parents=True, exist_ok=True)
 
-    assets_file = project_root / "config" / "list_of_assets.json"
+    assets_file = project_root / "config" / "schemas" / "list_of_assets.json"
     list_of_assets = {}
     if assets_file.exists():
         with open(assets_file, "r", encoding="utf-8") as f:
@@ -158,60 +194,40 @@ def generate_comparison_report(strategies_map: dict):
     else:
         logger.error(f"'list_of_assets.json' not found: {assets_file}")
 
-    fig = go.Figure()
     stats_dict = {}
+    strategy_series = {}
 
-    global_starts = []
-    global_ends = []
+    global_starts, global_ends = [], []
 
-    colors = ["#1f77b4", "#d62728", "#2ca02c", "#9467bd", "#ff7f0e", "#8c564b"]
-    color_idx = 0
+    first_strat = next(iter(strategies_map.keys()))
+    config = get_run_config(results_dir, first_strat)
+    initial_cash = float(config.get("market", {}).get("initial_cash", 100000))
+    fee_rate = float(config.get("market", {}).get("fee_rate", 0.0005))
+    risk_free_rate = float(config.get("market", {}).get("risk_free_rate_annual", 0.0))
 
-    first_strategy_folder = None
-    common_initial_cash = 100000.0
-    common_risk_free = 0.0
-
-    for folder, label in strategies_map.items():
-        logger.info(f"Loading strategy: {label} from {folder}")
-
-        if first_strategy_folder is None:
-            first_strategy_folder = folder
-
-        run_config = get_run_config(results_dir, folder)
-        market_cfg = run_config.get("market", {})
-
-        initial_cash = float(market_cfg.get("initial_cash"))
-        risk_free_rate = float(market_cfg.get("risk_free_rate_annual"))
-
-        common_initial_cash = initial_cash
-        common_risk_free = risk_free_rate
-
-        df_ret, df_exec, df_stats = load_strategy_data(results_dir, folder)
-
-        if df_ret is None:
-            logger.warning(f"Data not found for {label} ({folder}). Skipping...")
-            continue
+    for i, (folder, label) in enumerate(strategies_map.items()):
+        df_ret, df_exec = load_strategy_data(results_dir, folder)
+        if df_ret is None: continue
 
         global_starts.append(df_ret.index[0])
         global_ends.append(df_ret.index[-1])
 
-        pnl_series = (df_ret["total_pnl"] - df_ret["total_fees"]) * LEVERAGE
-        ret_series = pnl_series / initial_cash
+        lev_pnl = (df_ret["total_pnl"] - df_ret["total_fees"]) * LEVERAGE
+        lev_ret = lev_pnl / initial_cash
+        lev_ret = lev_ret - lev_ret.iloc[0]
 
-        fig.add_trace(
-            go.Scatter(
-                x=ret_series.index,
-                y=ret_series,
-                mode="lines",
-                name=f"{label}",
-                line=dict(color=colors[color_idx % len(colors)], width=2.0),
-            )
-        )
+        df_lev = pd.DataFrame(index=df_ret.index)
+        df_lev["total_pnl"] = lev_pnl
+        df_lev["total_net_pnl"] = lev_pnl
+        df_lev["equity"] = initial_cash + lev_pnl
 
-        if df_stats is not None:
-            stats_dict[label] = df_stats["net"].reindex(SELECTED_METRICS)
+        strat_stats = calculate_stats(df_lev, df_exec, initial_cash, Interval.H1, risk_free_rate)
+        stats_dict[label] = strat_stats["net"].reindex(SELECTED_METRICS)
 
-        color_idx += 1
+        strategy_series[label] = {
+            "series": lev_ret,
+            "color": PUBLICATION_COLORS[i % len(PUBLICATION_COLORS)]
+        }
 
     if not global_starts:
         logger.error("No valid strategies loaded. Exiting.")
@@ -219,118 +235,116 @@ def generate_comparison_report(strategies_map: dict):
 
     full_start = min(global_starts).strftime("%Y-%m-%d")
     full_end = max(global_ends).strftime("%Y-%m-%d")
-
     empty_ex = pd.DataFrame(columns=["position", "pnl", "fees", "entry_equity"])
 
     try:
-        btc_data = load_btc_benchmark(full_start, full_end, Interval.H1)
-        col_btc = "close" if "close" in btc_data.columns else btc_data.columns[0]
-
-        btc_ret = (btc_data[col_btc] / btc_data[col_btc].iloc[0]) - 1
-
-        fig.add_trace(
-            go.Scatter(
-                x=btc_ret.index,
-                y=btc_ret,
-                mode="lines",
-                name="BTC B&H",
-                line=dict(color="gray", width=1.5, dash="dash"),
-            )
-        )
+        btc = load_btc_benchmark(full_start, full_end, Interval.H1, fee_rate)
+        btc_ret = btc["BTC_return"] - btc["BTC_return"].iloc[0]
 
         df_btc = pd.DataFrame(index=btc_ret.index)
-        df_btc["total_pnl"] = btc_ret * common_initial_cash
+        df_btc["total_pnl"] = btc_ret * initial_cash
         df_btc["total_net_pnl"] = df_btc["total_pnl"]
-
-        stats_dict["BTC B&H"] = calculate_stats(
-            df_btc, empty_ex, common_initial_cash, Interval.H1, common_risk_free
-        )["net"].reindex(SELECTED_METRICS)
+        df_btc["equity"] = initial_cash + df_btc["total_net_pnl"]
+        stats_dict["BTC B&H"] = calculate_stats(df_btc, empty_ex, initial_cash, Interval.H1, risk_free_rate)[
+            "net"].reindex(SELECTED_METRICS)
     except Exception as e:
         logger.error(f"Error during BTC data loading: {e}")
+        btc_ret = None
 
     try:
-        ewp_data = build_stitched_ewp(
-            results_dir, first_strategy_folder, Interval.H1, list_of_assets
-        )
-
+        ewp_data = build_stitched_ewp(results_dir, first_strat, Interval.H1, list_of_assets, fee_rate)
         if ewp_data is not None:
             ewp_ret = ewp_data["ewp_return"]
-
-            fig.add_trace(
-                go.Scatter(
-                    x=ewp_ret.index,
-                    y=ewp_ret,
-                    mode="lines",
-                    name="EWP Portfolio",
-                    line=dict(color="black", width=1.5),
-                )
-            )
-
             df_ewp = pd.DataFrame(index=ewp_ret.index)
-            df_ewp["total_pnl"] = ewp_ret * common_initial_cash
+            df_ewp["total_pnl"] = ewp_ret * initial_cash
             df_ewp["total_net_pnl"] = df_ewp["total_pnl"]
-
-            stats_dict["EWP Portfolio"] = calculate_stats(
-                df_ewp, empty_ex, common_initial_cash, Interval.H1, common_risk_free
-            )["net"].reindex(SELECTED_METRICS)
+            df_ewp["equity"] = initial_cash + df_ewp["total_net_pnl"]
+            stats_dict["EWP B&H"] = calculate_stats(df_ewp, empty_ex, initial_cash, Interval.H1, risk_free_rate)[
+                "net"].reindex(SELECTED_METRICS)
         else:
-            logger.error("EWP data not generated.")
+            ewp_ret = None
     except Exception as e:
         logger.error(f"Error during EWP data loading: {e}")
+        ewp_ret = None
 
-    fig.update_layout(
-        template="plotly_white",
-        font=dict(family=FONT_SANS, color="black"),
-        margin=dict(t=50, b=50, l=70, r=20),
-        legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=1.05,
-            xanchor="center",
-            x=0.5,
-            font=dict(size=12),
-        ),
-        width=900,
-        height=450,
-    )
+    plot_configs = [
+        {"name": "strategies_only", "show_btc": False, "show_ewp": False},
+        {"name": "with_btc", "show_btc": True, "show_ewp": False},
+        {"name": "with_ewp", "show_btc": False, "show_ewp": True},
+        {"name": "with_all", "show_btc": True, "show_ewp": True},
+    ]
 
-    fig.update_yaxes(
-        title="Cumulative Return",
-        tickformat=".0%",
-        showline=True,
-        linewidth=1,
-        linecolor="black",
-        gridcolor="#e5e5e5",
-        mirror=True,
-        zeroline=True,
-        zerolinecolor="black",
-    )
-    fig.update_xaxes(
-        showline=True, linewidth=1, linecolor="black", gridcolor="#e5e5e5", mirror=True
-    )
+    final_fig_html = None
 
-    try:
-        pdf_path = pdf_dir / "multi_strategy_comparison.pdf"
-        fig.write_image(str(pdf_path), format="pdf", engine="kaleido")
-        logger.info(f"PDF saved: {pdf_path}")
-    except Exception as e:
-        logger.error(f"Error during PDF export: {e}")
+    def get_exact_ticks(dt_index, num_ticks=6):
+        if len(dt_index) < 2: return dt_index
+        step = (len(dt_index) - 1) / (num_ticks - 1)
+        return dt_index[[int(round(i * step)) for i in range(num_ticks)]]
 
-    df_stats = pd.DataFrame(stats_dict).rename(index=RENAME_MAP)
+    first_strat_data = next(iter(strategy_series.values()))["series"]
+    exact_ticks = get_exact_ticks(first_strat_data.index, num_ticks=6)
+
+    for p_cfg in plot_configs:
+        fig = go.Figure()
+
+        for label, data in strategy_series.items():
+            fig.add_trace(go.Scatter(
+                x=data["series"].index, y=data["series"],
+                name=f"{label}",
+                line=dict(color=data["color"], width=1.5, dash="solid")
+            ))
+
+        if p_cfg["show_btc"] and btc_ret is not None:
+            fig.add_trace(go.Scatter(
+                x=btc_ret.index, y=btc_ret,
+                name="BTC B&H",
+                line=dict(color="gray", width=1.0, dash="dash")
+            ))
+
+        if p_cfg["show_ewp"] and ewp_ret is not None:
+            fig.add_trace(go.Scatter(
+                x=ewp_ret.index, y=ewp_ret,
+                name="EWP B&H",
+                line=dict(color="black", width=1.0, dash="dot")
+            ))
+
+        fig.update_layout(
+            width=PDF_WIDTH, height=PDF_HEIGHT,
+            font=dict(family=ELSEVIER_FONT, size=FONT_SIZE_LABEL, color=COLOR_BLACK),
+            plot_bgcolor="white", paper_bgcolor="white",
+            legend=legend_style,
+            margin=dict(t=40, b=80, l=50, r=30),
+            title=dict(
+                text="Out-of-Sample Performance Comparison",
+                font=dict(size=FONT_SIZE_TITLE),
+                x=0.5,
+                xanchor="center",
+                xref="paper",
+            )
+        )
+
+        fig.update_xaxes(
+            **axis_style_x,
+            tickmode="array",
+            tickvals=exact_ticks,
+            tickformat="%b %Y"
+        )
+        fig.update_yaxes(**axis_style_y, tickformat=".0%", title_text="Cumulative Return")
+
+        pdf_path = pdf_dir / f"comparison_{p_cfg['name']}.pdf"
+        fig.write_image(str(pdf_path), format="pdf")
+
+        if p_cfg["name"] == "with_all":
+            final_fig_html = fig
+
+    df_stats = pd.DataFrame(stats_dict).rename(index=RENAME_MAP).astype(object)
 
     for col in df_stats.columns:
         for idx in df_stats.index:
             val = df_stats.loc[idx, col]
             if pd.notna(val):
-                if idx in [
-                    "CAGR",
-                    "Annual Volatility",
-                    "Max Drawdown",
-                    "Win Rate",
-                    "Avg Trade Return",
-                    "Avg Win",
-                    "Avg Loss",
-                ]:
+                if idx in ["CAGR", "Annual Volatility", "Max Drawdown", "Win Rate", "Avg Win", "Avg Loss",
+                           "Avg Trade Return"]:
                     df_stats.loc[idx, col] = f"{val:.2%}"
                 elif idx in ["Win Count", "Loss Count"]:
                     df_stats.loc[idx, col] = f"{int(val)}"
@@ -340,45 +354,38 @@ def generate_comparison_report(strategies_map: dict):
                 df_stats.loc[idx, col] = "-"
 
     with open(report_output_dir / "comparison_table.tex", "w") as f:
-        f.write(
-            df_stats.to_latex(
-                column_format="l" + "r" * len(df_stats.columns), escape=False
-            )
-        )
+        f.write(df_stats.to_latex(column_format="l" + "r" * len(df_stats.columns), escape=False))
 
     html_content = f"""
     <!DOCTYPE html>
     <html>
     <head>
         <style>
-            body {{ font-family: "{FONT_SERIF}"; padding: 30px; max-width: 1000px; margin: auto; background-color: #fcfcfc; }}
+            body {{ font-family: "{FONT_SERIF}"; padding: 30px; max-width: 1100px; margin: auto; background-color: #fcfcfc; }}
             .report-container {{ background-color: white; padding: 30px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }}
             h2, h3 {{ text-align: center; color: #333; }}
-            .elsevier-table {{ width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 11pt; }}
+            .elsevier-table {{ width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 10pt; }}
             .elsevier-table thead tr {{ border-top: 2px solid black; border-bottom: 1px solid black; }}
             .elsevier-table th, .elsevier-table td {{ padding: 8px; text-align: right; }}
-            .elsevier-table td:first-child, .elsevier-table th:first-child {{ text-align: left; font-weight: bold; width: 220px; }}
+            .elsevier-table td:first-child {{ text-align: left; font-weight: bold; width: 200px; }}
             .elsevier-table tbody tr:last-child td {{ border-bottom: 2px solid black; }}
-            .elsevier-table tbody tr:hover {{ background-color: #f5f5f5; }}
         </style>
     </head>
     <body>
         <div class="report-container">
-            <h2>Strategy Performance Comparison</h2>
-            <div>{fig.to_html(full_html=False, include_plotlyjs='cdn')}</div>
-            <br><br>
-            <h3>Table 1: Performance Metrics</h3>
+            <h2>Multi-Strategy Performance Comparison</h2>
+            <div>{final_fig_html.to_html(full_html=False, include_plotlyjs='cdn')}</div>
+            <br>
+            <h3>Table 1: Comparative Metrics</h3>
             {df_stats.to_html(classes="elsevier-table", border=0, justify="center")}
         </div>
     </body>
     </html>
     """
-
-    html_path = report_output_dir / "interactive_comparison.html"
-    with open(html_path, "w", encoding="utf-8") as f:
+    with open(report_output_dir / "comparison_report.html", "w", encoding="utf-8") as f:
         f.write(html_content)
 
-    logger.info(f"Comparison Pipeline completed. Results saved to: {report_output_dir}")
+    logger.info(f"Comparison report generated in: {report_output_dir}")
 
 
 if __name__ == "__main__":

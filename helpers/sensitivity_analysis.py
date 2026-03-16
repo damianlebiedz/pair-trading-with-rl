@@ -11,7 +11,7 @@ from modules.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-FOLDER = "sa 2"
+FOLDER = "sa av"
 
 IS_BASE_DIR = "is"
 OOS_BASE_DIR = "oos"
@@ -29,6 +29,8 @@ FONT_SIZE_TICK = 10
 FONT_SIZE_LABEL = 12
 FONT_SIZE_TITLE = 13
 COLOR_BLACK = "black"
+
+PUBLICATION_COLORS = ["#1f77b4", "#d62728", "#2ca02c", "#9467bd", "#ff7f0e", "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf"]
 
 PDF_WIDTH = 720
 PDF_HEIGHT = 350
@@ -180,24 +182,18 @@ def generate_reports(folder_name: str, baseline_dict: dict):
             exec_df = pd.read_parquet(exec_files[0])
 
             def get_cfg(key):
-                # Najpierw sprawdzamy główny poziom
                 if key in config:
                     return config[key]
-
-                # Następnie iterujemy po wszystkich interesujących nas sekcjach
                 for section in ["performance", "pair_selection", "market", "settings"]:
                     if section in config and key in config[section]:
                         return config[section][key]
-
                 return None
 
             params = {k: get_cfg(k) for k in (SENSITIVITY_PARAMS + ASSUMPTIONS)}
 
-            # --- APLIKACJA DŹWIGNI ---
             lev_pnl = (ts_df["total_pnl"] - ts_df["total_fees"]) * LEVERAGE
             ret_series = lev_pnl / initial_cash
 
-            # --- PRZELICZENIE STATYSTYK W LOCIE Z DŹWIGNIĄ ---
             df_lev = pd.DataFrame(index=ts_df.index)
             df_lev["total_pnl"] = lev_pnl
             df_lev["total_net_pnl"] = lev_pnl
@@ -226,7 +222,6 @@ def generate_reports(folder_name: str, baseline_dict: dict):
                 "Sharpe Ratio": net_stats.get("sharpe_ratio_annual"),
                 "Sortino Ratio": net_stats.get("sortino_ratio_annual"),
                 "Calmar Ratio": net_stats.get("calmar_ratio"),
-                "TDA-Sortino": net_stats.get("tda_sortino"),
             }
 
             return {
@@ -381,16 +376,15 @@ def generate_reports(folder_name: str, baseline_dict: dict):
                         y=ret,
                         name="Baseline",
                         legendgroup="Baseline",
-                        line=dict(color=COLOR_BLACK, width=1.5),
+                        line=dict(color=COLOR_BLACK, width=2.0),
                         showlegend=(c == 1),
                     ),
                     row=1,
                     col=c,
                 )
 
-            dash_styles = ["dash", "dot", "dashdot"]
             for i, p in enumerate(group_plots):
-                dash_style = dash_styles[i % len(dash_styles)]
+                color = PUBLICATION_COLORS[i % len(PUBLICATION_COLORS)]
 
                 for c, ret in enumerate([p["series_is"], p["series_oos"]], 1):
                     fig.add_trace(
@@ -399,7 +393,7 @@ def generate_reports(folder_name: str, baseline_dict: dict):
                             y=ret,
                             name=p["name"],
                             legendgroup=p["name"],
-                            line=dict(color=COLOR_BLACK, width=1.0, dash=dash_style),
+                            line=dict(color=color, width=1.5, dash="solid"),
                             showlegend=(c == 1),
                         ),
                         row=1,
@@ -430,6 +424,15 @@ def generate_reports(folder_name: str, baseline_dict: dict):
                 tickformat="%b\n%Y",
                 dtick="M3",
                 tick0=base_is_series.index[0] if len(base_is_series) > 0 else None,
+                row=1, col=1
+            )
+
+            fig.update_xaxes(
+                **axis_style_x,
+                tickformat="%b\n%Y",
+                dtick="M3",
+                tick0=base_oos_series.index[0] if len(base_oos_series) > 0 else None,
+                row=1, col=2
             )
 
             fig.update_yaxes(**axis_style_y, tickformat=".0%")

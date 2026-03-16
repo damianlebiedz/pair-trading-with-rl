@@ -23,8 +23,15 @@ STRATEGY = {
 
 LEVERAGE = 10
 
-FONT_SANS = "Arial, sans-serif"
+ELSEVIER_FONT = "Arial, sans-serif"
 FONT_SERIF = "Times New Roman, serif"
+FONT_SIZE_TICK = 10
+FONT_SIZE_LABEL = 12
+FONT_SIZE_TITLE = 13
+COLOR_BLACK = "black"
+
+PDF_WIDTH = 720
+PDF_HEIGHT = 350
 
 current_file = Path(__file__).resolve()
 project_root = current_file.parent.parent
@@ -37,13 +44,13 @@ SELECTED_METRICS = [
     "win_count",
     "lose_count",
     "win_rate",
-    "avg_win",
-    "avg_lose",
+    "avg_win_return",
+    "avg_lose_return",
     "avg_trade_return",
     "avg_trade_duration",
     "sharpe_ratio_annual",
     "sortino_ratio_annual",
-    "calmar_ratio_annual",
+    "calmar_ratio",
     "tda_sortino",
 ]
 
@@ -188,6 +195,52 @@ def generate_academic_report(strategies_map: dict):
     else:
         logger.error(f"'list_of_assets.json' not found: {assets_file}")
 
+    axis_style_x = dict(
+        showline=True,
+        linewidth=1,
+        linecolor=COLOR_BLACK,
+        mirror=True,
+        ticks="inside",
+        tickcolor=COLOR_BLACK,
+        tickwidth=1,
+        tickangle=0,
+        title_standoff=5,
+        tickfont=dict(family=ELSEVIER_FONT, size=FONT_SIZE_TICK, color=COLOR_BLACK),
+        title_font=dict(family=ELSEVIER_FONT, size=FONT_SIZE_LABEL, color=COLOR_BLACK),
+        showgrid=False,
+    )
+
+    axis_style_y = dict(
+        showline=True,
+        linewidth=1,
+        linecolor=COLOR_BLACK,
+        mirror=True,
+        ticks="inside",
+        tickcolor=COLOR_BLACK,
+        tickwidth=1,
+        title_standoff=5,
+        tickfont=dict(family=ELSEVIER_FONT, size=FONT_SIZE_TICK, color=COLOR_BLACK),
+        title_font=dict(family=ELSEVIER_FONT, size=FONT_SIZE_LABEL, color=COLOR_BLACK),
+        showgrid=True,
+        gridcolor="#E5E5E5",
+        gridwidth=0.5,
+        zeroline=True,
+        zerolinecolor=COLOR_BLACK,
+        zerolinewidth=1,
+    )
+
+    legend_style = dict(
+        orientation="h",
+        yanchor="top",
+        y=-0.10,
+        xanchor="center",
+        x=0.5,
+        font=dict(family=ELSEVIER_FONT, size=FONT_SIZE_TICK, color=COLOR_BLACK),
+        bgcolor="rgba(255, 255, 255, 0)",
+        bordercolor=COLOR_BLACK,
+        borderwidth=0,
+    )
+
     for label, folders in strategies_map.items():
         logger.info(f"Generating report for: {label}")
 
@@ -316,7 +369,7 @@ def generate_academic_report(strategies_map: dict):
                         y=ret,
                         name=f"Baseline ({fee_rate*100}% fees, {LEVERAGE}x leverage)",
                         legendgroup="M",
-                        line=dict(color="#1f77b4", width=2.2),
+                        line=dict(color=COLOR_BLACK, width=1.5),
                         showlegend=(c == 1),
                     ),
                     row=1,
@@ -331,7 +384,7 @@ def generate_academic_report(strategies_map: dict):
                             y=ret,
                             name=f"BTC B&H ({fee_rate*100}% fees)",
                             legendgroup="B",
-                            line=dict(color="gray", width=1.5, dash="dash"),
+                            line=dict(color=COLOR_BLACK, width=1.0, dash="dash"),
                             showlegend=(c == 1),
                         ),
                         row=1,
@@ -346,7 +399,7 @@ def generate_academic_report(strategies_map: dict):
                             y=ret,
                             name=f"EWP B&H ({fee_rate*100}% fees)",
                             legendgroup="E",
-                            line=dict(color="black", width=1.2, dash="dot"),
+                            line=dict(color=COLOR_BLACK, width=1.0, dash="dot"),
                             showlegend=(c == 1),
                         ),
                         row=1,
@@ -354,36 +407,33 @@ def generate_academic_report(strategies_map: dict):
                     )
 
             fig.update_layout(
-                template="plotly_white",
-                font=dict(family=FONT_SANS, color="black"),
-                width=1000,
-                height=450,
-                margin=dict(t=50, b=50, l=70, r=20),
-                legend=dict(
-                    orientation="h", yanchor="bottom", y=1.08, xanchor="center", x=0.5
+                width=PDF_WIDTH,
+                height=PDF_HEIGHT,
+                font=dict(
+                    family=ELSEVIER_FONT, size=FONT_SIZE_LABEL, color=COLOR_BLACK
                 ),
+                plot_bgcolor="white",
+                paper_bgcolor="white",
+                showlegend=True,
+                legend=legend_style,
+                margin=dict(t=30, b=40, l=45, r=10),
             )
 
-            fig.update_yaxes(
-                tickformat=".0%",
-                showline=True,
-                linewidth=1,
-                linecolor="black",
-                gridcolor="#e5e5e5",
-                mirror=True,
-                zeroline=True,
-                zerolinecolor="black",
-            )
+            for annotation in fig["layout"]["annotations"]:
+                annotation["font"] = dict(
+                    family=ELSEVIER_FONT, size=FONT_SIZE_TITLE, color=COLOR_BLACK
+                )
+                annotation["yshift"] = 5
+
             fig.update_xaxes(
+                **axis_style_x,
                 tickformat="%b\n%Y",
                 dtick="M3",
-                tick0=is_ret.index[0],
-                showline=True,
-                linewidth=1,
-                linecolor="black",
-                gridcolor="#e5e5e5",
-                mirror=True,
+                tick0=is_ret.index[0] if len(is_ret) > 0 else None,
             )
+
+            fig.update_yaxes(**axis_style_y, tickformat=".0%")
+
             fig.update_yaxes(title_text="Cumulative Return", row=1, col=1)
 
             pdf_path = pdf_dir / f"{label}_equity_{p_cfg['name']}.pdf"
@@ -403,9 +453,6 @@ def generate_academic_report(strategies_map: dict):
                         "Annual Volatility",
                         "Max Drawdown",
                         "Win Rate",
-                        "Avg Trade Return",
-                        "Avg Win",
-                        "Avg Lose",
                     ]:
                         df_stats.loc[idx, col] = f"{val:.2%}"
                     elif idx in ["Win Count", "Loss Count"]:

@@ -9,57 +9,88 @@ from modules.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-FOLDER = "new 3x grid"
+FOLDER = "stage 1 zoom"
 TOP_N_ROWS = 10
+TARGET_METRIC = "Sortino Ratio"
+
+FILTER = {
+    # "Entry Threshold": 3.0,
+    "Exit Threshold": 0.0,
+    "Stop Loss": 2.0,
+    "Z-Score Window": 168,
+    "Pairs": 20,
+}
+
+STAR = {
+    "Entry Threshold": 3.0,
+    # "Stop Loss": 2.0,
+}
+
+HIGHLIGHT_RANGE = {
+    # "Entry Threshold": [2.75, 3.25],
+    # "Stop Loss": [1.75, 2.25]
+}
+
+PARAMS_TO_PLOT = [
+    "Entry Threshold",
+    "Exit Threshold",
+    "Stop Loss",
+    "Z-Score Window",
+    "Pairs",
+]
 
 SELECTED_METRICS = [
-    "Entry",
-    "Exit",
-    "SL",
+    "Entry Threshold",
+    "Exit Threshold",
+    "Stop Loss",
     "Z-Score Window",
     "Pairs",
     "Total Trades",
     "Avg Trade Duration",
     "Max Drawdown",
-    "Sortino Ratio Median",
+    "Sharpe Ratio",
+    "Calmar Ratio",
     "TDA-Sortino",
 ]
 
 RENAME_MAP = {
-    "Entry": "Entry",
-    "Exit": "Exit",
-    "SL": "Stop Loss",
+    "Entry Threshold": "Entry Threshold",
+    "Exit Threshold": "Exit Threshold",
+    "Stop Loss": "Stop Loss",
     "Z-Score Window": "Z-Score Window",
     "Pairs": "Pairs",
     "Total Trades": "Total Trades",
     "Avg Trade Duration": "Avg Trade Duration",
     "Max Drawdown": "Max Drawdown",
+    "Sharpe Ratio": "Sharpe Ratio",
     "Sortino Ratio Median": "Sortino Ratio Median",
+    "Calmar Ratio": "Calmar Ratio",
     "TDA-Sortino": "TDA-Sortino",
 }
 
 FORMAT_MAP = {}
+
+ELSEVIER_FONT = "Arial, sans-serif"
+FONT_SIZE_TICK = 10
+FONT_SIZE_LABEL = 12
+FONT_SIZE_TITLE = 13
+COLOR_BLACK = "black"
+
+PDF_WIDTH = 720
+PDF_HEIGHT = 300
 
 
 def plot_distribution(
     df: pd.DataFrame,
     title: str,
     out_file: Path,
-    params_to_plot: list = None,
-    target_metric: str = "TDA-Sortino",
+    target_metric: str,
+    filters: dict = None,
+    stars: dict = None,
+    highlight_ranges: dict = None,
 ):
-    if params_to_plot is None:
-        params_to_plot = [
-            "Entry",
-            "Exit",
-            "SL",
-            "Z-Score Window",
-            "Beta Hedge",
-            "Pairs",
-        ]
-
     valid_params = [
-        p for p in params_to_plot if p in df.columns and df[p].nunique(dropna=False) > 1
+        p for p in PARAMS_TO_PLOT if p in df.columns and df[p].nunique(dropna=False) > 1
     ]
 
     if not valid_params:
@@ -71,18 +102,25 @@ def plot_distribution(
     logger.info(f"Created directory for individual PDFs: {pdf_dir}")
 
     n_params = len(valid_params)
+    rows = n_params
     cols = 2
-    rows = math.ceil(n_params / cols)
+
+    filter_annotation = ""
+    if filters:
+        f_str = ", ".join([f"{k} = {v}" for k, v in filters.items()])
+        filter_annotation = f"<br><span style='font-size: 9px; font-weight: normal; color: #444444;'>({f_str})</span>"
+
+    subplot_titles = []
+    for p in valid_params:
+        subplot_titles.append(f"Panel A: Distribution by {p}{filter_annotation}")
+        subplot_titles.append(f"Panel B: Median & Mean by {p}{filter_annotation}")
 
     fig_html = make_subplots(
         rows=rows,
         cols=cols,
-        subplot_titles=[
-            f"Panel {chr(65 + i)}: Distribution by {p}"
-            for i, p in enumerate(valid_params)
-        ],
+        subplot_titles=subplot_titles,
         vertical_spacing=0.15,
-        horizontal_spacing=0.1,
+        horizontal_spacing=0.08,
     )
 
     df = df.copy()
@@ -97,147 +135,301 @@ def plot_distribution(
 
     df_valid = df.dropna(subset=[target_metric]).copy()
 
-    font_family = "Arial, sans-serif"
-    pdf_width = 380
-    pdf_height = 320
+    axis_style_x = dict(
+        showline=True,
+        linewidth=1,
+        linecolor=COLOR_BLACK,
+        mirror=True,
+        ticks="inside",
+        tickcolor=COLOR_BLACK,
+        tickwidth=1,
+        tickangle=0,
+        title_standoff=5,
+        tickfont=dict(family=ELSEVIER_FONT, size=FONT_SIZE_TICK, color=COLOR_BLACK),
+        title_font=dict(family=ELSEVIER_FONT, size=FONT_SIZE_LABEL, color=COLOR_BLACK),
+        showgrid=False,
+    )
+
+    axis_style_y = dict(
+        showline=True,
+        linewidth=1,
+        linecolor=COLOR_BLACK,
+        mirror=True,
+        ticks="inside",
+        tickcolor=COLOR_BLACK,
+        tickwidth=1,
+        title_standoff=5,
+        tickformat=".2f",
+        tickfont=dict(family=ELSEVIER_FONT, size=FONT_SIZE_TICK, color=COLOR_BLACK),
+        title_font=dict(family=ELSEVIER_FONT, size=FONT_SIZE_LABEL, color=COLOR_BLACK),
+        showgrid=True,
+        gridcolor="#E5E5E5",
+        gridwidth=0.5,
+        zeroline=True,
+        zerolinecolor="#E5E5E5",
+        zerolinewidth=0.5,
+    )
+
+    legend_style = dict(
+        yanchor="top",
+        y=0.98,
+        xanchor="right",
+        x=0.99,
+        font=dict(family=ELSEVIER_FONT, size=FONT_SIZE_TICK, color=COLOR_BLACK),
+        bgcolor="rgba(255, 255, 255, 0.8)",
+        bordercolor=COLOR_BLACK,
+        borderwidth=0.5,
+    )
+
+    optimum_html_legend_added = False
 
     for i, param in enumerate(valid_params):
-        r = (i // cols) + 1
-        c = (i % cols) + 1
-
+        r = i + 1
         counts_full = df[f"{param}_str"].value_counts()
-        unique_vals = sorted(counts_full.index, key=lambda x: (x.lower() == "none", x))
 
+        def numeric_sort_key(v):
+            if str(v).lower() == "none":
+                return 1, float("inf")
+            try:
+                return 0, float(v)
+            except ValueError:
+                return 0, str(v)
+
+        unique_vals = sorted(counts_full.index, key=numeric_sort_key)
         counts_valid = df_valid[f"{param}_str"].value_counts()
         max_obs = counts_valid.max() if not counts_valid.empty else 1
 
         ordered_x_labels = []
-        traces = []
+        traces_box = []
+        medians = []
+        means = []
+        star_x_index = None
 
         for val in unique_vals:
             subset = df_valid[df_valid[f"{param}_str"] == val]
             n_obs = len(subset)
-
             box_width = 0.8 * math.sqrt(n_obs / max_obs) if max_obs > 0 else 0.8
 
-            x_label = f"{val}<br>(N={n_obs})"
+            try:
+                formatted_val = f"{float(val):.2f}"
+            except ValueError:
+                formatted_val = str(val)
+
+            display_val = formatted_val
+            is_starred = False
+            if stars and param in stars and str(stars[param]) == val:
+                display_val = f"{formatted_val}*"
+                is_starred = True
+
+            x_label = f"{display_val}"
             ordered_x_labels.append(x_label)
 
-            trace = go.Box(
+            if is_starred:
+                star_x_index = len(ordered_x_labels) - 1
+
+            medians.append(subset[target_metric].median())
+            means.append(subset[target_metric].mean())
+
+            trace_box = go.Box(
                 y=subset[target_metric],
                 x=[x_label] * len(subset),
                 name=x_label,
                 width=box_width,
                 offsetgroup="1",
                 fillcolor="#E0E0E0",
-                line=dict(color="black", width=1.5),
-                marker=dict(color="black", size=5, symbol="circle-open"),
+                line=dict(color=COLOR_BLACK, width=1.0),
+                marker=dict(color=COLOR_BLACK, size=4, symbol="circle-open"),
                 boxpoints="outliers",
                 showlegend=False,
             )
-            traces.append(trace)
-            fig_html.add_trace(trace, row=r, col=c)
+            traces_box.append(trace_box)
+            fig_html.add_trace(trace_box, row=r, col=1)
 
-        fig_html.update_xaxes(
-            categoryorder="array",
-            categoryarray=ordered_x_labels,
-            title_text=param,
-            row=r,
-            col=c,
-            showline=True,
-            linewidth=1,
-            linecolor="black",
-            mirror=True,
-            ticks="inside",
-            tickcolor="black",
-            tickwidth=1,
-            showgrid=False,
-            range=[-0.5, len(ordered_x_labels) - 0.5],
-        )
-        fig_html.update_yaxes(
-            title_text=target_metric,
-            row=r,
-            col=c,
-            showline=True,
-            linewidth=1,
-            linecolor="black",
-            mirror=True,
-            ticks="inside",
-            tickcolor="black",
-            tickwidth=1,
-            showgrid=True,
-            gridcolor="#E5E5E5",
-            gridwidth=1,
-            zeroline=True,
-            zerolinecolor="#E5E5E5",
-            zerolinewidth=1,
+        trace_median = go.Scatter(
+            x=ordered_x_labels,
+            y=medians,
+            mode="lines",
+            name="Median",
+            line=dict(color=COLOR_BLACK, width=1.0),
+            showlegend=True if i == 0 else False,
         )
 
-        fig_pdf = go.Figure(data=traces)
+        trace_mean = go.Scatter(
+            x=ordered_x_labels,
+            y=means,
+            mode="lines",
+            name="Mean",
+            line=dict(color=COLOR_BLACK, width=1.0, dash="dash"),
+            showlegend=True if i == 0 else False,
+        )
 
-        fig_pdf.update_xaxes(
-            categoryorder="array",
-            categoryarray=ordered_x_labels,
-            title_text=param,
-            showline=True,
-            linewidth=1,
-            linecolor="black",
-            mirror=True,
-            ticks="inside",
-            tickcolor="black",
-            tickwidth=1,
-            showgrid=False,
-            title_font=dict(size=12, color="black"),
-            tickfont=dict(size=10, color="black"),
-            range=[-0.5, len(ordered_x_labels) - 0.5],
+        fig_html.add_trace(trace_median, row=r, col=2)
+        fig_html.add_trace(trace_mean, row=r, col=2)
+
+        if star_x_index is not None:
+            show_opt_html = not optimum_html_legend_added
+
+            fig_html.add_vline(
+                x=star_x_index,
+                line_width=1.0,
+                line_dash="dot",
+                line_color=COLOR_BLACK,
+                row=r,
+                col=2,
+                name="Optimum*",
+                showlegend=show_opt_html,
+            )
+            optimum_html_legend_added = True
+
+        for c in [1, 2]:
+            fig_html.update_xaxes(
+                **axis_style_x,
+                categoryorder="array",
+                categoryarray=ordered_x_labels,
+                title_text=param,
+                row=r,
+                col=c,
+                range=[-0.5, len(ordered_x_labels) - 0.5],
+            )
+            fig_html.update_yaxes(
+                **axis_style_y, title_text=target_metric, row=r, col=c
+            )
+
+        fig_pdf = make_subplots(
+            rows=1,
+            cols=2,
+            subplot_titles=[
+                f"Panel A: Distribution by {param}{filter_annotation}",
+                f"Panel B: Median & Mean by {param}{filter_annotation}",
+            ],
+            horizontal_spacing=0.08,
         )
-        fig_pdf.update_yaxes(
-            title_text=target_metric,
-            showline=True,
-            linewidth=1,
-            linecolor="black",
-            mirror=True,
-            ticks="inside",
-            tickcolor="black",
-            tickwidth=1,
-            showgrid=True,
-            gridcolor="#E5E5E5",
-            gridwidth=1,
-            title_font=dict(size=12, color="black"),
-            tickfont=dict(size=10, color="black"),
-            zeroline=True,
-            zerolinecolor="#E5E5E5",
-            zerolinewidth=1,
+
+        for tb in traces_box:
+            fig_pdf.add_trace(tb, row=1, col=1)
+
+        trace_median_pdf = go.Scatter(
+            x=ordered_x_labels,
+            y=medians,
+            mode="lines",
+            name="Median",
+            line=dict(color=COLOR_BLACK, width=1.0),
+            showlegend=True,
         )
+        trace_mean_pdf = go.Scatter(
+            x=ordered_x_labels,
+            y=means,
+            mode="lines",
+            name="Mean",
+            line=dict(color=COLOR_BLACK, width=1.0, dash="dash"),
+            showlegend=True,
+        )
+
+        fig_pdf.add_trace(trace_median_pdf, row=1, col=2)
+        fig_pdf.add_trace(trace_mean_pdf, row=1, col=2)
+
+        if star_x_index is not None:
+            fig_pdf.add_vline(
+                x=star_x_index,
+                line_width=1.0,
+                line_dash="dot",
+                line_color=COLOR_BLACK,
+                row=1,
+                col=2,
+                name="Optimum*",
+                showlegend=True,
+            )
+
+        for c in [1, 2]:
+            fig_pdf.update_xaxes(
+                **axis_style_x,
+                categoryorder="array",
+                categoryarray=ordered_x_labels,
+                title_text=param,
+                row=1,
+                col=c,
+                range=[-0.5, len(ordered_x_labels) - 0.5],
+            )
+            fig_pdf.update_yaxes(**axis_style_y, title_text=target_metric, row=1, col=c)
+
+        if highlight_ranges and param in highlight_ranges:
+            min_val, max_val = highlight_ranges[param]
+            range_indices = [
+                idx
+                for idx, val_str in enumerate(unique_vals)
+                if (
+                    v := (
+                        float(val_str)
+                        if val_str.replace(".", "", 1).isdigit()
+                        else None
+                    )
+                )
+                is not None
+                and min_val <= v <= max_val
+            ]
+
+            if range_indices:
+                start_idx, end_idx = min(range_indices), max(range_indices)
+                for c in [1, 2]:
+                    fig_html.add_vrect(
+                        x0=start_idx,
+                        x1=end_idx,
+                        fillcolor="rgba(200, 200, 200, 0.3)",
+                        layer="below",
+                        line_width=0,
+                        row=r,
+                        col=c,
+                    )
+                    fig_pdf.add_vrect(
+                        x0=start_idx,
+                        x1=end_idx,
+                        fillcolor="rgba(200, 200, 200, 0.3)",
+                        layer="below",
+                        line_width=0,
+                        row=1,
+                        col=c,
+                    )
 
         fig_pdf.update_layout(
-            width=pdf_width,
-            height=pdf_height,
-            font=dict(family=font_family, color="black"),
+            width=PDF_WIDTH,
+            height=PDF_HEIGHT,
+            font=dict(family=ELSEVIER_FONT, size=FONT_SIZE_LABEL, color=COLOR_BLACK),
             plot_bgcolor="white",
             paper_bgcolor="white",
-            showlegend=False,
-            margin=dict(t=10, b=40, l=50, r=10),
+            showlegend=True,
+            legend=legend_style,
+            margin=dict(t=40, b=50, l=0, r=5),
         )
+
+        for annotation in fig_pdf["layout"]["annotations"]:
+            annotation["font"] = dict(
+                family=ELSEVIER_FONT, size=FONT_SIZE_TITLE, color=COLOR_BLACK
+            )
 
         pdf_path = pdf_dir / f"{param}.pdf"
         try:
             fig_pdf.write_image(str(pdf_path), format="pdf")
+            logger.info(f"Successfully saved Elsevier-styled PDF: {pdf_path.name}")
         except Exception as e:
-            logger.error(
-                f"Failed to save PDF for {param}. Make sure 'kaleido' is installed. Error: {e}"
-            )
+            logger.error(f"Failed to save PDF for {param}. Error: {e}")
+            logger.error("Try running: pip install -U kaleido")
 
     fig_html.update_layout(
-        height=400 * rows if rows > 0 else 400,
-        width=1000,
+        height=PDF_HEIGHT * rows if rows > 0 else 400,
+        width=PDF_WIDTH,
         title_text="",
-        font=dict(family=font_family, size=12, color="black"),
+        font=dict(family=ELSEVIER_FONT, size=FONT_SIZE_LABEL, color=COLOR_BLACK),
         plot_bgcolor="white",
         paper_bgcolor="white",
-        showlegend=False,
-        margin=dict(t=40, b=60, l=60, r=40),
+        showlegend=True,
+        legend=legend_style,
+        margin=dict(t=40, b=40, l=45, r=10),
     )
+
+    for annotation in fig_html["layout"]["annotations"]:
+        annotation["font"] = dict(
+            family=ELSEVIER_FONT, size=FONT_SIZE_TITLE, color=COLOR_BLACK
+        )
 
     fig_html.write_html(str(out_file))
     logger.info(f"Saved combined HTML dashboard: {out_file}")
@@ -258,17 +450,13 @@ def generate_distributions():
     all_results_list = []
 
     config_path = run_dir / ".hydra" / "config.yaml"
-    stats_path = "stats_multi_pair_*.parquet"
-    stats_files = list(run_dir.glob(stats_path))
+    stats_files = list(run_dir.glob("*/*/stats_multi_pair_*.parquet"))
 
     if not stats_files:
-        stats_files = list(run_dir.rglob(stats_path))
+        raise ValueError(f"Global stats not found in {run_dir}")
 
     if not config_path.exists() and not list(run_dir.rglob("config.yaml")):
         logger.warning(f"Config files not found in {run_dir}")
-
-    if not stats_files:
-        raise ValueError(f"{stats_path} not found in {run_dir}")
 
     for stats_file in stats_files:
         try:
@@ -311,9 +499,9 @@ def generate_distributions():
                     if stats_file.parent.name.isdigit()
                     else run_dir.name
                 ),
-                "Entry": entry,
-                "Exit": exit_t,
-                "SL": stop_loss,
+                "Entry Threshold": entry,
+                "Exit Threshold": exit_t,
+                "Stop Loss": stop_loss,
                 "Z-Score Window": z_score_window,
                 "Pairs": top_n,
                 "CAGR": get_metric("cagr", "net"),
@@ -322,10 +510,13 @@ def generate_distributions():
                 "Total Trades": int(get_metric("win_count", "net") or 0)
                 + int(get_metric("lose_count", "net") or 0),
                 "Avg Trade Duration": get_metric("avg_trade_duration", "net"),
+                "Avg Trade Return": get_metric("avg_trade_return", "net"),
+                "Sharpe Ratio": get_metric("sharpe_ratio_annual", "net"),
                 "Sortino Ratio": get_metric("sortino_ratio_annual", "net"),
-                "Sortino Ratio Mean": get_metric("sortino_annual_mean", "net"),
                 "Sortino Ratio Median": get_metric("sortino_annual_median", "net"),
+                "Calmar Ratio": get_metric("calmar_ratio", "net"),
                 "TDA-Sortino": get_metric("tda_sortino", "net"),
+                "Custom Score": get_metric("sortino_ratio_annual", "net") ** 2,
             }
 
             all_results_list.append(row_data)
@@ -336,7 +527,10 @@ def generate_distributions():
     logger.info("Saving results and generating plots...")
     df_summary = pd.DataFrame(all_results_list)
 
-    df_summary = df_summary.sort_values(by="TDA-Sortino", ascending=False).reset_index(
+    for col, value in FILTER.items():
+        df_summary = df_summary[df_summary[col] == value]
+
+    df_summary = df_summary.sort_values(by=TARGET_METRIC, ascending=False).reset_index(
         drop=True
     )
 
@@ -367,9 +561,9 @@ def generate_distributions():
     logger.info(f"Saved LaTeX table (Top {TOP_N_ROWS}): {tex_path}")
 
     cols_to_str = [
-        "Entry",
-        "Exit",
-        "SL",
+        "Entry Threshold",
+        "Exit Threshold",
+        "Stop Loss",
         "Z-Score Window",
         "Pairs",
     ]
@@ -382,18 +576,15 @@ def generate_distributions():
     logger.info(f"Saved summary: {output_parquet}")
 
     output_html = output_dir / "plots_distribution.html"
+
     plot_distribution(
         df_summary,
         title="TDA-Sortino Distribution",
         out_file=output_html,
-        params_to_plot=[
-            "Entry",
-            "Exit",
-            "SL",
-            "Z-Score Window",
-            "Pairs",
-        ],
-        target_metric="TDA-Sortino",
+        target_metric=TARGET_METRIC,
+        filters=FILTER,
+        stars=STAR,
+        highlight_ranges=HIGHLIGHT_RANGE,
     )
 
 
