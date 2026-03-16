@@ -7,7 +7,8 @@ defaults:
 
 rl:
   training_folder: null
-  reward: PnLReward
+  reward: AsymmetricReward
+  reward_lambda: 1.0
   obs_space_type: standard
   passes_per_pair: 50
   seed: 42

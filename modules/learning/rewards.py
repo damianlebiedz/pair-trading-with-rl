@@ -30,47 +30,23 @@ class RewardScheme(ABC):
         raise NotImplementedError
 
 
-class PnLReward(RewardScheme):
-    """
-    Standard Net Profit and Loss (PnL) reward function.
-    Calculates the step return normalized by the current equity.
-
-    Formula:
-        R_t = (PnL_t - Fees_t) / Equity_t
-
-    Terminal State:
-        R_t = -1.0 if bankrupt.
-    """
-
-    def calculate(
-        self,
-        step_pnl: float,
-        equity: float,
-        position: float,
-        signal: float,
-        step_fees: float,
-        is_bankrupt: bool,
-        fee_rate: float,
-        win: int,
-    ) -> float:
-        if is_bankrupt:
-            return -1.0
-
-        net_pnl = step_pnl - step_fees
-        return float(net_pnl / equity)
-
-
 class AsymmetricReward(RewardScheme):
     """
-    Reward function with Asymmetric Loss Aversion (based on Prospect Theory).
-    Penalizes negative returns strictly harder than it rewards positive ones
-    to prevent risky trades and false breakout traps.
+    Universal reward function with configurable Asymmetric Loss Aversion.
+    Based on Prospect Theory (Kahneman & Tversky).
+
+    If reward_lambda = 1.0, it acts as a standard Risk-Neutral PnLReward.
+    If reward_lambda > 1.0, it penalizes negative returns strictly harder
+    than it rewards positive ones.
 
     Formula:
         r_t = (PnL_t - Fees_t) / Equity_t
-        R_t = r_t if r_t >= 0 else r_t * lambda
-        (where lambda = 1.5)
+        R_t = r_t if r_t >= 0 else r_t * reward_lambda
     """
+
+    def __init__(self, reward_lambda: float = 1.0):
+        super().__init__()
+        self.reward_lambda = reward_lambda
 
     def reset(self):
         pass
@@ -90,52 +66,8 @@ class AsymmetricReward(RewardScheme):
             return -1.0
 
         reward = (step_pnl - step_fees) / equity
-        if reward < 0:
-            reward *= 1.5
-
-        return float(reward)
-
-
-class CompositeReward(RewardScheme):
-    """
-    Composite reward function applying both Asymmetric Loss Aversion
-    and an Action Churn Penalty to enforce policy stability.
-    Discourages High-Frequency Trading (HFT) and reduces slippage impact.
-
-    Formula:
-        r_t = (PnL_t - Fees_t) / Equity_t
-        R_t = (r_t if r_t >= 0 else r_t * 1.25) - (c * I[a_t != a_{t-1}])
-        (where c is a fraction of the standard fee rate, e.g., 0.1 * fee_rate)
-    """
-
-    def __init__(self):
-        super().__init__()
-        self.prev_position = 0.0
-
-    def reset(self):
-        self.prev_position = 0.0
-
-    def calculate(
-        self,
-        step_pnl: float,
-        equity: float,
-        position: float,
-        signal: float,
-        step_fees: float,
-        is_bankrupt: bool,
-        fee_rate: float,
-        win: int,
-    ) -> float:
-        if is_bankrupt:
-            return -1.0
-
-        reward = (step_pnl - step_fees) / equity
 
         if reward < 0:
-            reward *= 1.25
+            reward *= self.reward_lambda
 
-        if position != self.prev_position:
-            reward -= fee_rate * 0.1
-
-        self.prev_position = position
         return float(reward)

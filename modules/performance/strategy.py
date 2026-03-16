@@ -427,8 +427,6 @@ class Strategy:
                             signal=action,
                             norm_time_in_pos=position_state.time_in_pos
                             / z_score_window,
-                            drawdown_pct=drawdown_pct,
-                            current_market_vol=df["market_vol"].iloc[i],
                         )
                         raw_action = self.agent.get_action(current_state)
                         mapping = {0: -1.0, 1: 0.0, 2: 1.0}

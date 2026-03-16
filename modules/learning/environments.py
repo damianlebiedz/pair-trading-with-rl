@@ -23,6 +23,7 @@ def build_multi_env(
     fee_rate: float,
     freeze_std: bool,
     time_decay_stop: bool,
+    reward_lambda: float = 1.0,
     seed: int = None,
 ) -> DummyVecEnv:
     env_fns = []
@@ -31,7 +32,7 @@ def build_multi_env(
 
         def make_env(result=res):
             reward_class = getattr(rewards_module, rl_reward.value)
-            reward_schema = reward_class()
+            reward_schema = reward_class(reward_lambda=reward_lambda)
 
             env = PairsTradingEnv(
                 result=result,
@@ -282,7 +283,6 @@ class PairsTradingEnv(gym.Env):
         window = int(row.get("window"))
         market_z_score = row.get("market_z_score")
         hurst = row.get("hurst")
-        market_vol = row.get("market_vol")
         signal = row.get("position")
 
         if (
@@ -316,16 +316,10 @@ class PairsTradingEnv(gym.Env):
         if pd.notna(window) and window > 0:
             norm_time = time_in_pos / window
 
-        drawdown_pct = 0.0
-        if self.peak_equity > 0:
-            drawdown_pct = (self.peak_equity - self.equity) / self.peak_equity
-
         self.state = AgentState(
             z_score=float(z_score),
             hurst=float(hurst),
             position=float(self.position_state.position),
             signal=float(signal),
             norm_time_in_pos=float(norm_time),
-            drawdown_pct=float(drawdown_pct),
-            current_market_vol=float(market_vol),
         )

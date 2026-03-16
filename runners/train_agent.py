@@ -220,6 +220,7 @@ def train_agent(cfg: DictConfig):
         seed=seed,
         freeze_std=cfg.rl.freeze_std,
         time_decay_stop=cfg.rl.time_decay_stop,
+        reward_lambda=cfg.rl.reward_lambda,
     )
     vec_env = VecNormalize(vec_env, norm_obs=True, norm_reward=True, clip_obs=10.0)
 

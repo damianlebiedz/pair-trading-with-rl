@@ -333,7 +333,19 @@
         },
         "reward": {
           "$ref": "#/$defs/RLRewards",
-          "description": "Type of RL reward. Options: ['PnLReward', 'AsymmetricReward', 'CompositeReward']"
+          "description": "Type of RL reward. Options: ['AsymmetricReward']"
+        },
+        "reward_lambda": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Lambda in Asymmetric reward function.",
+          "title": "Reward Lambda"
         },
         "obs_space_type": {
           "$ref": "#/$defs/ObsSpaceType",
@@ -387,9 +399,7 @@
     },
     "RLRewards": {
       "enum": [
-        "PnLReward",
-        "AsymmetricReward",
-        "CompositeReward"
+        "AsymmetricReward"
       ],
       "title": "RLRewards",
       "type": "string"

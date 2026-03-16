@@ -15,8 +15,6 @@ class AgentState:
         position (float): Current position in the strategy (-1, 0, 1 scaled by capital).
         signal (float): Position (signal) from non-RL backtest.
         norm_time_in_pos (float): Normalized time in current position (0.0–1.0), where 1.0 means equal to window length.
-        drawdown_pct (float): Current drawdown as a fraction of peak equity.
-        current_market_vol (float): Instantaneous market volatility, computed as average of both assets' rolling volatility.
 
     Methods:
         get_state_arr() -> np.ndarray:
@@ -29,8 +27,6 @@ class AgentState:
     norm_time_in_pos: float
     signal: float
     hurst: float
-    drawdown_pct: float
-    current_market_vol: float
 
     @classmethod
     def get_obs_shape(cls, obs_space_type: ObsSpaceType) -> tuple[int]:
@@ -55,7 +51,7 @@ class AgentState:
         obs_space_type == "standard":
             - state_arr: z_score, position, norm_time_in_pos, signal
         obs_space_type == "full":
-            - state_arr: z_score, position, norm_time_in_pos, signal, hurst, drawdown_pct, current_market_vol
+            - state_arr: z_score, position, norm_time_in_pos, signal, hurst
         """
         if obs_space_type == ObsSpaceType.AUTONOMOUS:
             return np.array(
@@ -86,8 +82,6 @@ class AgentState:
                     self.norm_time_in_pos,
                     self.signal,
                     self.hurst,
-                    self.drawdown_pct,
-                    self.current_market_vol,
                 ],
                 dtype=np.float32,
             )

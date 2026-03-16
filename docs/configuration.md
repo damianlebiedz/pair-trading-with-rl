@@ -89,7 +89,8 @@ Below is an automatically generated list of all configuration parameters support
 
 ### RL
 - **`training_folder`**: Name of the folder with training data, if null take first one.
-- **`reward`**: Type of RL reward. Options: ['PnLReward', 'AsymmetricReward', 'CompositeReward']
+- **`reward`**: Type of RL reward. Options: ['AsymmetricReward']
+- **`reward_lambda`**: Lambda in Asymmetric reward function.
 - **`obs_space_type`**: Type of observation space. Options: ['autonomous', 'standard', 'full']
 - **`passes_per_pair`**: Number of passes per pair during training.
 - **`seed`**: Seed for random number generator.
