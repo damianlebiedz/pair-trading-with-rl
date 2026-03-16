@@ -151,8 +151,8 @@ class PairsTradingEnv(gym.Env):
         target_position = mapping[int(action)]
 
         row = self.df.iloc[self.current_step]
-        price_x = row[self.result.ticker_x]
-        price_y = row[self.result.ticker_y]
+        price_x = row[f"next_open_{self.result.ticker_x}"]
+        price_y = row[f"next_open_{self.result.ticker_y}"]
         position = row["position"]
         exec_win = row["window"]
 
