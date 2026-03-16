@@ -1,3 +1,4 @@
+import os
 import copy
 import logging
 import shutil
@@ -12,7 +13,6 @@ from sb3_contrib import RecurrentPPO
 from stable_baselines3.common.callbacks import BaseCallback, CheckpointCallback
 from stable_baselines3.common.utils import set_random_seed
 from stable_baselines3.common.vec_env import VecNormalize
-import os
 from wandb.integration.sb3 import WandbCallback
 
 from modules.core.config import Config
