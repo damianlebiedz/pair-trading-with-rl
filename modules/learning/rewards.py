@@ -44,7 +44,7 @@ class StepPnLReward(RewardScheme):
         R_t = r_t if r_t >= 0 else r_t * reward_lambda
     """
 
-    def __init__(self, reward_lambda: float = 1.0):
+    def __init__(self, reward_lambda: float = 1.0, **_):
         super().__init__()
         self.reward_lambda = reward_lambda
 
@@ -57,6 +57,7 @@ class StepPnLReward(RewardScheme):
         equity: float,
         step_fees: float,
         is_bankrupt: bool,
+        **_,
     ) -> float:
         if is_bankrupt:
             return -1.0
@@ -74,7 +75,7 @@ class TradePnLReward(RewardScheme):
     TODO
     """
 
-    def __init__(self, reward_lambda: float = 1.0):
+    def __init__(self, reward_lambda: float = 1.0, **_):
         super().__init__()
         self.reward_lambda = reward_lambda
 
@@ -84,6 +85,7 @@ class TradePnLReward(RewardScheme):
         is_bankrupt: bool,
         trade_ended: bool,
         trade_pnl: float,
+        **_,
     ) -> float:
         if is_bankrupt:
             return -1.0
@@ -104,7 +106,7 @@ class HybridActionReward(RewardScheme):
     TODO
     """
 
-    def __init__(self, reward_lambda: float = 1.0, fee_multiplier: float = 0.2):
+    def __init__(self, reward_lambda: float = 1.0, fee_multiplier: float = 0.2, **_):
         super().__init__()
         self.reward_lambda = reward_lambda
         self.fee_multiplier = fee_multiplier
@@ -119,6 +121,7 @@ class HybridActionReward(RewardScheme):
         fee_rate,
         trade_ended=False,
         trade_pnl=0.0,
+        **_,
     ):
         if is_bankrupt:
             return -1.0
