@@ -119,7 +119,7 @@ def train_agent(cfg: DictConfig):
     logger.info(f"Random seed set to: {seed}")
 
     if cfg.rl.reward_lambda is not None:
-        safe_lambda = str(cfg.rl.reward_lambda).replace('.', '_')
+        safe_lambda = str(cfg.rl.reward_lambda).replace(".", "_")
         reward_lambda_str = f"_{safe_lambda}"
     else:
         reward_lambda_str = ""
@@ -254,8 +254,11 @@ def train_agent(cfg: DictConfig):
     checkpoint_dir = f"{model_dir}/{run.id}_checkpoints"
     os.makedirs(checkpoint_dir, exist_ok=True)
 
+    num_envs = len(results)
+    actual_save_freq = max(100_000 // num_envs, 1)
+
     checkpoint_callback = CheckpointCallback(
-        save_freq=100_000,
+        save_freq=actual_save_freq,
         save_path=checkpoint_dir,
         name_prefix=f"{algo_name}_{cfg.rl.obs_space_type.value}_{cfg.rl.reward.value}{reward_lambda_str}",
         save_replay_buffer=False,
