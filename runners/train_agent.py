@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 from omegaconf import DictConfig, OmegaConf
 from stable_baselines3 import A2C
 from sb3_contrib import RecurrentPPO
-from stable_baselines3.common.callbacks import BaseCallback
+from stable_baselines3.common.callbacks import BaseCallback, CheckpointCallback
 from stable_baselines3.common.utils import set_random_seed
 from stable_baselines3.common.vec_env import VecNormalize
 import os
@@ -245,6 +245,17 @@ def train_agent(cfg: DictConfig):
         f"Starting {algo_name} training on {len(results)} pairs (Run ID: {run.id})..."
     )
 
+    checkpoint_dir = f"{model_dir}/{run.id}_checkpoints"
+    os.makedirs(checkpoint_dir, exist_ok=True)
+
+    checkpoint_callback = CheckpointCallback(
+        save_freq=100_000,
+        save_path=checkpoint_dir,
+        name_prefix=f"{algo_name}_{cfg.rl.obs_space_type.value}_{cfg.rl.reward.value}",
+        save_replay_buffer=False,
+        save_vecnormalize=True,
+    )
+
     callbacks = [
         WandbCallback(
             gradient_save_freq=100,
@@ -252,6 +263,7 @@ def train_agent(cfg: DictConfig):
             verbose=2,
         ),
         LogEquityCallback(),
+        checkpoint_callback,
     ]
 
     try:
