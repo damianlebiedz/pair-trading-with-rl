@@ -248,7 +248,7 @@ def train_agent(cfg: DictConfig):
     )
 
     logger.info(
-        f"Starting {algo_name} training on {len(results)} pairs (Run ID: {run.id})..."
+        f"Starting {algo_name} training on {len(results)} pairs (Run ID: {run.id}, Space: {cfg.rl.obs_space_type.value}, Reward: {cfg.rl.reward.value}{reward_lambda_str})..."
     )
 
     checkpoint_dir = f"{model_dir}/{run.id}_checkpoints"
@@ -297,7 +297,7 @@ def train_agent(cfg: DictConfig):
             model_artifact = wandb.Artifact(
                 name=f"{final_model_name}_model",
                 type="model",
-                description=f"Trained {algo_name} model (Space: {cfg.rl.obs_space_type.value}, Reward: {cfg.rl.reward.value})",
+                description=f"Trained {algo_name} model (Space: {cfg.rl.obs_space_type.value}, Reward: {cfg.rl.reward.value}{reward_lambda_str})",
             )
             model_artifact.add_file(f"{save_path}.zip")
             model_artifact.add_file(f"{save_path}_normalize.pkl")
@@ -320,7 +320,7 @@ def train_agent(cfg: DictConfig):
             model_artifact = wandb.Artifact(
                 name=f"{final_model_name}_model_interrupted",
                 type="model",
-                description=f"Interrupted {algo_name} (Space: {cfg.rl.obs_space_type.value}, Reward: {cfg.rl.reward.value})",
+                description=f"Interrupted {algo_name} (Space: {cfg.rl.obs_space_type.value}, Reward: {cfg.rl.reward.value}{reward_lambda_str})",
             )
             model_artifact.add_file(f"{save_path}.zip")
             model_artifact.add_file(f"{save_path}_normalize.pkl")
