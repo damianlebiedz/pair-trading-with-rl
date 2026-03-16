@@ -119,7 +119,8 @@ def train_agent(cfg: DictConfig):
     logger.info(f"Random seed set to: {seed}")
 
     if cfg.rl.reward_lambda is not None:
-        reward_lambda_str = f"_{cfg.rl.reward_lambda}"
+        safe_lambda = str(cfg.rl.reward_lambda).replace('.', '_')
+        reward_lambda_str = f"_{safe_lambda}"
     else:
         reward_lambda_str = ""
 
