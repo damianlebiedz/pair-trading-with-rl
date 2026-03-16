@@ -30,7 +30,18 @@ FONT_SIZE_LABEL = 12
 FONT_SIZE_TITLE = 13
 COLOR_BLACK = "black"
 
-PUBLICATION_COLORS = ["#1f77b4", "#d62728", "#2ca02c", "#9467bd", "#ff7f0e", "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf"]
+PUBLICATION_COLORS = [
+    "#1f77b4",
+    "#d62728",
+    "#2ca02c",
+    "#9467bd",
+    "#ff7f0e",
+    "#8c564b",
+    "#e377c2",
+    "#7f7f7f",
+    "#bcbd22",
+    "#17becf",
+]
 
 PDF_WIDTH = 720
 PDF_HEIGHT = 350
@@ -424,7 +435,8 @@ def generate_reports(folder_name: str, baseline_dict: dict):
                 tickformat="%b\n%Y",
                 dtick="M3",
                 tick0=base_is_series.index[0] if len(base_is_series) > 0 else None,
-                row=1, col=1
+                row=1,
+                col=1,
             )
 
             fig.update_xaxes(
@@ -432,7 +444,8 @@ def generate_reports(folder_name: str, baseline_dict: dict):
                 tickformat="%b\n%Y",
                 dtick="M3",
                 tick0=base_oos_series.index[0] if len(base_oos_series) > 0 else None,
-                row=1, col=2
+                row=1,
+                col=2,
             )
 
             fig.update_yaxes(**axis_style_y, tickformat=".0%")
