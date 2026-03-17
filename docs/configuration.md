@@ -65,6 +65,7 @@ Below is an automatically generated list of all configuration parameters support
 
 ### Performance
 - **`use_rl`**: Flag to use RL model during backtest.
+- **`autonomous_agent`**: Flag to set a risk management layer for an agent. If True, agent is autonomously deciding about exit. If false, agent is forced to exit while take profit or stop loss hit.
 - **`z_score_window`**: Z-Score lookback window size.
 - **`entry_threshold`**: Z-score threshold to open a position.
 - **`exit_threshold`**: Z-score threshold to close a position.

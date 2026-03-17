@@ -286,6 +286,7 @@ def run_backtest(cfg: DictConfig):
                 ),
                 vol_window=cfg.settings.vol_window,
                 freeze_std=cfg.performance.freeze_std,
+                autonomous_agent=cfg.performance.autonomous_agent,
                 agent=agent,
             )
 

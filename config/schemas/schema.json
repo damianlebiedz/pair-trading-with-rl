@@ -210,6 +210,11 @@
           "title": "Use Rl",
           "type": "boolean"
         },
+        "autonomous_agent": {
+          "description": "Flag to set a risk management layer for an agent. If True, agent is autonomously deciding about exit. If false, agent is forced to exit while take profit or stop loss hit.",
+          "title": "Autonomous Agent",
+          "type": "boolean"
+        },
         "z_score_window": {
           "description": "Z-Score lookback window size.",
           "exclusiveMinimum": 0,

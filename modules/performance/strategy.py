@@ -45,6 +45,7 @@ class Strategy:
         time_decay_sl: bool,
         time_decay_params: tuple[int, int],
         freeze_std: bool,
+        autonomous_agent: bool,
         agent: RLAgentAdapter | None = None,
         source: Source = Source.LOG.value,
     ):
@@ -63,6 +64,7 @@ class Strategy:
         self.time_decay_sl = time_decay_sl
         self.time_decay_params = time_decay_params
         self.freeze_std = freeze_std
+        self.autonomous_agent = autonomous_agent
         self.agent = agent
         self.source = source
 
@@ -395,11 +397,7 @@ class Strategy:
                     drawdown_pct = 0.0
 
                 if position_state.sl_lock:
-                    if (
-                        z_score is not None
-                        and prev_z_score is not None
-                        and exit_threshold is not None
-                    ):
+                    if z_score is not None and prev_z_score is not None:
                         break_above = prev_z_score > exit_threshold >= z_score
                         break_below = prev_z_score < -exit_threshold <= z_score
                         if break_above or break_below:
@@ -413,11 +411,20 @@ class Strategy:
                     z_score=z_score,
                     exit_threshold=exit_threshold,
                 )
-                if hit_sl and self.sl_lock:
+                if hit_sl and self.sl_lock and not self.autonomous_agent:
                     position_state.sl_lock = True
 
                 if self.agent:
-                    if z_score is None or pd.isna(z_score) or hit_sl or hit_tp:
+                    if z_score is None or pd.isna(z_score):
+                        action = 0.0
+                    elif not self.autonomous_agent and (hit_sl or hit_tp):
+                        action = 0.0
+                    elif (
+                            self.autonomous_agent
+                            and self.time_decay_sl
+                            and position_state.position != 0
+                            and position_state.time_in_pos >= z_score_window
+                    ):
                         action = 0.0
                     else:
                         current_state = AgentState(

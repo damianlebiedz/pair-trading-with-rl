@@ -12,6 +12,7 @@ pair_selection:
 
 performance:
   use_rl: false
+  autonomous_agent: True
 
   z_score_window: 168
   entry_threshold: 3.0

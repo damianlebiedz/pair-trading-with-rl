@@ -90,6 +90,9 @@ class PairSelection(BaseModel):
 
 class Performance(BaseModel):
     use_rl: bool = Field(description="Flag to use RL model during backtest.")
+    autonomous_agent: bool = Field(
+        description="Flag to set a risk management layer for an agent. If True, agent is autonomously deciding about exit. If false, agent is forced to exit while take profit or stop loss hit."
+    )
     z_score_window: int = Field(
         gt=0,
         description="Z-Score lookback window size.",
