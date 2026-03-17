@@ -411,7 +411,11 @@ class Strategy:
                     z_score=z_score,
                     exit_threshold=exit_threshold,
                 )
-                if hit_sl and self.sl_lock and not self.autonomous_agent:
+                if (
+                    hit_sl
+                    and self.sl_lock
+                    and (not self.autonomous_agent or not self.agent)
+                ):
                     position_state.sl_lock = True
 
                 if self.agent:

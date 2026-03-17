@@ -19,7 +19,6 @@ from modules.data_services.merge_utils import (
     aggregate_strategy_results,
     stitch_strategy_results,
 )
-from modules.performance.objectives import TDASortino
 from modules.performance.pair_selector import PairSelector
 from modules.performance.stats import calculate_stats
 from modules.performance.strategy import Strategy
@@ -331,43 +330,6 @@ def merge_multi_period_results(
         initial_cash=initial_cash,
         interval=results[0].interval,
         risk_free_rate_annual=risk_free_rate_annual,
-    )
-
-    net_mean = (
-        round(float(pd.Series(iter_sortino_net).mean()), 4)
-        if iter_sortino_net
-        else None
-    )
-    net_med = (
-        round(float(pd.Series(iter_sortino_net).median()), 4)
-        if iter_sortino_net
-        else None
-    )
-    gross_mean = (
-        round(float(pd.Series(iter_sortino_gross).mean()), 4)
-        if iter_sortino_gross
-        else None
-    )
-    gross_med = (
-        round(float(pd.Series(iter_sortino_gross).median()), 4)
-        if iter_sortino_gross
-        else None
-    )
-
-    stats.loc["sortino_annual_mean"] = pd.Series(
-        {"net": net_mean, "gross": gross_mean}, dtype=float
-    )
-    stats.loc["sortino_annual_median"] = pd.Series(
-        {"net": net_med, "gross": gross_med}, dtype=float
-    )
-
-    tda_evaluator = TDASortino(drawdown_penalty_lambda=10.0)
-
-    tda_net = tda_evaluator.calculate(stats, metric_type="net")
-    tda_gross = tda_evaluator.calculate(stats, metric_type="gross")
-
-    stats.loc["tda_sortino"] = pd.Series(
-        {"net": tda_net, "gross": tda_gross}, dtype=float
     )
 
     final_result = StrategyResult(
