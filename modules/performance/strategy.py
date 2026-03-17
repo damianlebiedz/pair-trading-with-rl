@@ -420,10 +420,10 @@ class Strategy:
                     elif not self.autonomous_agent and (hit_sl or hit_tp):
                         action = 0.0
                     elif (
-                            self.autonomous_agent
-                            and self.time_decay_sl
-                            and position_state.position != 0
-                            and position_state.time_in_pos >= z_score_window
+                        self.autonomous_agent
+                        and self.time_decay_sl
+                        and position_state.position != 0
+                        and position_state.time_in_pos >= z_score_window
                     ):
                         action = 0.0
                     else:
