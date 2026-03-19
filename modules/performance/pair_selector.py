@@ -57,7 +57,7 @@ class PairSelector:
         Initial Score = (0.5 * Normalized Cointegration) + (0.5 * R-squared)
 
         A hard penalty (Score = 0.0) is applied if either structural constraint is violated:
-        - Hurst > 0.5: Indicates the spread is trending, violating mean-reversion assumptions.
+        - Hurst >= 0.5: Indicates the spread is trending (or is a pure random walk), violating mean-reversion assumptions.
         - Beta <= 0: Indicates assets move inversely or lack a valid linear relationship for hedging.
 
         Algorithm Stages:
@@ -141,9 +141,9 @@ class PairSelector:
                     beta=beta,
                 )
 
-                if hurst > 0.5:
+                if hurst >= 0.5:
                     logger.debug(
-                        f"Pair {pair} penalized. Hurst {hurst:.3f} > 0.5. Score reset to 0."
+                        f"Pair {pair} penalized. Hurst {hurst:.3f} >= 0.5. Score reset to 0."
                     )
                     res_row["score"] = 0.0
 
