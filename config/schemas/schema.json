@@ -400,7 +400,16 @@
     "RLAlgoDefault": {
       "properties": {
         "rl_algo": {
-          "$ref": "#/$defs/RLModelName"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RLModelName"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "RL algorithm selection. Options: ['recurrent_ppo', 'a2c_baseline']"
         }
       },
       "title": "RLAlgoDefault",
@@ -712,7 +721,6 @@
         }
       ],
       "default": null,
-      "description": "RL algorithm selection (e.g., A2C, PPO) and its specific hyperparameters.",
       "title": "Rl Algo"
     },
     "wandb": {

@@ -322,7 +322,9 @@ def merge_multi_period_results(
         logger.warning("No results collected for merging.")
         return None
 
-    final_df, final_exec_df = stitch_strategy_results(results)
+    final_df, final_exec_df = stitch_strategy_results(
+        results=results, initial_cash=initial_cash
+    )
 
     stats = calculate_stats(
         df=final_df,

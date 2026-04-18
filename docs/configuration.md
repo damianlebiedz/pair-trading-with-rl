@@ -14,7 +14,7 @@ Below is an automatically generated list of all configuration parameters support
 - **`performance`**: Trading logic flags, SL types, and backtest execution parameters.
 - **`data_fetching_pipeline`**: *No description provided*
 - **`rl`**: Reinforcement Learning environment parameters and training settings.
-- **`rl_algo`**: RL algorithm selection (e.g., A2C, PPO) and its specific hyperparameters.
+- **`rl_algo`**: *No description provided*
 - **`wandb`**: Weights & Biases configuration for experiment tracking and logging.
 
 ---
@@ -102,7 +102,7 @@ Below is an automatically generated list of all configuration parameters support
 
 
 ### RLAlgoDefault
-- **`rl_algo`**: *No description provided*
+- **`rl_algo`**: RL algorithm selection. Options: ['recurrent_ppo', 'a2c_baseline']
 
 
 ### RecurrentPPO

@@ -248,7 +248,10 @@ class PPOAlgo(BaseModel):
 
 
 class RLAlgoDefault(BaseModel):
-    rl_algo: RLModelName
+    rl_algo: RLModelName | None = Field(
+        default=None,
+        description=f"RL algorithm selection. Options: {[n.value for n in RLModelName]}",
+    )
 
 
 class Wandb(BaseModel):
@@ -310,7 +313,6 @@ class Config(BaseModel):
     )
     rl_algo: RLAlgoConfig | None = Field(
         default=None,
-        description="RL algorithm selection (e.g., A2C, PPO) and its specific hyperparameters.",
     )
     wandb: Wandb | None = Field(
         default=None,
