@@ -1,9 +1,12 @@
+"""Script to generate IS/OOS performance report, including PDF equity plots and formatted LaTeX tables."""
+
 import json
 import sys
 import yaml
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+import plotly.io as pio
 from pathlib import Path
 
 from modules.data_services.data_utils import load_btc_benchmark, load_ewp_benchmark
@@ -16,10 +19,12 @@ logger = get_logger(__name__)
 
 STRATEGY = {
     "Rolling Beta-Hedge": {
-        "IS": "winner_is",
-        "OOS": "winner_oos",
+        "IS": "baseline_is",
+        "OOS": "baseline_oos",
     }
 }
+
+TITLE = "Out-Of-Sample Performance of the Baseline Strategy Against Benchmarks (2025)."
 
 LEVERAGE = 10
 
@@ -61,13 +66,13 @@ RENAME_MAP = {
     "win_count": "Win Count",
     "lose_count": "Loss Count",
     "win_rate": "Win Rate",
-    "avg_win": "Avg Win",
-    "avg_lose": "Avg Lose",
+    "avg_win_return": "Avg Win Return",
+    "avg_lose_return": "Avg Loss Return",
     "avg_trade_return": "Avg Trade Return",
     "avg_trade_duration": "Avg Trade Duration",
-    "sharpe_ratio_annual": "Sharpe Ratio",
-    "sortino_ratio_annual": "Sortino Ratio",
-    "calmar_ratio_annual": "Calmar Ratio",
+    "sharpe_ratio_annual": "Sharpe Ratio (Ann.)",
+    "sortino_ratio_annual": "Sortino Ratio (Ann.)",
+    "calmar_ratio": "Calmar Ratio",
     "tda_sortino": "TDA-Sortino",
 }
 
@@ -180,12 +185,12 @@ def build_stitched_ewp(
 
 
 def generate_academic_report(strategies_map: dict):
+    pio.defaults.default_format = "pdf"
+
     results_dir = project_root / "results"
 
-    report_output_dir = results_dir / "final_paper_is_oos"
-    pdf_dir = report_output_dir / "pdfs"
+    report_output_dir = results_dir / "is_oos_report"
     report_output_dir.mkdir(parents=True, exist_ok=True)
-    pdf_dir.mkdir(parents=True, exist_ok=True)
 
     assets_file = project_root / "config" / "schemas" / "list_of_assets.json"
     list_of_assets = {}
@@ -270,23 +275,11 @@ def generate_academic_report(strategies_map: dict):
         full_start = df_ret_is.index[0].strftime("%Y-%m-%d")
         full_end = df_ret_oos.index[-1].strftime("%Y-%m-%d")
 
-        stats_dict = {}
-
         is_pnl = (df_ret_is["total_pnl"] - df_ret_is["total_fees"]) * LEVERAGE
         is_ret = is_pnl / initial_cash
         is_ret = is_ret - is_ret.iloc[0]
 
-        df_is_lev = pd.DataFrame(index=df_ret_is.index)
-        df_is_lev["total_pnl"] = is_pnl
-        df_is_lev["total_net_pnl"] = is_pnl
-        df_is_lev["equity"] = initial_cash + is_pnl
-
-        stats_is_lev = calculate_stats(
-            df_is_lev, df_exec_is, initial_cash, Interval.H1, risk_free_rate
-        )
-        stats_dict[f"Baseline ({fee_rate*100}% fees, {LEVERAGE}x leverage)"] = (
-            stats_is_lev["net"].reindex(SELECTED_METRICS)
-        )
+        stats_dict = {}
 
         oos_pnl = (df_ret_oos["total_pnl"] - df_ret_oos["total_fees"]) * LEVERAGE
         oos_ret = oos_pnl / initial_cash
@@ -300,9 +293,7 @@ def generate_academic_report(strategies_map: dict):
         stats_oos_lev = calculate_stats(
             df_oos_lev, df_exec_oos, initial_cash, Interval.H1, risk_free_rate
         )
-        stats_dict[f"Baseline ({fee_rate*100}% fees, {LEVERAGE}x leverage)"] = (
-            stats_oos_lev["net"].reindex(SELECTED_METRICS)
-        )
+        stats_dict["Baseline"] = stats_oos_lev["net"].reindex(SELECTED_METRICS)
 
         empty_ex = pd.DataFrame(columns=["position", "pnl", "fees", "entry_equity"])
 
@@ -319,11 +310,10 @@ def generate_academic_report(strategies_map: dict):
         df_btc_oos["total_pnl"] = btc_oos_ret * initial_cash
         df_btc_oos["total_net_pnl"] = df_btc_oos["total_pnl"]
         df_btc_oos["equity"] = initial_cash + df_btc_oos["total_net_pnl"]
-        stats_dict[f"BTC B&H ({fee_rate*100}% fees)"] = calculate_stats(
+        stats_dict["BTC B&H"] = calculate_stats(
             df_btc_oos, empty_ex, initial_cash, Interval.H1, risk_free_rate
         )["net"].reindex(SELECTED_METRICS)
 
-        # EWP
         ewp_data_is = build_stitched_ewp(
             results_dir, folders.get("IS"), Interval.H1, list_of_assets
         )
@@ -337,7 +327,7 @@ def generate_academic_report(strategies_map: dict):
         df_ewp_oos["total_pnl"] = ewp_oos_ret * initial_cash
         df_ewp_oos["total_net_pnl"] = df_ewp_oos["total_pnl"]
         df_ewp_oos["equity"] = initial_cash + df_ewp_oos["total_net_pnl"]
-        stats_dict[f"EWP B&H ({fee_rate*100}% fees)"] = calculate_stats(
+        stats_dict["EWP B&H"] = calculate_stats(
             df_ewp_oos, empty_ex, initial_cash, Interval.H1, risk_free_rate
         )["net"].reindex(SELECTED_METRICS)
 
@@ -347,8 +337,6 @@ def generate_academic_report(strategies_map: dict):
             {"name": "with_ewp", "show_btc": False, "show_ewp": True},
             {"name": "with_all", "show_btc": True, "show_ewp": True},
         ]
-
-        final_fig_html = None
 
         for p_cfg in plot_configs:
             fig = make_subplots(
@@ -367,7 +355,7 @@ def generate_academic_report(strategies_map: dict):
                     go.Scatter(
                         x=ret.index,
                         y=ret,
-                        name=f"Baseline ({fee_rate*100}% fees, {LEVERAGE}x leverage)",
+                        name=f"Baseline ({fee_rate * 100}% fees, {LEVERAGE}x lev)",
                         legendgroup="M",
                         line=dict(color=COLOR_BLACK, width=1.5),
                         showlegend=(c == 1),
@@ -382,7 +370,7 @@ def generate_academic_report(strategies_map: dict):
                         go.Scatter(
                             x=ret.index,
                             y=ret,
-                            name=f"BTC B&H ({fee_rate*100}% fees)",
+                            name=f"BTC B&H ({fee_rate * 100}% fees)",
                             legendgroup="B",
                             line=dict(color=COLOR_BLACK, width=1.0, dash="dash"),
                             showlegend=(c == 1),
@@ -397,7 +385,7 @@ def generate_academic_report(strategies_map: dict):
                         go.Scatter(
                             x=ret.index,
                             y=ret,
-                            name=f"EWP B&H ({fee_rate*100}% fees)",
+                            name=f"EWP B&H ({fee_rate * 100}% fees)",
                             legendgroup="E",
                             line=dict(color=COLOR_BLACK, width=1.0, dash="dot"),
                             showlegend=(c == 1),
@@ -436,70 +424,74 @@ def generate_academic_report(strategies_map: dict):
 
             fig.update_yaxes(title_text="Cumulative Return", row=1, col=1)
 
-            pdf_path = pdf_dir / f"{label}_equity_{p_cfg['name']}.pdf"
+            pdf_path = report_output_dir / f"{label}_equity_{p_cfg['name']}.pdf"
             fig.write_image(str(pdf_path), format="pdf")
-
-            if p_cfg["name"] == "with_all":
-                final_fig_html = fig
 
         df_stats = pd.DataFrame(stats_dict).rename(index=RENAME_MAP).astype(object)
 
         for col in df_stats.columns:
             for idx in df_stats.index:
                 val = df_stats.loc[idx, col]
-                if pd.notna(val):
+                if pd.notna(val) and not (isinstance(val, str) and val == "-"):
                     if idx in [
                         "CAGR",
                         "Annual Volatility",
                         "Max Drawdown",
                         "Win Rate",
+                        "Avg Win Return",
+                        "Avg Loss Return",
+                        "Avg Trade Return",
                     ]:
-                        df_stats.loc[idx, col] = f"{val:.2%}"
+                        df_stats.loc[idx, col] = f"{val:.2%}".replace("%", "\\%")
                     elif idx in ["Win Count", "Loss Count"]:
                         df_stats.loc[idx, col] = f"{int(val)}"
+                    elif idx == "Avg Trade Duration":
+                        df_stats.loc[idx, col] = f"{val:.2f}"
                     else:
                         df_stats.loc[idx, col] = f"{val:.4f}"
                 else:
                     df_stats.loc[idx, col] = "-"
 
-        with open(report_output_dir / f"{label}_table.tex", "w") as f:
-            f.write(
-                df_stats.to_latex(
-                    column_format="l" + "r" * len(df_stats.columns), escape=False
-                )
-            )
+        def get_val(metric, col):
+            return df_stats.loc[metric, col] if metric in df_stats.index else "-"
 
-        html_content = f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <style>
-                body {{ font-family: "{FONT_SERIF}"; padding: 30px; max-width: 1200px; margin: auto; background-color: #fcfcfc; }}
-                .report-container {{ background-color: white; padding: 30px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }}
-                h2, h3 {{ text-align: center; color: #333; }}
-                .elsevier-table {{ width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 11pt; }}
-                .elsevier-table thead tr {{ border-top: 2px solid black; border-bottom: 1px solid black; }}
-                .elsevier-table th, .elsevier-table td {{ padding: 8px; text-align: right; }}
-                .elsevier-table td:first-child, .elsevier-table th:first-child {{ text-align: left; font-weight: bold; width: 200px; }}
-                .elsevier-table tbody tr:last-child td {{ border-bottom: 2px solid black; }}
-                .elsevier-table tbody tr:hover {{ background-color: #f5f5f5; }}
-            </style>
-        </head>
-        <body>
-            <div class="report-container">
-                <h2>{label} - In-Sample vs Out-of-Sample</h2>
-                <div>{final_fig_html.to_html(full_html=False, include_plotlyjs='cdn')}</div>
-                <br><br>
-                <h3>Table 1: Performance Summary</h3>
-                {df_stats.to_html(classes="elsevier-table", border=0, justify="center")}
-            </div>
-        </body>
-        </html>
-        """
-        with open(
-            report_output_dir / f"{label}_report.html", "w", encoding="utf-8"
-        ) as f:
-            f.write(html_content)
+        latex_content = f"""\\begin{{table}}[H]
+    \\centering
+    \\footnotesize
+    \\renewcommand{{\\arraystretch}}{{1.2}}
+    \\caption{{{TITLE}}}
+    \\label{{tab:oos-baseline}}
+    \\vspace{{12pt}}
+    \\begin{{tabularx}}{{\\linewidth}}{{l*{{3}}{{>{{\\centering\\arraybackslash}}X}}}}
+    \\toprule
+        Metric & Baseline & BTC B\\&H & EWP B\\&H \\\\ 
+    \\midrule
+        CAGR & {get_val('CAGR', 'Baseline')} & {get_val('CAGR', 'BTC B&H')} & {get_val('CAGR', 'EWP B&H')} \\\\
+        Annual Volatility & {get_val('Annual Volatility', 'Baseline')} & {get_val('Annual Volatility', 'BTC B&H')} & {get_val('Annual Volatility', 'EWP B&H')} \\\\
+        Max Drawdown & {get_val('Max Drawdown', 'Baseline')} & {get_val('Max Drawdown', 'BTC B&H')} & {get_val('Max Drawdown', 'EWP B&H')} \\\\[4pt]
+
+        Win Count & {get_val('Win Count', 'Baseline')} & - & - \\\\
+        Loss Count & {get_val('Loss Count', 'Baseline')} & - & - \\\\
+        Win Rate & {get_val('Win Rate', 'Baseline')} & - & - \\\\[4pt]
+
+        Avg Win Return & {get_val('Avg Win Return', 'Baseline')} & - & - \\\\
+        Avg Loss Return & {get_val('Avg Loss Return', 'Baseline')} & - & - \\\\
+        Avg Trade Return & {get_val('Avg Trade Return', 'Baseline')} & - & - \\\\
+        Avg Trade Duration & {get_val('Avg Trade Duration', 'Baseline')} & - & - \\\\[4pt]
+
+        Sharpe Ratio (Ann.) & {get_val('Sharpe Ratio (Ann.)', 'Baseline')} & {get_val('Sharpe Ratio (Ann.)', 'BTC B&H')} & {get_val('Sharpe Ratio (Ann.)', 'EWP B&H')} \\\\
+        Sortino Ratio (Ann.) & {get_val('Sortino Ratio (Ann.)', 'Baseline')} & {get_val('Sortino Ratio (Ann.)', 'BTC B&H')} & {get_val('Sortino Ratio (Ann.)', 'EWP B&H')} \\\\
+        Calmar Ratio & {get_val('Calmar Ratio', 'Baseline')} & {get_val('Calmar Ratio', 'BTC B&H')} & {get_val('Calmar Ratio', 'EWP B&H')} \\\\ 
+    \\bottomrule
+    \\end{{tabularx}}
+
+    \\vspace{{12pt}}
+    \\justifying \\noindent \\scriptsize Note: 
+\\end{{table}}
+"""
+        with open(report_output_dir / f"{label}_oos_table.tex", "w") as f:
+            f.write(latex_content)
+
         logger.info("IS-OOS Pipeline completed successfully.")
 
 
