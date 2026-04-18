@@ -9,20 +9,20 @@ from modules.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-FOLDER = "stage 1 zoom"
+FOLDER = "stage 2 zoom 2.0"
 TOP_N_ROWS = 10
 TARGET_METRIC = "Sortino Ratio"
 
 FILTER = {
-    # "Entry Threshold": 3.0,
+    "Entry Threshold": 3.0,
     "Exit Threshold": 0.0,
-    "Stop Loss": 2.0,
+    # "Stop Loss": 2.0,
     "Z-Score Window": 168,
     "Pairs": 20,
 }
 
 STAR = {
-    "Entry Threshold": 3.0,
+    # "Entry Threshold": 3.0,
     # "Stop Loss": 2.0,
 }
 
@@ -171,14 +171,14 @@ def plot_distribution(
     )
 
     legend_style = dict(
-        yanchor="top",
-        y=0.98,
+        yanchor="bottom",
+        y=0.05,
         xanchor="right",
         x=0.99,
         font=dict(family=ELSEVIER_FONT, size=FONT_SIZE_TICK, color=COLOR_BLACK),
         bgcolor="rgba(255, 255, 255, 0.8)",
         bordercolor=COLOR_BLACK,
-        borderwidth=0.5,
+        borderwidth=0.2,
     )
 
     optimum_html_legend_added = False
