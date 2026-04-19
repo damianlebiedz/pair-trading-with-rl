@@ -364,3 +364,6 @@ if __name__ == "__main__":
             logger.warning(
                 "Found CSV files, but its metrics don't fit the identifiers."
             )
+
+    logger.info("Ending...")
+    os._exit(0)
