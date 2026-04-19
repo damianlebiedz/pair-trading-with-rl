@@ -1,5 +1,5 @@
 """Script to generate grid-search distributions, including PDF plots and summary parquet."""
-
+import os
 import sys
 import math
 import pandas as pd
@@ -14,6 +14,7 @@ from modules.utils.logger import get_logger
 logger = get_logger(__name__)
 
 FOLDER = "baseline_optimization"
+TARGET_RUN_NAME = "stage 2 zoom 2.0"
 
 TARGET_METRIC = "Sortino Ratio"
 
@@ -39,13 +40,15 @@ project_root = current_file.parent.parent
 sys.path.append(str(project_root))
 
 
-def plot_global_distributions(
+def plot_distributions(
     df: pd.DataFrame,
     out_dir: Path,
     target_metric: str,
     run_name: str,
 ):
     pio.defaults.default_format = "pdf"
+    pio.defaults.mathjax = None
+
     out_dir.mkdir(parents=True, exist_ok=True)
     logger.info(f"Generating individual PDFs for '{run_name}' in: {out_dir}")
 
@@ -122,7 +125,7 @@ def plot_global_distributions(
             rows=1,
             cols=2,
             subplot_titles=[
-                f"Panel A: Global Distribution by {param}",
+                f"Panel A: Distribution by {param}",
                 f"Panel B: Median & Mean by {param}",
             ],
             horizontal_spacing=0.08,
@@ -330,7 +333,7 @@ def generate_distributions(run_dir: Path, output_dir: Path):
     df_summary.to_parquet(output_parquet, engine="pyarrow", index=False)
     logger.info(f"Saved global summary to: {output_parquet}")
 
-    plot_global_distributions(
+    plot_distributions(
         df=df_summary,
         out_dir=output_dir,
         target_metric=TARGET_METRIC,
@@ -348,12 +351,13 @@ if __name__ == "__main__":
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    found_subdirs = [
-        d for d in experiment_dir.iterdir() if d.is_dir() and d.name != "distributions"
-    ]
+    target_subdir = experiment_dir / TARGET_RUN_NAME
 
-    if not found_subdirs:
-        logger.warning(f"No subdirectories found in {experiment_dir}.")
+    if target_subdir.exists() and target_subdir.is_dir():
+        logger.info(f"Processing ONLY: {TARGET_RUN_NAME}")
+        generate_distributions(run_dir=target_subdir, output_dir=output_dir)
     else:
-        for subdir in sorted(found_subdirs):
-            generate_distributions(run_dir=subdir, output_dir=output_dir)
+        logger.error(f"Directory '{target_subdir}' not found. Check the name.")
+
+    logger.info("Ending...")
+    os._exit(0)
