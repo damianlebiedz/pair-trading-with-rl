@@ -11,7 +11,10 @@
   - [WIDE](#wide)
   - [MICRO](#micro)
   - [ASSUMPTIONS VERIFICATION](#assumptions-verification)
-- [RL Sensitivity Analysis](#rl-sensitivity-analysis)
+- [RL Training](#rl-training)
+  - [TRAINING](#training)
+- [RL Test](#rl-test)
+- [RL OOS Sensitivity Analysis](#rl-oos-sensitivity-analysis)
   - [WIDE](#wide)
   - [MICRO](#micro)
   - [ASSUMPTIONS VERIFICATION](#assumptions-verification)
@@ -225,4 +228,4 @@ poetry run python runners/run_backtest.py -m hydra/launcher=joblib hydra.launche
 poetry run python runners/run_backtest.py -m hydra/launcher=joblib hydra.launcher.n_jobs=-1 clean_single_backtests=false generate_plots=false save_for_training=false rl_model_folder="recurrent_ppo_*_*_*_*_seed*" performance.use_rl=true  performance.autonomous_agent=true performance.iterations=12 performance.beta_hedge=rolling performance.sl_lock=true performance.time_decay_sl=true pair_selection.top_n=20 pair_selection.start="2024-11-01" pair_selection.end="2025-01-01" performance.beta_start="2024-12-01" performance.start="2025-01-01" performance.end="2025-02-01" performance.entry_threshold=3.0 performance.exit_threshold=0.0 performance.stop_loss=2.0 performance.z_score_window=168 performance.time_decay_sl=true;
 ```
 
-Then you can use `rl_sensitivity_analysis.py` helper to generate pdf plots and table for the analysis.
+Then you can use `rl_sensitivity_analysis.py` helper to generate PDF plots and table for the analysis.

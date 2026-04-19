@@ -1,8 +1,11 @@
+"""Script to generate multiple strategies performance report, including PDF equity plots and formatted LaTeX tables."""
+
 import json
 import sys
 import yaml
 import pandas as pd
 import plotly.graph_objects as go
+import plotly.io as pio
 from pathlib import Path
 from datetime import datetime
 
@@ -15,13 +18,15 @@ from runners.core.utils import generate_date_lists
 logger = get_logger(__name__)
 
 STRATEGIES = {
-    "winner_rl_oos 1": "Winner 1",
-    "winner_rl_oos 2 (time_delay_stop training)": "Winner 2",
+    "baseline_oos": "Baseline",
+    "rl_winner_oos": "Agent 2",
 }
 
-LEVERAGE = 10
+TITLE = "Out-Of-Sample Performance of Agent 2 Against Baseline and Benchmarks (2025)."
+
+LEVERAGE = 10.0
+
 ELSEVIER_FONT = "Arial, sans-serif"
-FONT_SERIF = "Times New Roman, serif"
 FONT_SIZE_TICK = 10
 FONT_SIZE_LABEL = 12
 FONT_SIZE_TITLE = 13
@@ -70,12 +75,12 @@ RENAME_MAP = {
     "win_count": "Win Count",
     "lose_count": "Loss Count",
     "win_rate": "Win Rate",
-    "avg_win_return": "Avg Win",
-    "avg_lose_return": "Avg Lose",
+    "avg_win_return": "Avg Win Return",
+    "avg_lose_return": "Avg Loss Return",
     "avg_trade_return": "Avg Trade Return",
     "avg_trade_duration": "Avg Trade Duration",
-    "sharpe_ratio_annual": "Sharpe Ratio",
-    "sortino_ratio_annual": "Sortino Ratio",
+    "sharpe_ratio_annual": "Sharpe Ratio (Ann.)",
+    "sortino_ratio_annual": "Sortino Ratio (Ann.)",
     "calmar_ratio": "Calmar Ratio",
 }
 
@@ -180,7 +185,9 @@ def build_stitched_ewp(
     return final_ewp
 
 
-def generate_multi_report(strategies_map: dict):
+def generate_academic_multi_report(strategies_map: dict):
+    pio.defaults.default_format = "pdf"
+
     results_dir = project_root / "results"
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     report_output_dir = results_dir / f"final_multi_report_{timestamp}"
@@ -193,6 +200,8 @@ def generate_multi_report(strategies_map: dict):
     if assets_file.exists():
         with open(assets_file, "r", encoding="utf-8") as f:
             list_of_assets = json.load(f)
+    else:
+        logger.error(f"'list_of_assets.json' not found: {assets_file}")
 
     axis_style_x = dict(
         showline=True,
@@ -248,6 +257,8 @@ def generate_multi_report(strategies_map: dict):
     fee_rate = float(config.get("market", {}).get("fee_rate", 0.0005))
     risk_free_rate = float(config.get("market", {}).get("risk_free_rate_annual", 0.0))
 
+    logger.info("Loading strategies and extracting metrics...")
+
     for i, (folder, label) in enumerate(strategies_map.items()):
         df_ret, df_exec, df_stats = load_strategy_data(results_dir, folder)
         if df_ret is None:
@@ -268,14 +279,14 @@ def generate_multi_report(strategies_map: dict):
         strat_stats = calculate_stats(
             df_lev, df_exec, initial_cash, Interval.H1, risk_free_rate
         )
-        stats_dict[f"{label} ({fee_rate*100}% fees, {LEVERAGE}x lev)"] = strat_stats[
-            "net"
-        ].reindex(SELECTED_METRICS)
+
+        col_name = f"{label}"
+        stats_dict[col_name] = strat_stats["net"].reindex(SELECTED_METRICS)
 
         strategy_series[label] = {
             "series": ret,
             "color": PUBLICATION_COLORS[i % len(PUBLICATION_COLORS)],
-            "label_full": f"{label} ({fee_rate*100}% fees, {LEVERAGE}x lev)",
+            "label_full": f"{label} ({fee_rate * 100}% fees, {int(LEVERAGE)}x lev)",
         }
 
     if not global_starts:
@@ -286,6 +297,8 @@ def generate_multi_report(strategies_map: dict):
     full_end = max(global_ends).strftime("%Y-%m-%d")
     empty_ex = pd.DataFrame(columns=["position", "pnl", "fees", "entry_equity"])
 
+    logger.info("Loading benchmarks...")
+
     try:
         btc = load_btc_benchmark(full_start, full_end, Interval.H1, fee_rate)
         btc_ret = btc["BTC_return"] - btc["BTC_return"].iloc[0]
@@ -294,7 +307,8 @@ def generate_multi_report(strategies_map: dict):
         df_btc["total_pnl"] = btc_ret * initial_cash
         df_btc["total_net_pnl"] = df_btc["total_pnl"]
         df_btc["equity"] = initial_cash + df_btc["total_net_pnl"]
-        stats_dict[f"BTC B&H ({fee_rate*100}% fees)"] = calculate_stats(
+
+        stats_dict["BTC B&H"] = calculate_stats(
             df_btc, empty_ex, initial_cash, Interval.H1, risk_free_rate
         )["net"].reindex(SELECTED_METRICS)
     except Exception as e:
@@ -311,7 +325,9 @@ def generate_multi_report(strategies_map: dict):
             df_ewp["total_pnl"] = ewp_ret * initial_cash
             df_ewp["total_net_pnl"] = df_ewp["total_pnl"]
             df_ewp["equity"] = initial_cash + df_ewp["total_net_pnl"]
-            stats_dict[f"EWP B&H ({fee_rate*100}% fees)"] = calculate_stats(
+
+            # Clean benchmark name
+            stats_dict["EWP B&H"] = calculate_stats(
                 df_ewp, empty_ex, initial_cash, Interval.H1, risk_free_rate
             )["net"].reindex(SELECTED_METRICS)
         else:
@@ -327,7 +343,7 @@ def generate_multi_report(strategies_map: dict):
         {"name": "with_all", "show_btc": True, "show_ewp": True},
     ]
 
-    final_fig_html = None
+    logger.info("Generating PDF Plots...")
 
     for p_cfg in plot_configs:
         fig = go.Figure()
@@ -347,7 +363,7 @@ def generate_multi_report(strategies_map: dict):
                 go.Scatter(
                     x=btc_ret.index,
                     y=btc_ret,
-                    name=f"BTC B&H ({fee_rate*100}% fees)",
+                    name=f"BTC B&H ({fee_rate * 100}% fees)",
                     line=dict(color="gray", width=1.0, dash="dash"),
                 )
             )
@@ -357,7 +373,7 @@ def generate_multi_report(strategies_map: dict):
                 go.Scatter(
                     x=ewp_ret.index,
                     y=ewp_ret,
-                    name=f"EWP B&H ({fee_rate*100}% fees)",
+                    name=f"EWP B&H ({fee_rate * 100}% fees)",
                     line=dict(color="black", width=1.0, dash="dot"),
                 )
             )
@@ -397,73 +413,96 @@ def generate_multi_report(strategies_map: dict):
         )
 
         pdf_path = pdf_dir / f"comparison_{p_cfg['name']}.pdf"
-        fig.write_image(str(pdf_path, format="pdf"))
+        fig.write_image(str(pdf_path), format="pdf")
 
-        if p_cfg["name"] == "with_all":
-            final_fig_html = fig
+    logger.info("Generating LaTeX Table...")
 
     df_stats = pd.DataFrame(stats_dict).rename(index=RENAME_MAP).astype(object)
+    col_names = list(df_stats.columns)
 
     for col in df_stats.columns:
         for idx in df_stats.index:
             val = df_stats.loc[idx, col]
-            if pd.notna(val):
+            if pd.notna(val) and not (isinstance(val, str) and val == "-"):
                 if idx in [
                     "CAGR",
                     "Annual Volatility",
                     "Max Drawdown",
                     "Win Rate",
-                    "Avg Win",
-                    "Avg Lose",
+                    "Avg Win Return",
+                    "Avg Loss Return",
                     "Avg Trade Return",
                 ]:
-                    df_stats.loc[idx, col] = f"{val:.2%}"
+                    df_stats.loc[idx, col] = f"{val:.2%}".replace("%", "\\%")
                 elif idx in ["Win Count", "Loss Count"]:
                     df_stats.loc[idx, col] = f"{int(val)}"
+                elif idx == "Avg Trade Duration":
+                    df_stats.loc[idx, col] = f"{val:.2f}"
                 else:
                     df_stats.loc[idx, col] = f"{val:.4f}"
             else:
                 df_stats.loc[idx, col] = "-"
 
-    with open(report_output_dir / "comparison_table.tex", "w") as f:
-        f.write(
-            df_stats.to_latex(
-                column_format="l" + "r" * len(df_stats.columns), escape=False
-            )
-        )
+    def get_val(metric, col_name):
+        return df_stats.loc[metric, col_name] if metric in df_stats.index else "-"
 
-    html_content = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <style>
-            body {{ font-family: "{FONT_SERIF}"; padding: 30px; max-width: 1100px; margin: auto; background-color: #fcfcfc; }}
-            .report-container {{ background-color: white; padding: 30px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }}
-            h2, h3 {{ text-align: center; color: #333; }}
-            .elsevier-table {{ width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 10pt; }}
-            .elsevier-table thead tr {{ border-top: 2px solid black; border-bottom: 1px solid black; }}
-            .elsevier-table th, .elsevier-table td {{ padding: 8px; text-align: right; }}
-            .elsevier-table td:first-child, .elsevier-table th:first-child {{ text-align: left; font-weight: bold; width: 200px; }}
-            .elsevier-table tbody tr:last-child td {{ border-bottom: 2px solid black; }}
-            .elsevier-table tbody tr:hover {{ background-color: #f5f5f5; }}
-        </style>
-    </head>
-    <body>
-        <div class="report-container">
-            <h2>Multi-Strategy Performance Comparison</h2>
-            <div>{final_fig_html.to_html(full_html=False, include_plotlyjs='cdn')}</div>
-            <br>
-            <h3>Table 1: Comparative Metrics</h3>
-            {df_stats.to_html(classes="elsevier-table", border=0, justify="center")}
-        </div>
-    </body>
-    </html>
-    """
-    with open(report_output_dir / "comparison_report.html", "w", encoding="utf-8") as f:
-        f.write(html_content)
+    num_cols = len(col_names) + 1
+    latex_cols_format = (
+        "l" + f"*{{{num_cols - 1}}}{{>{{\\centering\\arraybackslash}}X}}"
+    )
+
+    escaped_col_names = [c.replace("&", "\\&") for c in col_names]
+    header_str = "Metric & " + " & ".join(escaped_col_names)
+
+    note_str = (
+        f"Baseline: {fee_rate * 100:g}\\% fees, {int(LEVERAGE)}x leverage; "
+        f"Agent 2 (StepPnLReward, Autonomous, $\\lambda=1.2$): {fee_rate * 100:g}\\% fees, {int(LEVERAGE)}x leverage; "
+        f"Benchmarks: {fee_rate * 100:g}\\% fees. The {int(LEVERAGE)}x leverage is applied to the baseline "
+        "and agent strategies to scale their inherently lower structural volatility and align their risk "
+        "profile with the unleveraged benchmarks (see Subsection \\ref{subsec:benchmark_selection}). "
+        "Consequently, all calculated performance metrics represent the post-leverage performance of "
+        "the strategies (see Subsection \\ref{subsec:performance_metrics})."
+    )
+
+    latex_content = f"""\\begin{{table}}[H]
+    \\centering
+    \\footnotesize
+    \\renewcommand{{\\arraystretch}}{{1.2}}
+    \\caption{{{TITLE}}}
+    \\label{{tab:oos-baseline-agent2}}
+    \\vspace{{12pt}}
+    \\begin{{tabularx}}{{\\linewidth}}{{{latex_cols_format}}}
+    \\toprule
+        {header_str} \\\\ 
+    \\midrule
+        CAGR & {' & '.join([get_val('CAGR', c) for c in col_names])} \\\\
+        Annual Volatility & {' & '.join([get_val('Annual Volatility', c) for c in col_names])} \\\\
+        Max Drawdown & {' & '.join([get_val('Max Drawdown', c) for c in col_names])} \\\\[4pt]
+
+        Win Count & {' & '.join([get_val('Win Count', c) for c in col_names])} \\\\
+        Loss Count & {' & '.join([get_val('Loss Count', c) for c in col_names])} \\\\
+        Win Rate & {' & '.join([get_val('Win Rate', c) for c in col_names])} \\\\[4pt]
+
+        Avg Win Return & {' & '.join([get_val('Avg Win Return', c) for c in col_names])} \\\\
+        Avg Loss Return & {' & '.join([get_val('Avg Loss Return', c) for c in col_names])} \\\\
+        Avg Trade Return & {' & '.join([get_val('Avg Trade Return', c) for c in col_names])} \\\\
+        Avg Trade Duration & {' & '.join([get_val('Avg Trade Duration', c) for c in col_names])} \\\\[4pt]
+
+        Sharpe Ratio (Ann.) & {' & '.join([get_val('Sharpe Ratio (Ann.)', c) for c in col_names])} \\\\
+        Sortino Ratio (Ann.) & {' & '.join([get_val('Sortino Ratio (Ann.)', c) for c in col_names])} \\\\
+        Calmar Ratio & {' & '.join([get_val('Calmar Ratio', c) for c in col_names])} \\\\ 
+    \\bottomrule
+    \\end{{tabularx}}
+
+    \\vspace{{12pt}}
+    \\justifying \\noindent \\scriptsize Note: {note_str}
+\\end{{table}}
+"""
+    with open(report_output_dir / "comparison_table.tex", "w") as f:
+        f.write(latex_content)
 
     logger.info(f"Comparison report generated in: {report_output_dir}")
 
 
 if __name__ == "__main__":
-    generate_multi_report(STRATEGIES)
+    generate_academic_multi_report(STRATEGIES)

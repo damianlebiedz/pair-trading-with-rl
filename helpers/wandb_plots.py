@@ -311,9 +311,7 @@ if __name__ == "__main__":
     found_files = glob.glob(csv_search_pattern)
 
     if not found_files:
-        print(
-            f"ERROR: .csv files not found in: {BASE_DIR.absolute()}"
-        )
+        print(f"ERROR: .csv files not found in: {BASE_DIR.absolute()}")
     else:
         csv_files_paths = {}
 

@@ -77,7 +77,9 @@ def aggregate_models():
         model_col_id = get_column_id_from_folder(rl_model_folder)
 
         if model_col_id is None:
-            print(f"Skipped {run_dir.name} - could not parse parameters from '{rl_model_folder}'")
+            print(
+                f"Skipped {run_dir.name} - could not parse parameters from '{rl_model_folder}'"
+            )
             continue
 
         stats_files = list(run_dir.rglob("stats_multi_pair_*.parquet"))
@@ -137,13 +139,13 @@ def aggregate_models():
             for val in final_df[metric_key]:
                 if pd.isna(val):
                     vals.append("-")
-                elif fmt_type == 'pct':
+                elif fmt_type == "pct":
                     vals.append(f"{val * 100:.2f}\\%")
-                elif fmt_type == 'int':
+                elif fmt_type == "int":
                     vals.append(f"{int(val)}")
-                elif fmt_type == 'float2':
+                elif fmt_type == "float2":
                     vals.append(f"{val:.2f}")
-                elif fmt_type == 'float4':
+                elif fmt_type == "float4":
                     vals.append(f"{val:.4f}")
 
         ending = " \\\\[4pt]" if add_spacing else " \\\\"

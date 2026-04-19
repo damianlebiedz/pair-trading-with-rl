@@ -255,7 +255,9 @@ def generate_reports(folder_name: str, baseline_dict: dict):
             p_name = diffs_sens[0]
             val = run_oos["params"][p_name]
 
-            run_oos["series_oos"] = run_oos["ret_series"] - run_oos["ret_series"].iloc[0]
+            run_oos["series_oos"] = (
+                run_oos["ret_series"] - run_oos["ret_series"].iloc[0]
+            )
 
             sensitivity_dict[p_name][val] = run_oos
             added = True
@@ -279,7 +281,9 @@ def generate_reports(folder_name: str, baseline_dict: dict):
                     elif val.lower() == "false":
                         val = True
 
-            run_oos["series_oos"] = run_oos["ret_series"] - run_oos["ret_series"].iloc[0]
+            run_oos["series_oos"] = (
+                run_oos["ret_series"] - run_oos["ret_series"].iloc[0]
+            )
 
             mechanism_dict[p_name][val] = run_oos
             added = True
