@@ -1,11 +1,12 @@
 """Script to generate PDF equity plots for RL agents grouped by Reward Function."""
 
+import os
 import sys
 import re
+import time
 import pandas as pd
 import plotly.graph_objects as go
 from pathlib import Path
-from datetime import datetime
 
 from modules.utils.logger import get_logger
 
@@ -85,11 +86,8 @@ def generate_multi_report(target_folder_name: str):
         logger.error(f"Directory {base_dir} does not exist!")
         return
 
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    report_output_dir = project_root / "results" / f"final_grouped_plots_{timestamp}"
-    pdf_dir = report_output_dir / "pdfs"
+    report_output_dir = project_root / "results" / "rl_rewards_ablation"
     report_output_dir.mkdir(parents=True, exist_ok=True)
-    pdf_dir.mkdir(parents=True, exist_ok=True)
 
     axis_style_x = dict(
         showline=True,
@@ -186,7 +184,6 @@ def generate_multi_report(target_folder_name: str):
 
         fig = go.Figure()
 
-        # Sort lines by col_id so colors are consistent across plots
         series_list.sort(key=lambda x: x["col_id"])
 
         for i, data in enumerate(series_list):
@@ -222,11 +219,42 @@ def generate_multi_report(target_folder_name: str):
             **axis_style_y, tickformat=".0%", title_text="Cumulative Return"
         )
 
-        pdf_path = pdf_dir / f"comparison_{reward_type}.pdf"
-        fig.write_image(str(pdf_path), format="pdf")
+        pdf_path = report_output_dir / f"comparison_{reward_type}.pdf"
+        try:
+            fig.write_image(str(pdf_path), format="pdf")
+            logger.info(f"PDF saved: {pdf_path.name}")
+        except Exception as e:
+            logger.warning(
+                f"Initial save failed for {pdf_path.name}. Killing kaleido and retrying... {e}"
+            )
+            os.system("taskkill /F /IM kaleido.exe /T >nul 2>&1")
+            time.sleep(1)
+
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    fig.write_image(str(pdf_path), format="pdf")
+                    logger.info(f"PDF saved on retry {attempt + 1}: {pdf_path.name}")
+                    break
+                except Exception as retry_e:
+                    if attempt < max_retries - 1:
+                        logger.warning(
+                            f"Retry {attempt + 1} failed for {pdf_path.name}. Killing kaleido again..."
+                        )
+                        os.system("taskkill /F /IM kaleido.exe /T >nul 2>&1")
+                        time.sleep(2)
+                    else:
+                        logger.error(
+                            f"Failed to save {pdf_path.name} after {max_retries} retries: {retry_e}"
+                        )
         logger.info(f"Saved: {pdf_path.name}")
 
-    logger.info(f"Plot generation completed successfully! Saved to: {pdf_dir}")
+    logger.info(
+        f"Plot generation completed successfully! Saved to: {report_output_dir}"
+    )
+
+    logger.info("Ending...")
+    os._exit(0)
 
 
 if __name__ == "__main__":
