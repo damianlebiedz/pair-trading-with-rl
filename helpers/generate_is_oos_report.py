@@ -56,7 +56,6 @@ SELECTED_METRICS = [
     "sharpe_ratio_annual",
     "sortino_ratio_annual",
     "calmar_ratio",
-    "tda_sortino",
 ]
 
 RENAME_MAP = {
@@ -73,7 +72,6 @@ RENAME_MAP = {
     "sharpe_ratio_annual": "Sharpe Ratio (Ann.)",
     "sortino_ratio_annual": "Sortino Ratio (Ann.)",
     "calmar_ratio": "Calmar Ratio",
-    "tda_sortino": "TDA-Sortino",
 }
 
 
