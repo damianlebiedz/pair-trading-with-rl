@@ -1,25 +1,18 @@
-"""Script to generate plots based on the W&B export .csv files."""
+"""Script to generate smoothed PDF plots based on W&B export .csv files."""
 
 import glob
+import os
+import time
 import pandas as pd
 import plotly.graph_objects as go
 from pathlib import Path
 import re
 
-TARGET_SUBFOLDER = "wandb_export"
+from modules.utils.logger import get_logger
 
-CSV_NAMES = {
-    "reward": "wandb_export_2026-03-17T21_45_05.791+01_00.csv",
-    "fees_paid": "wandb_export_2026-03-17T21_45_18.159+01_00.csv",
-    "exposure_pct": "wandb_export_2026-03-17T21_45_28.947+01_00.csv",
-    "avg_win_rate": "wandb_export_2026-03-17T21_45_39.037+01_00.csv",
-    "avg_hold": "wandb_export_2026-03-17T21_45_49.522+01_00.csv",
-    "avg_equity": "wandb_export_2026-03-17T21_45_59.285+01_00.csv",
-    "value_loss": "wandb_export_2026-03-17T21_48_11.875+01_00.csv",
-    "pg_loss": "wandb_export_2026-03-17T21_48_20.042+01_00.csv",
-    "total_loss": "wandb_export_2026-03-17T21_48_28.565+01_00.csv",
-    "explained_var": "wandb_export_2026-03-17T21_48_46.796+01_00.csv",
-}
+logger = get_logger(__name__)
+
+TARGET_SUBFOLDER = "wandb_export"
 
 RENAME_MAP = {
     "recurrent_ppo_autonomous_StepPnLReward_1_0": "1 – StepPnLReward, Autonomous, λ=1.0",
@@ -43,7 +36,6 @@ RENAME_MAP = {
 }
 
 ELSEVIER_FONT = "Arial, sans-serif"
-FONT_SERIF = "Times New Roman, serif"
 FONT_SIZE_TICK = 10
 FONT_SIZE_LABEL = 12
 FONT_SIZE_TITLE = 13
@@ -74,7 +66,7 @@ PUBLICATION_COLORS = [
 ]
 
 PDF_WIDTH = 720
-PDF_HEIGHT = 450
+PDF_HEIGHT = 650
 
 axis_style_x = dict(
     showline=True,
@@ -239,13 +231,11 @@ def generate_wandb_diagnostics(csv_paths: dict, output_dir: Path):
             smoothed_vals = raw_vals.ewm(alpha=cfg["smooth"], adjust=False).mean()
 
             label = clean_label(col)
-
             model_id = extract_id_from_label(label)
-            if model_id != 999:
-                color_idx = (model_id - 1) % len(PUBLICATION_COLORS)
-            else:
-                color_idx = 0
 
+            color_idx = (
+                (model_id - 1) % len(PUBLICATION_COLORS) if model_id != 999 else 0
+            )
             color = PUBLICATION_COLORS[color_idx]
 
             show_leg = label not in added_to_legend
@@ -282,14 +272,14 @@ def generate_wandb_diagnostics(csv_paths: dict, output_dir: Path):
         full_title_text = f"{cfg['title']}<br><span style='font-size:{FONT_SIZE_SUBTITLE}px; color:#555555'>Exponential Moving Average (\u03B1={alpha_val})</span>"
 
         fig.update_layout(
-            showlegend=False,
+            showlegend=True,
             width=PDF_WIDTH,
             height=PDF_HEIGHT,
             font=dict(family=ELSEVIER_FONT, size=FONT_SIZE_LABEL, color=COLOR_BLACK),
             plot_bgcolor="white",
             paper_bgcolor="white",
             legend=legend_style,
-            margin=dict(t=40, b=60, l=60, r=40),
+            margin=dict(t=50, b=180, l=60, r=40),
             title=dict(
                 text=full_title_text,
                 font=dict(
@@ -302,8 +292,34 @@ def generate_wandb_diagnostics(csv_paths: dict, output_dir: Path):
         )
 
         output_file = output_dir / f"wandb_{cfg['key']}.pdf"
-        fig.write_image(str(output_file), format="pdf")
-        print(f"Generated plot: {output_file.name}")
+
+        try:
+            fig.write_image(str(output_file), format="pdf")
+            logger.info(f"Generated plot: {output_file.name}")
+        except Exception as e:
+            logger.warning(
+                f"Initial save failed for {output_file.name}. Killing kaleido and retrying... {e}"
+            )
+            os.system("taskkill /F /IM kaleido.exe /T >nul 2>&1")
+            time.sleep(1)
+
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    fig.write_image(str(output_file), format="pdf")
+                    logger.info(f"PDF saved on retry {attempt + 1}: {output_file.name}")
+                    break
+                except Exception as retry_e:
+                    if attempt < max_retries - 1:
+                        logger.warning(
+                            f"Retry {attempt + 1} failed for {output_file.name}. Killing kaleido again..."
+                        )
+                        os.system("taskkill /F /IM kaleido.exe /T >nul 2>&1")
+                        time.sleep(2)
+                    else:
+                        logger.error(
+                            f"Failed to save {output_file.name} after {max_retries} retries: {retry_e}"
+                        )
 
 
 if __name__ == "__main__":
@@ -311,7 +327,7 @@ if __name__ == "__main__":
     found_files = glob.glob(csv_search_pattern)
 
     if not found_files:
-        print(f"ERROR: .csv files not found in: {BASE_DIR.absolute()}")
+        logger.error(f"ERROR: .csv files not found in: {BASE_DIR.absolute()}")
     else:
         csv_files_paths = {}
 
@@ -345,4 +361,6 @@ if __name__ == "__main__":
         if len(csv_files_paths) > 0:
             generate_wandb_diagnostics(csv_files_paths, BASE_DIR)
         else:
-            print("Found CSV files, but its metrics doesn't fit.")
+            logger.warning(
+                "Found CSV files, but its metrics don't fit the identifiers."
+            )
