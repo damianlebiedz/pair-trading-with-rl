@@ -3,6 +3,8 @@
 import os
 import sys
 import math
+import time
+
 import pandas as pd
 import yaml
 import plotly.graph_objects as go
@@ -14,8 +16,7 @@ from modules.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-FOLDER = "baseline_optimization"
-TARGET_RUN_NAME = "stage 2 zoom 2.0"
+FOLDER = "Baseline Optimization"
 
 TARGET_METRIC = "Sortino Ratio"
 
@@ -231,9 +232,31 @@ def plot_distributions(
         pdf_path = out_dir / f"{param} {run_name}.pdf"
         try:
             fig_pdf.write_image(str(pdf_path), format="pdf")
-            logger.info(f"Successfully saved PDF: {pdf_path.name}")
+            logger.info(f"PDF saved: {pdf_path.name}")
         except Exception as e:
-            logger.error(f"Failed to save PDF for {param}. Error: {e}")
+            logger.warning(
+                f"Initial save failed for {pdf_path.name}. Killing kaleido and retrying... {e}"
+            )
+            os.system("taskkill /F /IM kaleido.exe /T >nul 2>&1")
+            time.sleep(1)
+
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    fig_pdf.write_image(str(pdf_path), format="pdf")
+                    logger.info(f"PDF saved on retry {attempt + 1}: {pdf_path.name}")
+                    break
+                except Exception as retry_e:
+                    if attempt < max_retries - 1:
+                        logger.warning(
+                            f"Retry {attempt + 1} failed for {pdf_path.name}. Killing kaleido again..."
+                        )
+                        os.system("taskkill /F /IM kaleido.exe /T >nul 2>&1")
+                        time.sleep(2)
+                    else:
+                        logger.error(
+                            f"Failed to save {pdf_path.name} after {max_retries} retries: {retry_e}"
+                        )
 
 
 def generate_distributions(run_dir: Path, output_dir: Path):
@@ -352,13 +375,15 @@ if __name__ == "__main__":
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    target_subdir = experiment_dir / TARGET_RUN_NAME
+    found_subdirs = [
+        d for d in experiment_dir.iterdir() if d.is_dir() and d.name != "distributions"
+    ]
 
-    if target_subdir.exists() and target_subdir.is_dir():
-        logger.info(f"Processing ONLY: {TARGET_RUN_NAME}")
-        generate_distributions(run_dir=target_subdir, output_dir=output_dir)
+    if not found_subdirs:
+        logger.warning(f"No subdirectories found in {experiment_dir}.")
     else:
-        logger.error(f"Directory '{target_subdir}' not found. Check the name.")
+        for subdir in sorted(found_subdirs):
+            generate_distributions(run_dir=subdir, output_dir=output_dir)
 
     logger.info("Ending...")
     os._exit(0)
