@@ -159,48 +159,70 @@ poetry run python runners/run_backtest.py -m hydra/launcher=joblib hydra.launche
 poetry run python runners/run_backtest.py -m hydra/launcher=joblib hydra.launcher.n_jobs=-1 clean_single_backtests=false generate_plots=false save_for_training=false performance.use_rl=false performance.iterations=12 performance.beta_hedge=rolling performance.sl_lock=true performance.time_decay_sl=true pair_selection.top_n=20 pair_selection.start="2024-11-01" pair_selection.end="2025-01-01" performance.beta_start="2024-12-01" performance.start="2025-01-01" performance.end="2025-02-01" performance.entry_threshold=3.0 performance.exit_threshold=0.0 performance.stop_loss=2.0 performance.z_score_window=168 performance.time_decay_sl=false;
 ```
 
-## RL Sensitivity Analysis
+## RL Training
+
+Note: Before training run In-Sample Baseline's backtest with `save_for_training: false` and ensure that before this action `data/rl_training` folder was clean.
+
+```bash
+poetry run python runners/run_backtest.py -m hydra/launcher=joblib hydra.launcher.n_jobs=-1 clean_single_backtests=false generate_plots=false save_for_training=true performance.use_rl=false performance.iterations=12 performance.beta_hedge=rolling performance.sl_lock=true performance.time_decay_sl=true pair_selection.top_n=20 pair_selection.start="2023-11-01" pair_selection.end="2024-01-01" performance.beta_start="2023-12-01" performance.start="2024-01-01" performance.end="2024-02-01" performance.entry_threshold=3.0 performance.exit_threshold=0.0 performance.stop_loss=2.0 performance.z_score_window=168;
+```
+
+### TRAINING
+
+```bash
+poetry run python runners/train_agent.py -m hydra/launcher=joblib hydra.launcher.n_jobs=-1 defaults.rl_algo=recurrent_ppo rl.training_folder=null rl.reward=StepPnLReward,TradePnLReward,HybridActionReward rl.reward_lambda=1.0,1.2 rl.fee_multiplier=0.2 rl.obs_space_type=autonomous,standard,full rl.passes_per_pair=20 rl.seed=42 rl.verbose=1 rl.time_decay_stop=true
+```
+
+## RL Test
+
+Note: Ensurer that you have RL models trained in `data/rl_models`.
+
+### IS
+
+```bash
+poetry run python runners/run_backtest.py -m hydra/launcher=joblib hydra.launcher.n_jobs=-1 clean_single_backtests=false generate_plots=false save_for_training=false rl_model_folder="recurrent_ppo_*_*_*_*_seed*" performance.use_rl=true  performance.autonomous_agent=false performance.iterations=12 performance.beta_hedge=rolling performance.sl_lock=true performance.time_decay_sl=true pair_selection.top_n=20 pair_selection.start="2023-11-01" pair_selection.end="2024-01-01" performance.beta_start="2023-12-01" performance.start="2024-01-01" performance.end="2024-02-01" performance.entry_threshold=3.0 performance.exit_threshold=0.0 performance.stop_loss=2.0 performance.z_score_window=168;
+```
+
+### OOS
+
+```bash
+poetry run python runners/run_backtest.py -m hydra/launcher=joblib hydra.launcher.n_jobs=-1 clean_single_backtests=false generate_plots=false save_for_training=false rl_model_folder="recurrent_ppo_*_*_*_*_seed*" performance.use_rl=true  performance.autonomous_agent=false performance.iterations=12 performance.beta_hedge=rolling performance.sl_lock=true performance.time_decay_sl=true pair_selection.top_n=20 pair_selection.start="2024-11-01" pair_selection.end="2025-01-01" performance.beta_start="2024-12-01" performance.start="2025-01-01" performance.end="2025-02-01" performance.entry_threshold=3.0 performance.exit_threshold=0.0 performance.stop_loss=2.0 performance.z_score_window=168;
+```
+
+Repeat this commands for every RL model. Then you can aggregate these backtests into one folder and run helper `aggregate_rl_results.py` with appropriate `FOLDER` name to generate comparison table.
+
+## RL OOS Sensitivity Analysis
 
 Note: Structure of the folder should be similar as in the baseline's case. Remember to change `FOLDER` name in the `sensitivity_analysis.py` file.
 
 ### WIDE
 
-#### IS
-
 ```bash
-
-```
-
-#### OOS
-    
-```bash
-
+poetry run python runners/run_backtest.py -m hydra/launcher=joblib hydra.launcher.n_jobs=-1 clean_single_backtests=false generate_plots=false save_for_training=false rl_model_folder="recurrent_ppo_*_*_*_*_seed*" performance.use_rl=true  performance.autonomous_agent=false performance.iterations=12 performance.beta_hedge=rolling performance.sl_lock=true performance.time_decay_sl=true pair_selection.top_n=20 pair_selection.start="2024-11-01" pair_selection.end="2025-01-01" performance.beta_start="2024-12-01" performance.start="2025-01-01" performance.end="2025-02-01" performance.entry_threshold=2.50,3.50 performance.exit_threshold=0.0 performance.stop_loss=2.0 performance.z_score_window=168;
+poetry run python runners/run_backtest.py -m hydra/launcher=joblib hydra.launcher.n_jobs=-1 clean_single_backtests=false generate_plots=false save_for_training=false rl_model_folder="recurrent_ppo_*_*_*_*_seed*" performance.use_rl=true  performance.autonomous_agent=false performance.iterations=12 performance.beta_hedge=rolling performance.sl_lock=true performance.time_decay_sl=true pair_selection.top_n=20 pair_selection.start="2024-11-01" pair_selection.end="2025-01-01" performance.beta_start="2024-12-01" performance.start="2025-01-01" performance.end="2025-02-01" performance.entry_threshold=3.0 performance.exit_threshold=-0.5,0.5 performance.stop_loss=2.0 performance.z_score_window=168;
+poetry run python runners/run_backtest.py -m hydra/launcher=joblib hydra.launcher.n_jobs=-1 clean_single_backtests=false generate_plots=false save_for_training=false rl_model_folder="recurrent_ppo_*_*_*_*_seed*" performance.use_rl=true  performance.autonomous_agent=false performance.iterations=12 performance.beta_hedge=rolling performance.sl_lock=true performance.time_decay_sl=true pair_selection.top_n=20 pair_selection.start="2024-11-01" pair_selection.end="2025-01-01" performance.beta_start="2024-12-01" performance.start="2025-01-01" performance.end="2025-02-01" performance.entry_threshold=3.0 performance.exit_threshold=0.0 performance.stop_loss=1.5,2.5 performance.z_score_window=168;
+poetry run python runners/run_backtest.py -m hydra/launcher=joblib hydra.launcher.n_jobs=-1 clean_single_backtests=false generate_plots=false save_for_training=false rl_model_folder="recurrent_ppo_*_*_*_*_seed*" performance.use_rl=true  performance.autonomous_agent=false performance.iterations=12 performance.beta_hedge=rolling performance.sl_lock=true performance.time_decay_sl=true pair_selection.top_n=20 pair_selection.start="2024-11-01" pair_selection.end="2025-01-01" performance.beta_start="2024-12-01" performance.start="2025-01-01" performance.end="2025-02-01" performance.entry_threshold=3.0 performance.exit_threshold=0.0 performance.stop_loss=2.0 performance.z_score_window=168 pair_selection.top_n=10,30;
+poetry run python runners/run_backtest.py -m hydra/launcher=joblib hydra.launcher.n_jobs=-1 clean_single_backtests=false generate_plots=false save_for_training=false rl_model_folder="recurrent_ppo_*_*_*_*_seed*" performance.use_rl=true  performance.autonomous_agent=false performance.iterations=12 performance.beta_hedge=rolling performance.sl_lock=true performance.time_decay_sl=true pair_selection.top_n=20 pair_selection.start="2024-11-01" pair_selection.end="2025-01-01" performance.beta_start="2024-12-01" performance.start="2025-01-01" performance.end="2025-02-01" performance.entry_threshold=3.0 performance.exit_threshold=0.0 performance.stop_loss=2.0 performance.z_score_window=120,216 pair_selection.top_n=20;
 ```
 
 ### MICRO
 
-#### IS
-
 ```bash
-
-```
-
-#### OOS
-
-```bash
-
+poetry run python runners/run_backtest.py -m hydra/launcher=joblib hydra.launcher.n_jobs=-1 clean_single_backtests=false generate_plots=false save_for_training=false rl_model_folder="recurrent_ppo_*_*_*_*_seed*" performance.use_rl=true  performance.autonomous_agent=false performance.iterations=12 performance.beta_hedge=rolling performance.sl_lock=true performance.time_decay_sl=true pair_selection.top_n=20 pair_selection.start="2024-11-01" pair_selection.end="2025-01-01" performance.beta_start="2024-12-01" performance.start="2025-01-01" performance.end="2025-02-01" performance.entry_threshold=2.90,3.10 performance.exit_threshold=0.0 performance.stop_loss=2.0 performance.z_score_window=168;
+poetry run python runners/run_backtest.py -m hydra/launcher=joblib hydra.launcher.n_jobs=-1 clean_single_backtests=false generate_plots=false save_for_training=false rl_model_folder="recurrent_ppo_*_*_*_*_seed*" performance.use_rl=true  performance.autonomous_agent=false performance.iterations=12 performance.beta_hedge=rolling performance.sl_lock=true performance.time_decay_sl=true pair_selection.top_n=20 pair_selection.start="2024-11-01" pair_selection.end="2025-01-01" performance.beta_start="2024-12-01" performance.start="2025-01-01" performance.end="2025-02-01" performance.entry_threshold=3.0 performance.exit_threshold=-0.1,0.1 performance.stop_loss=2.0 performance.z_score_window=168;
+poetry run python runners/run_backtest.py -m hydra/launcher=joblib hydra.launcher.n_jobs=-1 clean_single_backtests=false generate_plots=false save_for_training=false rl_model_folder="recurrent_ppo_*_*_*_*_seed*" performance.use_rl=true  performance.autonomous_agent=false performance.iterations=12 performance.beta_hedge=rolling performance.sl_lock=true performance.time_decay_sl=true pair_selection.top_n=20 pair_selection.start="2024-11-01" pair_selection.end="2025-01-01" performance.beta_start="2024-12-01" performance.start="2025-01-01" performance.end="2025-02-01" performance.entry_threshold=3.0 performance.exit_threshold=0.0 performance.stop_loss=1.9,2.1 performance.z_score_window=168;
+poetry run python runners/run_backtest.py -m hydra/launcher=joblib hydra.launcher.n_jobs=-1 clean_single_backtests=false generate_plots=false save_for_training=false rl_model_folder="recurrent_ppo_*_*_*_*_seed*" performance.use_rl=true  performance.autonomous_agent=false performance.iterations=12 performance.beta_hedge=rolling performance.sl_lock=true performance.time_decay_sl=true pair_selection.top_n=20 pair_selection.start="2024-11-01" pair_selection.end="2025-01-01" performance.beta_start="2024-12-01" performance.start="2025-01-01" performance.end="2025-02-01" performance.entry_threshold=3.0 performance.exit_threshold=0.0 performance.stop_loss=2.0 performance.z_score_window=168 pair_selection.top_n=18,22;
+poetry run python runners/run_backtest.py -m hydra/launcher=joblib hydra.launcher.n_jobs=-1 clean_single_backtests=false generate_plots=false save_for_training=false rl_model_folder="recurrent_ppo_*_*_*_*_seed*" performance.use_rl=true  performance.autonomous_agent=false performance.iterations=12 performance.beta_hedge=rolling performance.sl_lock=true performance.time_decay_sl=true pair_selection.top_n=20 pair_selection.start="2024-11-01" pair_selection.end="2025-01-01" performance.beta_start="2024-12-01" performance.start="2025-01-01" performance.end="2025-02-01" performance.entry_threshold=3.0 performance.exit_threshold=0.0 performance.stop_loss=2.0 performance.z_score_window=162,174 pair_selection.top_n=20;
 ```
 
 ### ASSUMPTIONS VERIFICATION
 
-#### IS
-
 ```bash
-
+poetry run python runners/run_backtest.py -m hydra/launcher=joblib hydra.launcher.n_jobs=-1 clean_single_backtests=false generate_plots=false save_for_training=false rl_model_folder="recurrent_ppo_*_*_*_*_seed*" performance.use_rl=true  performance.autonomous_agent=false performance.iterations=12 performance.beta_hedge=rolling performance.sl_lock=true performance.time_decay_sl=true pair_selection.top_n=20 pair_selection.start="2024-11-01" pair_selection.end="2025-01-01" performance.beta_start="2024-12-01" performance.start="2025-01-01" performance.end="2025-02-01" performance.entry_threshold=3.0 performance.exit_threshold=0.0 performance.stop_loss=2.0 performance.z_score_window=168 market.fee_rate=0,0.001;
+poetry run python runners/run_backtest.py -m hydra/launcher=joblib hydra.launcher.n_jobs=-1 clean_single_backtests=false generate_plots=false save_for_training=false rl_model_folder="recurrent_ppo_*_*_*_*_seed*" performance.use_rl=true  performance.autonomous_agent=false performance.iterations=12 performance.beta_hedge=rolling performance.sl_lock=true performance.time_decay_sl=true pair_selection.top_n=20 pair_selection.start="2024-11-01" pair_selection.end="2025-01-01" performance.beta_start="2024-12-01" performance.start="2025-01-01" performance.end="2025-02-01" performance.entry_threshold=3.0 performance.exit_threshold=0.0 performance.stop_loss=2.0 performance.z_score_window=168 performance.beta_hedge=no_hedge;
+poetry run python runners/run_backtest.py -m hydra/launcher=joblib hydra.launcher.n_jobs=-1 clean_single_backtests=false generate_plots=false save_for_training=false rl_model_folder="recurrent_ppo_*_*_*_*_seed*" performance.use_rl=true  performance.autonomous_agent=false performance.iterations=12 performance.beta_hedge=rolling performance.sl_lock=true performance.time_decay_sl=true pair_selection.top_n=20 pair_selection.start="2024-11-01" pair_selection.end="2025-01-01" performance.beta_start="2024-12-01" performance.start="2025-01-01" performance.end="2025-02-01" performance.entry_threshold=3.0 performance.exit_threshold=0.0 performance.stop_loss=2.0 performance.z_score_window=168 performance.sl_lock=false;
+poetry run python runners/run_backtest.py -m hydra/launcher=joblib hydra.launcher.n_jobs=-1 clean_single_backtests=false generate_plots=false save_for_training=false rl_model_folder="recurrent_ppo_*_*_*_*_seed*" performance.use_rl=true  performance.autonomous_agent=false performance.iterations=12 performance.beta_hedge=rolling performance.sl_lock=true performance.time_decay_sl=true pair_selection.top_n=20 pair_selection.start="2024-11-01" pair_selection.end="2025-01-01" performance.beta_start="2024-12-01" performance.start="2025-01-01" performance.end="2025-02-01" performance.entry_threshold=3.0 performance.exit_threshold=0.0 performance.stop_loss=2.0 performance.z_score_window=168 performance.time_decay_sl=false;
+poetry run python runners/run_backtest.py -m hydra/launcher=joblib hydra.launcher.n_jobs=-1 clean_single_backtests=false generate_plots=false save_for_training=false rl_model_folder="recurrent_ppo_*_*_*_*_seed*" performance.use_rl=true  performance.autonomous_agent=true performance.iterations=12 performance.beta_hedge=rolling performance.sl_lock=true performance.time_decay_sl=true pair_selection.top_n=20 pair_selection.start="2024-11-01" pair_selection.end="2025-01-01" performance.beta_start="2024-12-01" performance.start="2025-01-01" performance.end="2025-02-01" performance.entry_threshold=3.0 performance.exit_threshold=0.0 performance.stop_loss=2.0 performance.z_score_window=168 performance.time_decay_sl=true;
 ```
 
-#### OOS
-
-```bash
-
-```
+Then you can use `rl_sensitivity_analysis.py` helper to generate pdf plots and table for the analysis.
