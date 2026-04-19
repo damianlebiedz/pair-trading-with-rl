@@ -566,6 +566,123 @@ def generate_reports(folder_name: str, baseline_dict: dict):
             f.write(tex)
         logger.info(f"LaTeX Table saved: {prefix}_table.tex")
 
+    def generate_mechanism_latex_table(results_dict, params_list, prefix, title, label):
+        columns_data = []
+        header_cells = []
+
+        for p in params_list:
+            if p in results_dict and results_dict[p]:
+                vals = sorted(
+                    results_dict[p].keys(),
+                    key=lambda x: (
+                        (0, float(x))
+                        if str(x).lstrip("-").replace(".", "", 1).isdigit()
+                        else (1, str(x))
+                    ),
+                )
+                for v in vals:
+                    columns_data.append(results_dict[p][v])
+                    name_str = NAME_MAP.get(p, p)
+
+                    if name_str == "Time Decay SL":
+                        name_str = "Time Decay \\\\ SL"
+
+                    v_str = str(v).replace("%", "\\%")
+
+                    header_cells.append(f"\\makecell{{{name_str} \\\\ {v_str}}}")
+
+        if not columns_data:
+            return
+
+        total_cols = 2 + len(columns_data)
+        col_format = "l" + f"*{{{total_cols - 1}}}{{>{{\\centering\\arraybackslash}}X}}"
+
+        header_str = "Metric & Baseline & " + " & ".join(header_cells)
+
+        row_groups = [
+            [
+                ("cagr", "CAGR", "%"),
+                ("volatility_annual", "Annual Volatility", "%"),
+                ("max_drawdown", "Max Drawdown", "%"),
+            ],
+            [
+                ("win_count", "Win Count", "d"),
+                ("lose_count", "Loss Count", "d"),
+                ("win_rate", "Win Rate", "%"),
+            ],
+            [
+                ("avg_win_return", "Avg Win Return", "%"),
+                ("avg_lose_return", "Avg Loss Return", "%"),
+                ("avg_trade_return", "Avg Trade Return", "%"),
+                ("avg_trade_duration", "Avg Trade Duration", "f"),
+            ],
+            [
+                ("sharpe_ratio_annual", "Sharpe Ratio (Ann.)", "f4"),
+                ("sortino_ratio_annual", "Sortino Ratio (Ann.)", "f4"),
+                ("calmar_ratio", "Calmar Ratio", "f4"),
+            ],
+        ]
+
+        def format_val(val, fmt):
+            if pd.isnull(val):
+                return "-"
+            if fmt == "%":
+                return f"{val * 100:.2f}\\%"
+            if fmt == "d":
+                return f"{int(val)}"
+            if fmt == "f":
+                return f"{val:.2f}"
+            if fmt == "f4":
+                return f"{val:.4f}"
+            return str(val)
+
+        rows_tex = ""
+        for group in row_groups:
+            for orig_name, tex_name, fmt in group:
+                row_str = f"        {tex_name} & {format_val(base_oos['metrics'].get(orig_name), fmt)}"
+                for col in columns_data:
+                    metric_val = col["metrics"].get(orig_name)
+                    row_str += f" & {format_val(metric_val, fmt)}"
+
+                row_str += " \\\\"
+                if orig_name in ["max_drawdown", "win_rate", "avg_trade_duration"]:
+                    row_str += "[4pt]"
+                rows_tex += row_str + "\n"
+
+        fee = float(base_oos["params"].get("fee_rate", 0.0))
+        baseline_params = []
+        for p in params_list:
+            if p != "fee_rate":
+                val = base_oos["params"].get(p, "N/A")
+                baseline_params.append(f"{NAME_MAP.get(p, p)} = {val}")
+
+        baseline_str = ", ".join(baseline_params)
+        note = f"Baseline ({fee * 100:.2f}\\% fees, leverage {int(LEVERAGE)}x): {baseline_str}."
+
+        tex = f"""\\begin{{table}}[H]
+    \\centering
+    \\footnotesize
+    \\renewcommand{{\\arraystretch}}{{1.2}}
+    \\caption{{{title}}}
+    \\label{{{label}}}
+    \\vspace{{12pt}}
+    \\begin{{tabularx}}{{\\linewidth}}{{{col_format}}}
+    \\toprule
+        {header_str} \\\\
+    \\midrule
+{rows_tex.rstrip()}
+    \\bottomrule
+    \\end{{tabularx}}\\\\
+    \\vspace{{12pt}}
+    \\justifying \\noindent \\scriptsize Note: {note}
+\\end{{table}}"""
+
+        with open(
+            report_output_dir / f"{prefix}_table.tex", "w", encoding="utf-8"
+        ) as f:
+            f.write(tex)
+        logger.info(f"LaTeX Table saved: {prefix}_table.tex")
+
     logger.info("Generating PDF Plots...")
     plot_and_save(sensitivity_dict, "sensitivity")
     plot_and_save(mechanism_dict, "mechanism")
@@ -578,12 +695,12 @@ def generate_reports(folder_name: str, baseline_dict: dict):
         "Sensitivity Analysis of Out-Of-Sample Baseline Strategy Performance (2025).",
         "tab:oos_sensitivity",
     )
-    generate_latex_table(
+    generate_mechanism_latex_table(
         mechanism_dict,
         ASSUMPTIONS,
         "mechanism",
-        "Assumptions Verification of Out-Of-Sample Baseline Strategy Performance (2025).",
-        "tab:oos_mechanism",
+        "Assumptions Verification: Out-Of-Sample Baseline Strategy Performance (2025).",
+        "tab:oos-fee_hedge_sensitivity",
     )
 
     logger.info("Sensitivity Pipeline completed successfully.")
