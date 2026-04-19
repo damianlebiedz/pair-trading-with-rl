@@ -1,7 +1,10 @@
 """Script to generate IS/OOS performance report, including PDF equity plots and formatted LaTeX tables."""
 
 import json
+import os
 import sys
+import time
+
 import yaml
 import pandas as pd
 import plotly.graph_objects as go
@@ -423,7 +426,35 @@ def generate_academic_report(strategies_map: dict):
             fig.update_yaxes(title_text="Cumulative Return", row=1, col=1)
 
             pdf_path = report_output_dir / f"{label}_equity_{p_cfg['name']}.pdf"
-            fig.write_image(str(pdf_path), format="pdf")
+            try:
+                fig.write_image(str(pdf_path), format="pdf")
+                logger.info(f"PDF saved: {pdf_path.name}")
+            except Exception as e:
+                logger.warning(
+                    f"Initial save failed for {pdf_path.name}. Killing kaleido and retrying... {e}"
+                )
+                os.system("taskkill /F /IM kaleido.exe /T >nul 2>&1")
+                time.sleep(1)
+
+                max_retries = 3
+                for attempt in range(max_retries):
+                    try:
+                        fig.write_image(str(pdf_path), format="pdf")
+                        logger.info(
+                            f"PDF saved on retry {attempt + 1}: {pdf_path.name}"
+                        )
+                        break
+                    except Exception as retry_e:
+                        if attempt < max_retries - 1:
+                            logger.warning(
+                                f"Retry {attempt + 1} failed for {pdf_path.name}. Killing kaleido again..."
+                            )
+                            os.system("taskkill /F /IM kaleido.exe /T >nul 2>&1")
+                            time.sleep(2)
+                        else:
+                            logger.error(
+                                f"Failed to save {pdf_path.name} after {max_retries} retries: {retry_e}"
+                            )
 
         df_stats = pd.DataFrame(stats_dict).rename(index=RENAME_MAP).astype(object)
 
@@ -491,6 +522,9 @@ def generate_academic_report(strategies_map: dict):
             f.write(latex_content)
 
         logger.info("IS-OOS Pipeline completed successfully.")
+
+        logger.info("Ending...")
+        os._exit(0)
 
 
 if __name__ == "__main__":
