@@ -16,10 +16,10 @@ from modules.utils.logger import get_logger
 warnings.filterwarnings("ignore", category=UserWarning, module="choreographer")
 logger = get_logger(__name__)
 
-FOLDER = "RL Sensitivity Analysis/Wide"
+FOLDER = "RL Sensitivity Analysis lev 10x/Assumptions Verification"
 
 BASELINE = {
-    "OOS": "rl_winner_oos",
+    "OOS": "rl_winner_oos_lev_10",
 }
 
 LEVERAGE = 10
@@ -521,39 +521,31 @@ def generate_reports(folder_name: str, baseline_dict: dict):
         logger.info(f"LaTeX Table saved: {prefix}_table.tex")
 
     def generate_mechanism_latex_table(results_dict, params_list, prefix, title, label):
-        columns_data = []
-        header_cells = []
-
-        for p in params_list:
-            if p in results_dict and results_dict[p]:
-                vals = sorted(
-                    results_dict[p].keys(),
-                    key=lambda x: (
-                        (0, float(x))
-                        if str(x).lstrip("-").replace(".", "", 1).isdigit()
-                        else (1, str(x))
-                    ),
-                )
-                for v in vals:
-                    columns_data.append(results_dict[p][v])
-                    name_str = NAME_MAP.get(p, p)
-
-                    if name_str == "Time Decay SL":
-                        name_str = "Time Decay \\\\ SL"
-                    elif name_str == "Risk Management Overlay":
-                        name_str = "Risk Management \\\\ Overlay"
-
-                    v_str = str(v).replace("%", "\\%")
-
-                    header_cells.append(f"\\makecell{{{name_str} \\\\ {v_str}}}")
-
-        if not columns_data:
+        active_params = [p for p in params_list if results_dict.get(p)]
+        if not active_params:
             return
 
-        total_cols = 2 + len(columns_data)
+        num_vars = sum(len(results_dict[p]) for p in active_params)
+        total_cols = 2 + num_vars
         col_format = "l" + f"*{{{total_cols - 1}}}{{>{{\\centering\\arraybackslash}}X}}"
 
-        header_str = "Metric & Agent 2 & " + " & ".join(header_cells)
+        header1 = "& Agent 2"
+        header2 = "& -"
+
+        for p in active_params:
+            vals = sorted(
+                results_dict[p].keys(),
+                key=lambda x: (
+                    (0, float(x))
+                    if str(x).lstrip("-").replace(".", "", 1).isdigit()
+                    else (1, str(x))
+                ),
+            )
+            header1 += f" & \\multicolumn{{{len(vals)}}}{{c}}{{{NAME_MAP.get(p, p)}}}"
+            for v in vals:
+                v_str = f"{v:g}" if isinstance(v, float) else str(v)
+                v_str = v_str.replace("%", "\\%")
+                header2 += f" & {v_str}"
 
         row_groups = [
             [
@@ -595,10 +587,19 @@ def generate_reports(folder_name: str, baseline_dict: dict):
         rows_tex = ""
         for group in row_groups:
             for orig_name, tex_name, fmt in group:
-                row_str = f"        {tex_name} & {format_val(base_oos['metrics'].get(orig_name), fmt)}"
-                for col in columns_data:
-                    metric_val = col["metrics"].get(orig_name)
-                    row_str += f" & {format_val(metric_val, fmt)}"
+                row_str = f"{tex_name} & {format_val(base_oos['metrics'].get(orig_name), fmt)}"
+                for p in active_params:
+                    vals = sorted(
+                        results_dict[p].keys(),
+                        key=lambda x: (
+                            (0, float(x))
+                            if str(x).lstrip("-").replace(".", "", 1).isdigit()
+                            else (1, str(x))
+                        ),
+                    )
+                    for v in vals:
+                        metric_val = results_dict[p][v]["metrics"].get(orig_name)
+                        row_str += f" & {format_val(metric_val, fmt)}"
 
                 row_str += " \\\\"
                 if orig_name in ["max_drawdown", "win_rate", "avg_trade_duration"]:
@@ -615,23 +616,28 @@ def generate_reports(folder_name: str, baseline_dict: dict):
         baseline_str = ", ".join(baseline_params)
         note = f"Agent 2 ({fee * 100:.2f}\\% fees, leverage {int(LEVERAGE)}x): {baseline_str}."
 
-        tex = f"""\\begin{{table}}[H]
-    \\centering
-    \\footnotesize
-    \\renewcommand{{\\arraystretch}}{{1.2}}
-    \\caption{{{title}}}
-    \\label{{{label}}}
-    \\vspace{{12pt}}
-    \\begin{{tabularx}}{{\\linewidth}}{{{col_format}}}
-    \\toprule
-        {header_str} \\\\
-    \\midrule
-{rows_tex.rstrip()}
-    \\bottomrule
-    \\end{{tabularx}}\\\\
-    \\vspace{{12pt}}
-    \\justifying \\noindent \\scriptsize Note: {note}
-\\end{{table}}"""
+        tex = f"""\\begin{{landscape}}
+\\vspace*{{\\fill}}
+\\renewcommand{{\\arraystretch}}{{1.2}}
+\\begin{{center}}
+\\footnotesize
+\\captionof{{table}}{{{title}}}
+\\vspace{{12pt}}
+\\label{{{label}}}
+\\begin{{tabularx}}{{\\linewidth}}{{{col_format}}}
+\\toprule
+ {header1} \\\\
+ {header2} \\\\
+\\midrule
+{rows_tex.strip()}
+\\bottomrule
+\\end{{tabularx}}
+
+\\vspace{{12pt}}
+\\justifying \\noindent \\scriptsize Note: {note}
+\\end{{center}}
+\\vspace*{{\\fill}}
+\\end{{landscape}}"""
 
         with open(
             report_output_dir / f"{prefix}_table.tex", "w", encoding="utf-8"
@@ -640,8 +646,8 @@ def generate_reports(folder_name: str, baseline_dict: dict):
         logger.info(f"LaTeX Table saved: {prefix}_table.tex")
 
     logger.info("Generating PDF Plots...")
-    plot_and_save(sensitivity_dict, "sensitivity")
-    plot_and_save(mechanism_dict, "mechanism")
+    plot_and_save(sensitivity_dict, "rl_sensitivity")
+    plot_and_save(mechanism_dict, "rl_mechanism")
 
     logger.info("Generating LaTeX Tables...")
     generate_latex_table(

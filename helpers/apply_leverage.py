@@ -11,7 +11,7 @@ from modules.core.enums import Interval
 from modules.utils.logger import get_logger
 
 LEVERAGES = [10.0]
-BASE_DIR = "RL OOS SEEDS"
+BASE_DIR = "RL Sensitivity Analysis/Assumptions Verification/oos"
 
 current_file = Path(__file__).resolve()
 project_root = current_file.parent.parent
