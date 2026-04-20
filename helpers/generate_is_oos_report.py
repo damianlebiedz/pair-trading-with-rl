@@ -3,8 +3,6 @@
 import json
 import os
 import sys
-import time
-
 import yaml
 import pandas as pd
 import plotly.graph_objects as go
@@ -20,16 +18,21 @@ from runners.core.utils import generate_date_lists
 
 logger = get_logger(__name__)
 
+OOS_TABLE_STRATEGIES = {
+    "Baseline (1x)": "baseline_oos",
+    "Baseline (10x)": "baseline_oos_lev_10",
+}
+
 STRATEGY = {
     "Rolling Beta-Hedge": {
-        "IS": "baseline_is",
-        "OOS": "baseline_oos",
+        "IS": "baseline_is_lev_10",
+        "OOS": "baseline_oos_lev_10",
     }
 }
 
 TITLE = "Out-Of-Sample Performance of the Baseline Strategy Against Benchmarks (2025)."
 
-LEVERAGE = 10
+LEVERAGE_LABEL = 10
 
 ELSEVIER_FONT = "Arial, sans-serif"
 FONT_SERIF = "Times New Roman, serif"
@@ -77,6 +80,16 @@ RENAME_MAP = {
     "calmar_ratio": "Calmar Ratio",
 }
 
+TRADE_METRICS = [
+    "win_count",
+    "lose_count",
+    "win_rate",
+    "avg_win_return",
+    "avg_lose_return",
+    "avg_trade_return",
+    "avg_trade_duration",
+]
+
 
 def load_strategy_data(
     base_dir: Path, strategy_name: str
@@ -91,10 +104,13 @@ def load_strategy_data(
     exec_files = list(strat_dir.glob("exec_logger_*.parquet"))
     df_exec = pd.read_parquet(exec_files[0]) if exec_files else None
 
-    stats_files = list(strat_dir.glob("stats_multi_pair_*.parquet"))
-    df_stats = (
-        pd.read_parquet(stats_files[0]).set_index("metric") if stats_files else None
-    )
+    stats_files = list(strat_dir.glob("stats_*.parquet"))
+    if stats_files:
+        df_stats = pd.read_parquet(stats_files[0])
+        if "metric" in df_stats.columns:
+            df_stats = df_stats.set_index("metric")
+    else:
+        df_stats = None
 
     return df_returns, df_exec, df_stats
 
@@ -113,11 +129,12 @@ def build_stitched_ewp(
     interval: Interval,
     assets_dict: dict,
 ) -> pd.DataFrame:
-    strat_dir = base_dir / strategy_name
+    lookup_name = strategy_name.replace("_lev_10", "").replace("_lev_1", "")
+    strat_dir = base_dir / lookup_name
 
-    run_config = get_run_config(base_dir, strategy_name)
+    run_config = get_run_config(base_dir, lookup_name)
     if not run_config:
-        logger.warning(f"Run config not found for {strategy_name}")
+        logger.warning(f"Run config not found for {lookup_name}")
         return None
 
     config_dict = {
@@ -135,7 +152,6 @@ def build_stitched_ewp(
     )
 
     ewp_dfs = []
-
     for d in iter_dirs:
         returns_files = list(d.glob("returns_*.parquet"))
         if not returns_files:
@@ -156,9 +172,6 @@ def build_stitched_ewp(
         iter_tickers = month_data.get("assets") if month_data else None
 
         if not iter_tickers:
-            logger.warning(
-                f"Warning: Lack of tickers for {month_key} (iter {iter_num}) in 'list_of_assets.json'"
-            )
             continue
 
         fee_rate = float(run_config["market"]["fee_rate"])
@@ -178,18 +191,14 @@ def build_stitched_ewp(
 
     final_ewp = pd.concat(ewp_dfs).sort_index()
     final_ewp = final_ewp[~final_ewp.index.duplicated(keep="first")]
-
-    col_name = "ewp_pct"
-    final_ewp["ewp_return"] = (1 + final_ewp[col_name]).cumprod() - 1
+    final_ewp["ewp_return"] = (1 + final_ewp["ewp_pct"]).cumprod() - 1
 
     return final_ewp
 
 
 def generate_academic_report(strategies_map: dict):
     pio.defaults.default_format = "pdf"
-
     results_dir = project_root / "results"
-
     report_output_dir = results_dir / "is_oos_report"
     report_output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -198,8 +207,6 @@ def generate_academic_report(strategies_map: dict):
     if assets_file.exists():
         with open(assets_file, "r", encoding="utf-8") as f:
             list_of_assets = json.load(f)
-    else:
-        logger.error(f"'list_of_assets.json' not found: {assets_file}")
 
     axis_style_x = dict(
         showline=True,
@@ -215,7 +222,6 @@ def generate_academic_report(strategies_map: dict):
         title_font=dict(family=ELSEVIER_FONT, size=FONT_SIZE_LABEL, color=COLOR_BLACK),
         showgrid=False,
     )
-
     axis_style_y = dict(
         showline=True,
         linewidth=1,
@@ -234,7 +240,6 @@ def generate_academic_report(strategies_map: dict):
         zerolinecolor=COLOR_BLACK,
         zerolinewidth=1,
     )
-
     legend_style = dict(
         orientation="h",
         yanchor="top",
@@ -252,49 +257,31 @@ def generate_academic_report(strategies_map: dict):
 
         run_config = get_run_config(results_dir, folders.get("OOS"))
         market_cfg = run_config.get("market", {})
-
         initial_cash = float(market_cfg.get("initial_cash"))
         fee_rate = float(market_cfg.get("fee_rate"))
         risk_free_rate = float(market_cfg.get("risk_free_rate_annual"))
 
-        logger.info(
-            f"Loaded config -> Initial Capital: {initial_cash}, Fee Rate: {fee_rate * 100}%, Risk Free Rate: {risk_free_rate}"
-        )
-
-        df_ret_is, df_exec_is, df_stats_is = load_strategy_data(
-            results_dir, folders.get("IS")
-        )
-        df_ret_oos, df_exec_oos, df_stats_oos = load_strategy_data(
-            results_dir, folders.get("OOS")
-        )
+        df_ret_is, df_exec_is, _ = load_strategy_data(results_dir, folders.get("IS"))
+        df_ret_oos, df_exec_oos, _ = load_strategy_data(results_dir, folders.get("OOS"))
 
         if df_ret_is is None or df_ret_oos is None:
-            logger.warning(f"Data not found for IS/OOS ({label}). Skipping...")
             continue
 
         split_date = df_ret_oos.index[0]
         full_start = df_ret_is.index[0].strftime("%Y-%m-%d")
         full_end = df_ret_oos.index[-1].strftime("%Y-%m-%d")
 
-        is_pnl = (df_ret_is["total_pnl"] - df_ret_is["total_fees"]) * LEVERAGE
-        is_ret = is_pnl / initial_cash
+        is_ret = (df_ret_is["equity"] / initial_cash) - 1
         is_ret = is_ret - is_ret.iloc[0]
 
-        stats_dict = {}
-
-        oos_pnl = (df_ret_oos["total_pnl"] - df_ret_oos["total_fees"]) * LEVERAGE
-        oos_ret = oos_pnl / initial_cash
+        oos_ret = (df_ret_oos["equity"] / initial_cash) - 1
         oos_ret = oos_ret - oos_ret.iloc[0]
 
-        df_oos_lev = pd.DataFrame(index=df_ret_oos.index)
-        df_oos_lev["total_pnl"] = oos_pnl
-        df_oos_lev["total_net_pnl"] = oos_pnl
-        df_oos_lev["equity"] = initial_cash + oos_pnl
-
-        stats_oos_lev = calculate_stats(
-            df_oos_lev, df_exec_oos, initial_cash, Interval.H1, risk_free_rate
-        )
-        stats_dict["Baseline"] = stats_oos_lev["net"].reindex(SELECTED_METRICS)
+        stats_dict = {}
+        for display_name, folder_name in OOS_TABLE_STRATEGIES.items():
+            _, _, df_stats = load_strategy_data(results_dir, folder_name)
+            if df_stats is not None:
+                stats_dict[display_name] = df_stats["net"].reindex(SELECTED_METRICS)
 
         empty_ex = pd.DataFrame(columns=["position", "pnl", "fees", "entry_equity"])
 
@@ -311,9 +298,14 @@ def generate_academic_report(strategies_map: dict):
         df_btc_oos["total_pnl"] = btc_oos_ret * initial_cash
         df_btc_oos["total_net_pnl"] = df_btc_oos["total_pnl"]
         df_btc_oos["equity"] = initial_cash + df_btc_oos["total_net_pnl"]
-        stats_dict["BTC B&H"] = calculate_stats(
+        btc_stats = calculate_stats(
             df_btc_oos, empty_ex, initial_cash, Interval.H1, risk_free_rate
         )["net"].reindex(SELECTED_METRICS)
+
+        for m in TRADE_METRICS:
+            if m in btc_stats.index:
+                btc_stats.loc[m] = None
+        stats_dict["BTC B&H"] = btc_stats
 
         ewp_data_is = build_stitched_ewp(
             results_dir, folders.get("IS"), Interval.H1, list_of_assets
@@ -328,9 +320,14 @@ def generate_academic_report(strategies_map: dict):
         df_ewp_oos["total_pnl"] = ewp_oos_ret * initial_cash
         df_ewp_oos["total_net_pnl"] = df_ewp_oos["total_pnl"]
         df_ewp_oos["equity"] = initial_cash + df_ewp_oos["total_net_pnl"]
-        stats_dict["EWP B&H"] = calculate_stats(
+        ewp_stats = calculate_stats(
             df_ewp_oos, empty_ex, initial_cash, Interval.H1, risk_free_rate
         )["net"].reindex(SELECTED_METRICS)
+
+        for m in TRADE_METRICS:
+            if m in ewp_stats.index:
+                ewp_stats.loc[m] = None
+        stats_dict["EWP B&H"] = ewp_stats
 
         plot_configs = [
             {"name": "baseline_only", "show_btc": False, "show_ewp": False},
@@ -350,13 +347,12 @@ def generate_academic_report(strategies_map: dict):
                     "Panel B: Out-of-Sample Performance (2025)",
                 ],
             )
-
             for c, (ret, name) in enumerate([(is_ret, "IS"), (oos_ret, "OOS")], 1):
                 fig.add_trace(
                     go.Scatter(
                         x=ret.index,
                         y=ret,
-                        name=f"Baseline ({fee_rate * 100}% fees, {LEVERAGE}x lev)",
+                        name=f"Baseline (0.05% fees, {LEVERAGE_LABEL}x lev)",
                         legendgroup="M",
                         line=dict(color=COLOR_BLACK, width=1.5),
                         showlegend=(c == 1),
@@ -364,14 +360,13 @@ def generate_academic_report(strategies_map: dict):
                     row=1,
                     col=c,
                 )
-
             if p_cfg["show_btc"]:
                 for c, ret in enumerate([btc_is_ret, btc_oos_ret], 1):
                     fig.add_trace(
                         go.Scatter(
                             x=ret.index,
                             y=ret,
-                            name=f"BTC B&H ({fee_rate * 100}% fees)",
+                            name="BTC B&H (0.05% fees)",
                             legendgroup="B",
                             line=dict(color=COLOR_BLACK, width=1.0, dash="dash"),
                             showlegend=(c == 1),
@@ -379,14 +374,13 @@ def generate_academic_report(strategies_map: dict):
                         row=1,
                         col=c,
                     )
-
             if p_cfg["show_ewp"]:
                 for c, ret in enumerate([ewp_is_ret, ewp_oos_ret], 1):
                     fig.add_trace(
                         go.Scatter(
                             x=ret.index,
                             y=ret,
-                            name=f"EWP B&H ({fee_rate * 100}% fees)",
+                            name="EWP B&H (0.05% fees)",
                             legendgroup="E",
                             line=dict(color=COLOR_BLACK, width=1.0, dash="dot"),
                             showlegend=(c == 1),
@@ -407,61 +401,23 @@ def generate_academic_report(strategies_map: dict):
                 legend=legend_style,
                 margin=dict(t=30, b=40, l=45, r=10),
             )
-
             for annotation in fig["layout"]["annotations"]:
                 annotation["font"] = dict(
                     family=ELSEVIER_FONT, size=FONT_SIZE_TITLE, color=COLOR_BLACK
                 )
                 annotation["yshift"] = 5
-
-            fig.update_xaxes(
-                **axis_style_x,
-                tickformat="%b\n%Y",
-                dtick="M3",
-                tick0=is_ret.index[0] if len(is_ret) > 0 else None,
-            )
-
+            fig.update_xaxes(**axis_style_x, tickformat="%b\n%Y", dtick="M3")
             fig.update_yaxes(**axis_style_y, tickformat=".0%")
-
             fig.update_yaxes(title_text="Cumulative Return", row=1, col=1)
 
             pdf_path = report_output_dir / f"{label}_equity_{p_cfg['name']}.pdf"
-            try:
-                fig.write_image(str(pdf_path), format="pdf")
-                logger.info(f"PDF saved: {pdf_path.name}")
-            except Exception as e:
-                logger.warning(
-                    f"Initial save failed for {pdf_path.name}. Killing kaleido and retrying... {e}"
-                )
-                os.system("taskkill /F /IM kaleido.exe /T >nul 2>&1")
-                time.sleep(1)
-
-                max_retries = 3
-                for attempt in range(max_retries):
-                    try:
-                        fig.write_image(str(pdf_path), format="pdf")
-                        logger.info(
-                            f"PDF saved on retry {attempt + 1}: {pdf_path.name}"
-                        )
-                        break
-                    except Exception as retry_e:
-                        if attempt < max_retries - 1:
-                            logger.warning(
-                                f"Retry {attempt + 1} failed for {pdf_path.name}. Killing kaleido again..."
-                            )
-                            os.system("taskkill /F /IM kaleido.exe /T >nul 2>&1")
-                            time.sleep(2)
-                        else:
-                            logger.error(
-                                f"Failed to save {pdf_path.name} after {max_retries} retries: {retry_e}"
-                            )
+            fig.write_image(str(pdf_path), format="pdf")
 
         df_stats = pd.DataFrame(stats_dict).rename(index=RENAME_MAP).astype(object)
-
         for col in df_stats.columns:
             for idx in df_stats.index:
                 val = df_stats.loc[idx, col]
-                if pd.notna(val) and not (isinstance(val, str) and val == "-"):
+                if pd.notna(val) and val != "-":
                     if idx in [
                         "CAGR",
                         "Annual Volatility",
@@ -474,8 +430,6 @@ def generate_academic_report(strategies_map: dict):
                         df_stats.loc[idx, col] = f"{val:.2%}".replace("%", "\\%")
                     elif idx in ["Win Count", "Loss Count"]:
                         df_stats.loc[idx, col] = f"{int(val)}"
-                    elif idx == "Avg Trade Duration":
-                        df_stats.loc[idx, col] = f"{val:.2f}"
                     else:
                         df_stats.loc[idx, col] = f"{val:.4f}"
                 else:
@@ -484,6 +438,21 @@ def generate_academic_report(strategies_map: dict):
         def get_val(metric, col):
             return df_stats.loc[metric, col] if metric in df_stats.index else "-"
 
+        num_cols = len(df_stats.columns)
+
+        def escape_latex(s: str) -> str:
+            return s.replace("&", "\\&")
+
+        header_cols = " & ".join([escape_latex(c) for c in df_stats.columns])
+
+        rows_latex = ""
+        for m_key in SELECTED_METRICS:
+            m_name = RENAME_MAP[m_key]
+            row_vals = " & ".join([get_val(m_name, c) for c in df_stats.columns])
+            rows_latex += f"        {m_name} & {row_vals} \\\\\n"
+            if m_name in ["Max Drawdown", "Win Rate", "Avg Trade Duration"]:
+                rows_latex += "        \\addlinespace[4pt]\n"
+
         latex_content = f"""\\begin{{table}}[H]
     \\centering
     \\footnotesize
@@ -491,39 +460,18 @@ def generate_academic_report(strategies_map: dict):
     \\caption{{{TITLE}}}
     \\label{{tab:oos-baseline}}
     \\vspace{{12pt}}
-    \\begin{{tabularx}}{{\\linewidth}}{{l*{{3}}{{>{{\\centering\\arraybackslash}}X}}}}
+    \\begin{{tabularx}}{{\\linewidth}}{{l*{{{num_cols}}}{{>{{\\centering\\arraybackslash}}X}}}}
     \\toprule
-        Metric & Baseline & BTC B\\&H & EWP B\\&H \\\\ 
+        Metric & {header_cols} \\\\ 
     \\midrule
-        CAGR & {get_val('CAGR', 'Baseline')} & {get_val('CAGR', 'BTC B&H')} & {get_val('CAGR', 'EWP B&H')} \\\\
-        Annual Volatility & {get_val('Annual Volatility', 'Baseline')} & {get_val('Annual Volatility', 'BTC B&H')} & {get_val('Annual Volatility', 'EWP B&H')} \\\\
-        Max Drawdown & {get_val('Max Drawdown', 'Baseline')} & {get_val('Max Drawdown', 'BTC B&H')} & {get_val('Max Drawdown', 'EWP B&H')} \\\\[4pt]
-
-        Win Count & {get_val('Win Count', 'Baseline')} & - & - \\\\
-        Loss Count & {get_val('Loss Count', 'Baseline')} & - & - \\\\
-        Win Rate & {get_val('Win Rate', 'Baseline')} & - & - \\\\[4pt]
-
-        Avg Win Return & {get_val('Avg Win Return', 'Baseline')} & - & - \\\\
-        Avg Loss Return & {get_val('Avg Loss Return', 'Baseline')} & - & - \\\\
-        Avg Trade Return & {get_val('Avg Trade Return', 'Baseline')} & - & - \\\\
-        Avg Trade Duration & {get_val('Avg Trade Duration', 'Baseline')} & - & - \\\\[4pt]
-
-        Sharpe Ratio (Ann.) & {get_val('Sharpe Ratio (Ann.)', 'Baseline')} & {get_val('Sharpe Ratio (Ann.)', 'BTC B&H')} & {get_val('Sharpe Ratio (Ann.)', 'EWP B&H')} \\\\
-        Sortino Ratio (Ann.) & {get_val('Sortino Ratio (Ann.)', 'Baseline')} & {get_val('Sortino Ratio (Ann.)', 'BTC B&H')} & {get_val('Sortino Ratio (Ann.)', 'EWP B&H')} \\\\
-        Calmar Ratio & {get_val('Calmar Ratio', 'Baseline')} & {get_val('Calmar Ratio', 'BTC B&H')} & {get_val('Calmar Ratio', 'EWP B&H')} \\\\ 
-    \\bottomrule
+{rows_latex}    \\bottomrule
     \\end{{tabularx}}
-
-    \\vspace{{12pt}}
-    \\justifying \\noindent \\scriptsize Note: 
 \\end{{table}}
 """
         with open(report_output_dir / f"{label}_oos_table.tex", "w") as f:
             f.write(latex_content)
 
         logger.info("IS-OOS Pipeline completed successfully.")
-
-        logger.info("Ending...")
         os._exit(0)
 
 

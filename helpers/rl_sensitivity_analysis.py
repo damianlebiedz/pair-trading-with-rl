@@ -22,7 +22,7 @@ BASELINE = {
     "OOS": "rl_winner_oos",
 }
 
-LEVERAGE = 10.0
+LEVERAGE = 10
 
 ELSEVIER_FONT = "Arial, sans-serif"
 FONT_SIZE_TICK = 10
@@ -88,15 +88,6 @@ def generate_reports(folder_name: str, baseline_dict: dict):
 
     if not oos_base_dir.exists():
         raise ValueError(f"Directory 'oos' must exist inside {category_dir}")
-
-    base_config_path = project_root / "config" / "base.yaml"
-    if base_config_path.exists():
-        with open(base_config_path, "r", encoding="utf-8") as f:
-            base_config = yaml.safe_load(f)
-            market_cfg = base_config.get("market", {})
-            initial_cash = market_cfg.get("initial_cash")
-    else:
-        raise ValueError("'base.yaml' not found")
 
     axis_style_x = dict(
         showline=True,
@@ -180,22 +171,23 @@ def generate_reports(folder_name: str, baseline_dict: dict):
 
             params = {k: get_cfg(k) for k in (SENSITIVITY_PARAMS + ASSUMPTIONS)}
 
-            lev_pnl = (ts_df["total_pnl"] - ts_df["total_fees"]) * LEVERAGE
-            ret_series = lev_pnl / initial_cash
+            initial_cash = ts_df["equity"].iloc[0]
+            ret_series = (ts_df["equity"] / initial_cash) - 1
 
-            df_lev = pd.DataFrame(index=ts_df.index)
-            df_lev["total_pnl"] = lev_pnl
-            df_lev["total_net_pnl"] = lev_pnl
-            df_lev["equity"] = initial_cash + lev_pnl
-
-            risk_free_rate = float(
-                config.get("market", {}).get("risk_free_rate_annual", 0.0)
-            )
-
-            stats_lev = calculate_stats(
-                df_lev, exec_df, initial_cash, Interval.H1, risk_free_rate
-            )
-            net_stats = stats_lev["net"]
+            stats_files = list(run_dir.glob("stats_*.parquet"))
+            if stats_files:
+                df_stats = pd.read_parquet(stats_files[0])
+                if "metric" in df_stats.columns:
+                    df_stats = df_stats.set_index("metric")
+                net_stats = df_stats["net"]
+            else:
+                risk_free_rate = float(
+                    config.get("market", {}).get("risk_free_rate_annual", 0.0)
+                )
+                stats_calc = calculate_stats(
+                    ts_df, exec_df, initial_cash, Interval.H1, risk_free_rate
+                )
+                net_stats = stats_calc["net"]
 
             return {
                 "params": params,
@@ -267,7 +259,6 @@ def generate_reports(folder_name: str, baseline_dict: dict):
             p_name = diffs_assump[0]
             val = run_oos["params"][p_name]
 
-            # Special logic exceptions for RL scripts
             if p_name == "beta_hedge" and val == "no_hedge":
                 val = False
             elif p_name == "fee_rate":
@@ -299,7 +290,6 @@ def generate_reports(folder_name: str, baseline_dict: dict):
             if not variations:
                 continue
 
-            # In RL SA we only plot OOS Performance (1 panel)
             fig = make_subplots(
                 rows=1,
                 cols=1,

@@ -17,14 +17,20 @@ from runners.core.utils import generate_date_lists
 
 logger = get_logger(__name__)
 
-STRATEGIES = {
-    "baseline_oos": "Baseline",
-    "rl_winner_oos": "Agent 2",
+
+LEVERAGE = 10
+
+PLOT_STRATEGIES = {
+    "Baseline": "baseline_oos_lev_10",
+    "Agent 2": "rl_winner_oos_lev_10",
+}
+
+TABLE_STRATEGIES = {
+    "Baseline": "baseline_oos_lev_10",
+    "Agent 2": "rl_winner_oos_lev_10",
 }
 
 TITLE = "Out-Of-Sample Performance of Agent 2 Against Baseline and Benchmarks (2025)."
-
-LEVERAGE = 10.0
 
 ELSEVIER_FONT = "Arial, sans-serif"
 FONT_SIZE_TICK = 10
@@ -84,6 +90,16 @@ RENAME_MAP = {
     "calmar_ratio": "Calmar Ratio",
 }
 
+TRADE_METRICS = [
+    "win_count",
+    "lose_count",
+    "win_rate",
+    "avg_win_return",
+    "avg_lose_return",
+    "avg_trade_return",
+    "avg_trade_duration",
+]
+
 
 def load_strategy_data(
     base_dir: Path, strategy_name: str
@@ -98,10 +114,13 @@ def load_strategy_data(
     exec_files = list(strat_dir.glob("exec_logger_*.parquet"))
     df_exec = pd.read_parquet(exec_files[0]) if exec_files else None
 
-    stats_files = list(strat_dir.glob("stats_multi_pair_*.parquet"))
-    df_stats = (
-        pd.read_parquet(stats_files[0]).set_index("metric") if stats_files else None
-    )
+    stats_files = list(strat_dir.glob("stats_*.parquet"))
+    if stats_files:
+        df_stats = pd.read_parquet(stats_files[0])
+        if "metric" in df_stats.columns:
+            df_stats = df_stats.set_index("metric")
+    else:
+        df_stats = None
 
     return df_returns, df_exec, df_stats
 
@@ -117,10 +136,12 @@ def get_run_config(base_dir: Path, strategy_name: str) -> dict:
 def build_stitched_ewp(
     base_dir: Path, strategy_name: str, interval: Interval, assets_dict: dict
 ) -> pd.DataFrame:
-    strat_dir = base_dir / strategy_name
-    run_config = get_run_config(base_dir, strategy_name)
+    lookup_name = strategy_name.split("_lev_")[0]
+    strat_dir = base_dir / lookup_name
+
+    run_config = get_run_config(base_dir, lookup_name)
     if not run_config:
-        logger.warning(f"Run config not found for {strategy_name}")
+        logger.warning(f"Run config not found for {lookup_name}")
         return None
 
     config_dict = {
@@ -158,9 +179,6 @@ def build_stitched_ewp(
         iter_tickers = month_data.get("assets") if month_data else None
 
         if not iter_tickers:
-            logger.warning(
-                f"Warning: Lack of tickers for {month_key} (iter {iter_num}) in 'list_of_assets.json'"
-            )
             continue
 
         fee_rate = float(run_config["market"]["fee_rate"])
@@ -185,23 +203,20 @@ def build_stitched_ewp(
     return final_ewp
 
 
-def generate_academic_multi_report(strategies_map: dict):
+def generate_academic_multi_report(plot_map: dict, table_map: dict):
     pio.defaults.default_format = "pdf"
 
     results_dir = project_root / "results"
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    report_output_dir = results_dir / f"final_multi_report_{timestamp}"
-    pdf_dir = report_output_dir / "pdfs"
+    report_output_dir = results_dir / f"multi_report_{timestamp}"
+
     report_output_dir.mkdir(parents=True, exist_ok=True)
-    pdf_dir.mkdir(parents=True, exist_ok=True)
 
     assets_file = project_root / "config" / "schemas" / "list_of_assets.json"
     list_of_assets = {}
     if assets_file.exists():
         with open(assets_file, "r", encoding="utf-8") as f:
             list_of_assets = json.load(f)
-    else:
-        logger.error(f"'list_of_assets.json' not found: {assets_file}")
 
     axis_style_x = dict(
         showline=True,
@@ -216,7 +231,6 @@ def generate_academic_multi_report(strategies_map: dict):
         title_font=dict(family=ELSEVIER_FONT, size=FONT_SIZE_LABEL, color=COLOR_BLACK),
         showgrid=False,
     )
-
     axis_style_y = dict(
         showline=True,
         linewidth=1,
@@ -235,7 +249,6 @@ def generate_academic_multi_report(strategies_map: dict):
         zerolinecolor=COLOR_BLACK,
         zerolinewidth=1,
     )
-
     legend_style = dict(
         orientation="h",
         yanchor="top",
@@ -251,46 +264,48 @@ def generate_academic_multi_report(strategies_map: dict):
     strategy_series = {}
     global_starts, global_ends = [], []
 
-    first_strat = next(iter(strategies_map.keys()))
-    config = get_run_config(results_dir, first_strat)
+    first_strat_folder = next(iter(plot_map.values()))
+    config = get_run_config(results_dir, first_strat_folder.split("_lev_")[0])
     initial_cash = float(config.get("market", {}).get("initial_cash", 100000))
     fee_rate = float(config.get("market", {}).get("fee_rate", 0.0005))
     risk_free_rate = float(config.get("market", {}).get("risk_free_rate_annual", 0.0))
 
-    logger.info("Loading strategies and extracting metrics...")
-
-    for i, (folder, label) in enumerate(strategies_map.items()):
-        df_ret, df_exec, df_stats = load_strategy_data(results_dir, folder)
+    logger.info("Loading strategies for PLOTS...")
+    for i, (display_name, folder) in enumerate(plot_map.items()):
+        df_ret, _, _ = load_strategy_data(results_dir, folder)
         if df_ret is None:
+            logger.warning(f"Could not load data for PLOT from folder: {folder}")
             continue
 
         global_starts.append(df_ret.index[0])
         global_ends.append(df_ret.index[-1])
 
-        pnl = (df_ret["total_pnl"] - df_ret["total_fees"]) * LEVERAGE
-        ret = pnl / initial_cash
+        ret = (df_ret["equity"] / initial_cash) - 1
         ret = ret - ret.iloc[0]
 
-        df_lev = pd.DataFrame(index=df_ret.index)
-        df_lev["total_pnl"] = pnl
-        df_lev["total_net_pnl"] = pnl
-        df_lev["equity"] = initial_cash + pnl
-
-        strat_stats = calculate_stats(
-            df_lev, df_exec, initial_cash, Interval.H1, risk_free_rate
-        )
-
-        col_name = f"{label}"
-        stats_dict[col_name] = strat_stats["net"].reindex(SELECTED_METRICS)
-
-        strategy_series[label] = {
+        strategy_series[display_name] = {
             "series": ret,
             "color": PUBLICATION_COLORS[i % len(PUBLICATION_COLORS)],
-            "label_full": f"{label} ({fee_rate * 100}% fees, {int(LEVERAGE)}x lev)",
+            "label_full": f"{display_name} ({fee_rate * 100:g}% fees, lev {LEVERAGE}x)",
         }
 
+    logger.info("Loading strategies for TABLE...")
+    for display_name, folder in table_map.items():
+        df_ret, df_exec, df_stats = load_strategy_data(results_dir, folder)
+        if df_ret is None:
+            logger.warning(f"Could not load data for TABLE from folder: {folder}")
+            continue
+
+        if df_stats is not None:
+            stats_dict[display_name] = df_stats["net"].reindex(SELECTED_METRICS)
+        else:
+            strat_stats = calculate_stats(
+                df_ret, df_exec, initial_cash, Interval.H1, risk_free_rate
+            )
+            stats_dict[display_name] = strat_stats["net"].reindex(SELECTED_METRICS)
+
     if not global_starts:
-        logger.error("No valid strategies loaded. Exiting.")
+        logger.error("No valid strategies loaded for plotting. Exiting.")
         return
 
     full_start = min(global_starts).strftime("%Y-%m-%d")
@@ -308,16 +323,21 @@ def generate_academic_multi_report(strategies_map: dict):
         df_btc["total_net_pnl"] = df_btc["total_pnl"]
         df_btc["equity"] = initial_cash + df_btc["total_net_pnl"]
 
-        stats_dict["BTC B&H"] = calculate_stats(
+        btc_stats = calculate_stats(
             df_btc, empty_ex, initial_cash, Interval.H1, risk_free_rate
         )["net"].reindex(SELECTED_METRICS)
+
+        for m in TRADE_METRICS:
+            if m in btc_stats.index:
+                btc_stats.loc[m] = None
+        stats_dict["BTC B&H"] = btc_stats
     except Exception as e:
         logger.error(f"Error during BTC data loading: {e}")
         btc_ret = None
 
     try:
         ewp_data = build_stitched_ewp(
-            results_dir, first_strat, Interval.H1, list_of_assets
+            results_dir, first_strat_folder, Interval.H1, list_of_assets
         )
         if ewp_data is not None:
             ewp_ret = ewp_data["ewp_return"] - ewp_data["ewp_return"].iloc[0]
@@ -326,10 +346,14 @@ def generate_academic_multi_report(strategies_map: dict):
             df_ewp["total_net_pnl"] = df_ewp["total_pnl"]
             df_ewp["equity"] = initial_cash + df_ewp["total_net_pnl"]
 
-            # Clean benchmark name
-            stats_dict["EWP B&H"] = calculate_stats(
+            ewp_stats = calculate_stats(
                 df_ewp, empty_ex, initial_cash, Interval.H1, risk_free_rate
             )["net"].reindex(SELECTED_METRICS)
+
+            for m in TRADE_METRICS:
+                if m in ewp_stats.index:
+                    ewp_stats.loc[m] = None
+            stats_dict["EWP B&H"] = ewp_stats
         else:
             ewp_ret = None
     except Exception as e:
@@ -363,7 +387,7 @@ def generate_academic_multi_report(strategies_map: dict):
                 go.Scatter(
                     x=btc_ret.index,
                     y=btc_ret,
-                    name=f"BTC B&H ({fee_rate * 100}% fees)",
+                    name=f"BTC B&H ({fee_rate * 100:g}% fees)",
                     line=dict(color="gray", width=1.0, dash="dash"),
                 )
             )
@@ -373,7 +397,7 @@ def generate_academic_multi_report(strategies_map: dict):
                 go.Scatter(
                     x=ewp_ret.index,
                     y=ewp_ret,
-                    name=f"EWP B&H ({fee_rate * 100}% fees)",
+                    name=f"EWP B&H ({fee_rate * 100:g}% fees)",
                     line=dict(color="black", width=1.0, dash="dot"),
                 )
             )
@@ -412,18 +436,17 @@ def generate_academic_multi_report(strategies_map: dict):
             **axis_style_y, tickformat=".0%", title_text="Cumulative Return"
         )
 
-        pdf_path = pdf_dir / f"comparison_{p_cfg['name']}.pdf"
+        pdf_path = report_output_dir / f"comparison_{p_cfg['name']}.pdf"
         fig.write_image(str(pdf_path), format="pdf")
 
     logger.info("Generating LaTeX Table...")
 
     df_stats = pd.DataFrame(stats_dict).rename(index=RENAME_MAP).astype(object)
-    col_names = list(df_stats.columns)
 
     for col in df_stats.columns:
         for idx in df_stats.index:
             val = df_stats.loc[idx, col]
-            if pd.notna(val) and not (isinstance(val, str) and val == "-"):
+            if pd.notna(val) and val != "-":
                 if idx in [
                     "CAGR",
                     "Annual Volatility",
@@ -436,8 +459,6 @@ def generate_academic_multi_report(strategies_map: dict):
                     df_stats.loc[idx, col] = f"{val:.2%}".replace("%", "\\%")
                 elif idx in ["Win Count", "Loss Count"]:
                     df_stats.loc[idx, col] = f"{int(val)}"
-                elif idx == "Avg Trade Duration":
-                    df_stats.loc[idx, col] = f"{val:.2f}"
                 else:
                     df_stats.loc[idx, col] = f"{val:.4f}"
             else:
@@ -446,23 +467,21 @@ def generate_academic_multi_report(strategies_map: dict):
     def get_val(metric, col_name):
         return df_stats.loc[metric, col_name] if metric in df_stats.index else "-"
 
-    num_cols = len(col_names) + 1
+    num_cols = len(df_stats.columns) + 1
     latex_cols_format = (
         "l" + f"*{{{num_cols - 1}}}{{>{{\\centering\\arraybackslash}}X}}"
     )
 
-    escaped_col_names = [c.replace("&", "\\&") for c in col_names]
+    escaped_col_names = [c.replace("&", "\\&") for c in df_stats.columns]
     header_str = "Metric & " + " & ".join(escaped_col_names)
 
-    note_str = (
-        f"Baseline: {fee_rate * 100:g}\\% fees, {int(LEVERAGE)}x leverage; "
-        f"Agent 2 (StepPnLReward, Autonomous, $\\lambda=1.2$): {fee_rate * 100:g}\\% fees, {int(LEVERAGE)}x leverage; "
-        f"Benchmarks: {fee_rate * 100:g}\\% fees. The {int(LEVERAGE)}x leverage is applied to the baseline "
-        "and agent strategies to scale their inherently lower structural volatility and align their risk "
-        "profile with the unleveraged benchmarks (see Subsection \\ref{subsec:benchmark_selection}). "
-        "Consequently, all calculated performance metrics represent the post-leverage performance of "
-        "the strategies (see Subsection \\ref{subsec:performance_metrics})."
-    )
+    rows_latex = ""
+    for m_key in SELECTED_METRICS:
+        m_name = RENAME_MAP[m_key]
+        row_vals = " & ".join([get_val(m_name, c) for c in df_stats.columns])
+        rows_latex += f"        {m_name} & {row_vals} \\\\\n"
+        if m_name in ["Max Drawdown", "Win Rate", "Avg Trade Duration"]:
+            rows_latex += "        \\addlinespace[4pt]\n"
 
     latex_content = f"""\\begin{{table}}[H]
     \\centering
@@ -475,27 +494,11 @@ def generate_academic_multi_report(strategies_map: dict):
     \\toprule
         {header_str} \\\\ 
     \\midrule
-        CAGR & {' & '.join([get_val('CAGR', c) for c in col_names])} \\\\
-        Annual Volatility & {' & '.join([get_val('Annual Volatility', c) for c in col_names])} \\\\
-        Max Drawdown & {' & '.join([get_val('Max Drawdown', c) for c in col_names])} \\\\[4pt]
-
-        Win Count & {' & '.join([get_val('Win Count', c) for c in col_names])} \\\\
-        Loss Count & {' & '.join([get_val('Loss Count', c) for c in col_names])} \\\\
-        Win Rate & {' & '.join([get_val('Win Rate', c) for c in col_names])} \\\\[4pt]
-
-        Avg Win Return & {' & '.join([get_val('Avg Win Return', c) for c in col_names])} \\\\
-        Avg Loss Return & {' & '.join([get_val('Avg Loss Return', c) for c in col_names])} \\\\
-        Avg Trade Return & {' & '.join([get_val('Avg Trade Return', c) for c in col_names])} \\\\
-        Avg Trade Duration & {' & '.join([get_val('Avg Trade Duration', c) for c in col_names])} \\\\[4pt]
-
-        Sharpe Ratio (Ann.) & {' & '.join([get_val('Sharpe Ratio (Ann.)', c) for c in col_names])} \\\\
-        Sortino Ratio (Ann.) & {' & '.join([get_val('Sortino Ratio (Ann.)', c) for c in col_names])} \\\\
-        Calmar Ratio & {' & '.join([get_val('Calmar Ratio', c) for c in col_names])} \\\\ 
-    \\bottomrule
+{rows_latex}    \\bottomrule
     \\end{{tabularx}}
 
     \\vspace{{12pt}}
-    \\justifying \\noindent \\scriptsize Note: {note_str}
+    \\justifying \\noindent \\scriptsize Note:
 \\end{{table}}
 """
     with open(report_output_dir / "comparison_table.tex", "w") as f:
@@ -505,4 +508,4 @@ def generate_academic_multi_report(strategies_map: dict):
 
 
 if __name__ == "__main__":
-    generate_academic_multi_report(STRATEGIES)
+    generate_academic_multi_report(PLOT_STRATEGIES, TABLE_STRATEGIES)

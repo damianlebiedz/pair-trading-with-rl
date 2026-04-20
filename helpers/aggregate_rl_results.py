@@ -5,7 +5,7 @@ import yaml
 import pandas as pd
 from pathlib import Path
 
-FOLDER = "RL IS"
+FOLDER = "RL OOS lev 10x"
 
 
 def get_column_id_from_folder(folder_name: str) -> int:

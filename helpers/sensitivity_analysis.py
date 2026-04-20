@@ -16,14 +16,14 @@ from modules.utils.logger import get_logger
 warnings.filterwarnings("ignore", category=UserWarning, module="choreographer")
 logger = get_logger(__name__)
 
-FOLDER = "Baseline Sensitivity Analysis/Assumptions Verification"
+FOLDER = "Baseline Sensitivity Analysis/Wide"
 
 BASELINE = {
     "IS": "baseline_is",
     "OOS": "baseline_oos",
 }
 
-LEVERAGE = 10.0
+LEVERAGE = 1
 
 ELSEVIER_FONT = "Arial, sans-serif"
 FONT_SIZE_TICK = 10
@@ -180,27 +180,19 @@ def generate_reports(folder_name: str, baseline_dict: dict):
 
             params = {k: get_cfg(k) for k in (SENSITIVITY_PARAMS + ASSUMPTIONS)}
 
-            lev_pnl = (ts_df["total_pnl"] - ts_df["total_fees"]) * LEVERAGE
-            ret_series = lev_pnl / initial_cash
-
-            df_lev = pd.DataFrame(index=ts_df.index)
-            df_lev["total_pnl"] = lev_pnl
-            df_lev["total_net_pnl"] = lev_pnl
-            df_lev["equity"] = initial_cash + lev_pnl
-
             risk_free_rate = float(
                 config.get("market", {}).get("risk_free_rate_annual", 0.0)
             )
 
-            stats_lev = calculate_stats(
-                df_lev, exec_df, initial_cash, Interval.H1, risk_free_rate
+            stats = calculate_stats(
+                ts_df, exec_df, initial_cash, Interval.H1, risk_free_rate
             )
-            net_stats = stats_lev["net"]
+            net_stats = stats["net"]
 
             return {
                 "params": params,
                 "metrics": net_stats,
-                "ret_series": ret_series,
+                "ret_series": ts_df["total_net_return"],
                 "id": run_dir.name,
             }
         except Exception as e:

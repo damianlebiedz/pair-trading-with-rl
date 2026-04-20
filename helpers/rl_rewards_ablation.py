@@ -12,9 +12,8 @@ from modules.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-TARGET_EXPERIMENT_FOLDER = "RL OOS"
+TARGET_EXPERIMENT_FOLDER = "RL OOS lev 10x"
 
-LEVERAGE = 10
 ELSEVIER_FONT = "Arial, sans-serif"
 FONT_SIZE_TICK = 10
 FONT_SIZE_LABEL = 12
@@ -128,7 +127,7 @@ def generate_multi_report(target_folder_name: str):
         y=-0.18,
         xanchor="center",
         x=0.5,
-        entrywidth=220,
+        entrywidth=240,
         entrywidthmode="pixels",
         font=dict(family=ELSEVIER_FONT, size=FONT_SIZE_TICK, color=COLOR_BLACK),
         bgcolor="rgba(255, 255, 255, 0)",
@@ -140,8 +139,6 @@ def generate_multi_report(target_folder_name: str):
         "TradePnLReward": [],
         "HybridActionReward": [],
     }
-
-    initial_cash = 100000
 
     logger.info("Loading return series...")
 
@@ -166,10 +163,11 @@ def generate_multi_report(target_folder_name: str):
             continue
 
         lam_label = "1.2" if lam == "1_2" else "1.0"
-        line_label = f"{reward}, {space.capitalize()}, λ={lam_label}"
 
-        pnl = (df_ret["total_pnl"] - df_ret["total_fees"]) * LEVERAGE
-        ret = pnl / initial_cash
+        line_label = f"{col_id} - {reward}, {space.capitalize()}, λ={lam_label}"
+
+        initial_cash = df_ret["equity"].iloc[0]
+        ret = (df_ret["equity"] / initial_cash) - 1
         ret = ret - ret.iloc[0]
 
         grouped_series[reward].append(
