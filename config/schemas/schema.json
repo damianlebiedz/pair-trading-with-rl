@@ -215,6 +215,11 @@
           "title": "Autonomous Agent",
           "type": "boolean"
         },
+        "leverage": {
+          "description": "Leverage ratio.",
+          "title": "Leverage",
+          "type": "number"
+        },
         "z_score_window": {
           "description": "Z-Score lookback window size.",
           "exclusiveMinimum": 0,

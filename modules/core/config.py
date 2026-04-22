@@ -93,6 +93,7 @@ class Performance(BaseModel):
     autonomous_agent: bool = Field(
         description="Flag to set a risk management layer for an agent. If True, agent is autonomously deciding about exit. If false, agent is forced to exit while take profit or stop loss hit."
     )
+    leverage: float = Field(description="Leverage ratio.")
     z_score_window: int = Field(
         gt=0,
         description="Z-Score lookback window size.",

@@ -57,6 +57,7 @@ class TradeExecutor:
         price_y: float,
         beta: float,
         equity: float,
+        leverage: float,
         exec_logger: ExecLogger | None,
         std: float | None,
     ) -> tuple[float, float]:
@@ -66,6 +67,20 @@ class TradeExecutor:
         """
         prev_position = position_state.prev_position
         sl_lock = position_state.sl_lock
+
+        if prev_position != 0:
+            curr_dif = position_state.q_x * price_x + position_state.q_y * price_y
+            unrealized_gross_pnl = curr_dif - position_state.entry_dif
+
+            curr_val = (
+                abs(position_state.q_x) * price_x + abs(position_state.q_y) * price_y
+            )
+            expected_exit_fees = curr_val * fee_rate
+
+            if (
+                unrealized_gross_pnl - expected_exit_fees
+            ) <= -position_state.entry_equity:
+                action = 0.0
 
         if action == prev_position:
             if prev_position != 0:
@@ -102,6 +117,7 @@ class TradeExecutor:
                 equity=current_equity,
                 exec_logger=exec_logger,
                 std=std,
+                leverage=leverage,
             )
             fees_total += fees
 
@@ -120,18 +136,20 @@ class TradeExecutor:
         equity: float,
         exec_logger: ExecLogger | None,
         std: float,
+        leverage: float,
     ) -> tuple[float, float]:
         wx = 1 / (beta + 1)
         wy = beta / (beta + 1)
 
-        pos_cash = equity * abs(action)
+        margin_allocated = equity * abs(action)
+        notional_value = margin_allocated * leverage
 
         if action > 0:
-            qx = pos_cash * wx / price_x
-            qy = -(pos_cash * wy) / price_y
+            qx = notional_value * wx / price_x
+            qy = -(notional_value * wy) / price_y
         else:
-            qx = -(pos_cash * wx) / price_x
-            qy = pos_cash * wy / price_y
+            qx = -(notional_value * wx) / price_x
+            qy = notional_value * wy / price_y
 
         entry_dif = qx * price_x + qy * price_y
 
@@ -143,13 +161,13 @@ class TradeExecutor:
             w_y=wy,
             entry_dif=entry_dif,
             prev_dif=entry_dif,
-            entry_equity=pos_cash,
+            entry_equity=margin_allocated,
             sl_thr=stop_loss_thr,
             entry_beta=beta,
             entry_std=std,
         )
 
-        fees = pos_cash * fee_rate
+        fees = notional_value * fee_rate
 
         if exec_logger:
             exec_logger.log(
@@ -161,7 +179,7 @@ class TradeExecutor:
                 position=position_state.position,
                 fees=fees,
                 pnl=0.0,
-                entry_equity=pos_cash,
+                entry_equity=margin_allocated,
                 time_in_pos=0,
             )
 
@@ -177,10 +195,16 @@ class TradeExecutor:
         exec_logger: ExecLogger | None,
     ) -> tuple[float, float]:
         exit_dif = position_state.q_x * price_x + position_state.q_y * price_y
+        unrealized_gross_pnl = exit_dif - position_state.entry_dif
+
         exit_val = abs(position_state.q_x) * price_x + abs(position_state.q_y) * price_y
+        fees = exit_val * fee_rate
+
+        if (unrealized_gross_pnl - fees) <= -position_state.entry_equity:
+            exit_dif = position_state.entry_dif - position_state.entry_equity
+            fees = 0.0
 
         pnl = exit_dif - position_state.prev_dif
-        fees = exit_val * fee_rate
 
         position_state.time_in_pos += 1
 

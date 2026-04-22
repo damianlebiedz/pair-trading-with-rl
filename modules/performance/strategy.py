@@ -46,6 +46,7 @@ class Strategy:
         time_decay_params: tuple[int, int],
         freeze_std: bool,
         autonomous_agent: bool,
+        leverage: float,
         agent: RLAgentAdapter | None = None,
         source: Source = Source.LOG.value,
     ):
@@ -65,6 +66,7 @@ class Strategy:
         self.time_decay_params = time_decay_params
         self.freeze_std = freeze_std
         self.autonomous_agent = autonomous_agent
+        self.leverage = leverage
         self.agent = agent
         self.source = source
 
@@ -258,7 +260,16 @@ class Strategy:
                         total_fees += fees
                         total_net_pnl = total_pnl - total_fees
                         equity = initial_cash + total_net_pnl
+
                         position_state.clear_position()
+
+                        if equity <= 1e-6:
+                            is_bankrupt = True
+                            equity = 0.0
+                            drawdown_pct = -1.0
+                            total_net_pnl = -initial_cash
+                            if total_pnl < -initial_cash:
+                                total_pnl = -initial_cash
 
                 results_buffer.append(
                     {
@@ -454,6 +465,7 @@ class Strategy:
                     price_y=exec_py,
                     beta=beta,
                     equity=equity,
+                    leverage=self.leverage,
                     exec_logger=exec_logger,
                     std=std,
                 )
@@ -466,7 +478,7 @@ class Strategy:
 
                 equity = initial_cash + total_net_pnl
 
-                if equity < 0.0:
+                if equity <= 1e-6:
                     is_bankrupt = True
                     position_state.clear_position()
                     equity = 0.0
@@ -525,8 +537,33 @@ class Strategy:
                     exec_logger=exec_logger,
                 )
 
+                results_buffer[-1]["total_pnl"] += pnl
                 results_buffer[-1]["total_fees"] += fees
                 results_buffer[-1]["total_net_pnl"] += pnl - fees
+                results_buffer[-1]["equity"] += pnl - fees
+
+                if results_buffer[-1]["equity"] <= 1e-6:
+                    results_buffer[-1]["equity"] = 0.0
+                    results_buffer[-1]["total_net_pnl"] = -initial_cash
+                    if results_buffer[-1]["total_pnl"] < -initial_cash:
+                        results_buffer[-1]["total_pnl"] = -initial_cash
+                    results_buffer[-1]["drawdown_pct"] = -1.0
+                else:
+                    peak = max(equity_peak, results_buffer[-1]["equity"])
+                    if peak > 0:
+                        results_buffer[-1]["drawdown_pct"] = (
+                            results_buffer[-1]["equity"] - peak
+                        ) / peak
+                    else:
+                        results_buffer[-1]["drawdown_pct"] = 0.0
+
+                results_buffer[-1]["total_return"] = (
+                    results_buffer[-1]["total_pnl"] / initial_cash
+                )
+                results_buffer[-1]["total_net_return"] = (
+                    results_buffer[-1]["total_net_pnl"] / initial_cash
+                )
+
                 results_buffer[-1]["q_x"] = 0
                 results_buffer[-1]["q_y"] = 0
                 results_buffer[-1]["w_x"] = None

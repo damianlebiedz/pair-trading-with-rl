@@ -288,6 +288,7 @@ def run_backtest(cfg: DictConfig):
                 freeze_std=cfg.performance.freeze_std,
                 autonomous_agent=cfg.performance.autonomous_agent,
                 agent=agent,
+                leverage=cfg.performance.leverage,
             )
 
             strategies.append(bt)
