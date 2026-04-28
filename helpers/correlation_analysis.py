@@ -64,7 +64,7 @@ def _build_correlation_latex(pooled_corr: pd.DataFrame, n_episodes: int) -> str:
     """
 
 
-def _build_vif_latex(pooled_vif: pd.DataFrame, n_episodes: int) -> str:
+def _build_vif_latex(pooled_vif: pd.DataFrame) -> str:
     ordered_vif = pooled_vif.reindex(FEATURES)
     header_cols = " & ".join(FEATURE_LABELS[col] for col in FEATURES)
     values = " & ".join(_fmt_float(ordered_vif.loc[col, "VIF"]) for col in FEATURES)
@@ -177,8 +177,9 @@ def run_post_hoc_analysis() -> None:
 
             all_data.append(data)
 
-        except Exception:
+        except Exception as e:
             skipped_errors += 1
+            print(e)
             continue
 
     if not all_data:
@@ -217,7 +218,7 @@ def run_post_hoc_analysis() -> None:
     pooled_vif = pd.DataFrame({"VIF": vif_values}, index=FEATURES)
     vif_csv_path = _safe_write_csv(pooled_vif, output_path, "pooled_vif_report.csv")
 
-    vif_latex = _build_vif_latex(pooled_vif=pooled_vif, n_episodes=n_episodes)
+    vif_latex = _build_vif_latex(pooled_vif=pooled_vif)
     with open(output_path / "vif_table.tex", "w", encoding="utf-8") as f_tex:
         f_tex.write(vif_latex)
 
