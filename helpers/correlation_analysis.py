@@ -191,10 +191,16 @@ def run_post_hoc_analysis() -> None:
 
     # Global Correlation
     pooled_corr = pooled_df.corr()
-    corr_csv_path = _safe_write_csv(pooled_corr, output_path, "pooled_correlation_matrix.csv")
+    corr_csv_path = _safe_write_csv(
+        pooled_corr, output_path, "pooled_correlation_matrix.csv"
+    )
 
-    corr_latex = _build_correlation_latex(pooled_corr=pooled_corr, n_episodes=n_episodes)
-    with open(output_path / "correlation_matrix_table.tex", "w", encoding="utf-8") as f_tex:
+    corr_latex = _build_correlation_latex(
+        pooled_corr=pooled_corr, n_episodes=n_episodes
+    )
+    with open(
+        output_path / "correlation_matrix_table.tex", "w", encoding="utf-8"
+    ) as f_tex:
         f_tex.write(corr_latex)
 
     # Global VIF
@@ -205,8 +211,7 @@ def run_post_hoc_analysis() -> None:
             message="divide by zero encountered in scalar divide",
         )
         vif_values = [
-            variance_inflation_factor(pooled_df.values, i)
-            for i in range(len(FEATURES))
+            variance_inflation_factor(pooled_df.values, i) for i in range(len(FEATURES))
         ]
 
     pooled_vif = pd.DataFrame({"VIF": vif_values}, index=FEATURES)
@@ -216,7 +221,9 @@ def run_post_hoc_analysis() -> None:
     with open(output_path / "vif_table.tex", "w", encoding="utf-8") as f_tex:
         f_tex.write(vif_latex)
 
-    print(f"\nSuccess! Processed episodes: {n_episodes} (Pooled rows: {len(pooled_df)})")
+    print(
+        f"\nSuccess! Processed episodes: {n_episodes} (Pooled rows: {len(pooled_df)})"
+    )
     print(f"Saved: {corr_csv_path.name}")
     print(f"Saved: {vif_csv_path.name}")
     print(
