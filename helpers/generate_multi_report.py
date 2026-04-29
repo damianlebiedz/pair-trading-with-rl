@@ -21,13 +21,18 @@ logger = get_logger(__name__)
 LEVERAGE = 10
 
 PLOT_STRATEGIES = {
-    "Baseline": "baseline_oos_lev_10",
-    "Agent 2": "rl_winner_oos_lev_10",
+    "Baseline": "MAIN RESULTS/BASELINE OOS 10x",
+    "Agent 2": "MAIN RESULTS/RL OOS 10x",
+}
+
+PLOT_COLORS = {
+    "Baseline": "black",
+    "Agent 2": "#FF8C00",
 }
 
 TABLE_STRATEGIES = {
-    "Baseline": "baseline_oos_lev_10",
-    "Agent 2": "rl_winner_oos_lev_10",
+    "Baseline (10x)": "MAIN RESULTS/BASELINE OOS 10x",
+    "Agent 2 (10x)": "MAIN RESULTS/RL OOS 10x",
 }
 
 TITLE = "Out-Of-Sample Performance of Agent 2 Against Baseline and Benchmarks (2025)."
@@ -285,7 +290,9 @@ def generate_academic_multi_report(plot_map: dict, table_map: dict):
 
         strategy_series[display_name] = {
             "series": ret,
-            "color": PUBLICATION_COLORS[i % len(PUBLICATION_COLORS)],
+            "color": PLOT_COLORS.get(
+                display_name, PUBLICATION_COLORS[i % len(PUBLICATION_COLORS)]
+            ),
             "label_full": f"{display_name} ({fee_rate * 100:g}% fees, lev {LEVERAGE}x)",
         }
 

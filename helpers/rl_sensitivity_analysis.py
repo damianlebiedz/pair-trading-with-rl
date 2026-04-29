@@ -16,10 +16,10 @@ from modules.utils.logger import get_logger
 warnings.filterwarnings("ignore", category=UserWarning, module="choreographer")
 logger = get_logger(__name__)
 
-FOLDER = "RL Sensitivity Analysis lev 10x/Assumptions Verification"
+FOLDER = "RL Sensitivity Analysis 10x/Wide"
 
 BASELINE = {
-    "OOS": "rl_winner_oos_lev_10",
+    "OOS": "RL OOS 10x",
 }
 
 LEVERAGE = 10
@@ -304,7 +304,7 @@ def generate_reports(folder_name: str, baseline_dict: dict):
                     y=base_oos_series,
                     name="Agent 2",
                     legendgroup="Agent 2",
-                    line=dict(color=COLOR_BLACK, width=1.5),
+                    line=dict(color="#FF8C00", width=1.5),
                     showlegend=True,
                 ),
             )

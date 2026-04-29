@@ -16,16 +16,19 @@ from modules.utils.logger import get_logger
 warnings.filterwarnings("ignore", category=UserWarning, module="choreographer")
 logger = get_logger(__name__)
 
-FOLDER = "RL OOS SEEDS lev 10x"
+FOLDER = "RL MODELS OOS 10x SEEDS"
 LEVERAGE = 10
 
-TITLE = "Assumptions Verification: Out-Of-Sample Performance Stability Across Random Seeds (Agent 2, 2025)."
+TITLE = "Out-Of-Sample Performance Stability Across Random Seeds"
 
 ELSEVIER_FONT = "Arial, sans-serif"
 FONT_SIZE_TICK = 10
 FONT_SIZE_LABEL = 12
 FONT_SIZE_TITLE = 13
 COLOR_BLACK = "black"
+
+AGENT_2_SEED = 42
+AGENT_2_COLOR = "#FF8C00"
 
 PUBLICATION_COLORS = [
     "#1f77b4",
@@ -170,16 +173,28 @@ def generate_seed_variance_report(folder_name: str):
     results = sorted(results, key=lambda x: x["seed"])
     seeds = [r["seed"] for r in results]
 
+    # Seed 42 (Agent 2) must always be highlighted in the chosen orange.
+    other_seeds = [s for s in seeds if s != AGENT_2_SEED]
+    if len(other_seeds) > len(PUBLICATION_COLORS):
+        raise ValueError(
+            f"Not enough colors configured for seeds: {len(other_seeds)} other seeds "
+            f"but only {len(PUBLICATION_COLORS)} colors available."
+        )
+
+    # Assign unique colors to non-42 seeds deterministically (sorted by seed).
+    other_seed_colors = {s: PUBLICATION_COLORS[i] for i, s in enumerate(other_seeds)}
+
     fig = go.Figure()
-    for i, res in enumerate(results):
-        color = PUBLICATION_COLORS[i % len(PUBLICATION_COLORS)]
+    for res in results:
         series = res["ret_series"]
+        seed = res["seed"]
+        color = AGENT_2_COLOR if seed == AGENT_2_SEED else other_seed_colors[seed]
         fig.add_trace(
             go.Scatter(
                 x=series.index,
                 y=series,
-                name=f"Seed {res['seed']}",
-                line=dict(color="black" if res["seed"] == 42 else color, width=1.5),
+                name=f"Seed {seed}",
+                line=dict(color=color, width=1.5),
             )
         )
 

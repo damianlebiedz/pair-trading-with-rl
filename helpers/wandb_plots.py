@@ -12,7 +12,7 @@ from modules.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-TARGET_SUBFOLDER = "wandb_export"
+TARGET_SUBFOLDER = "wandb_export_classic"
 
 RENAME_MAP = {
     "recurrent_ppo_autonomous_StepPnLReward_1_0": "1 – StepPnLReward, Autonomous, λ=1.0",
@@ -65,6 +65,24 @@ PUBLICATION_COLORS = [
     "#bd9e39",
 ]
 
+PLOT_SPACE_COLOR_FAMILIES = {
+    "StepPnLReward": {
+        "autonomous": ["#fdae6b", "#ff7f0e"],
+        "standard": ["#9e9ac8", "#756bb1"],
+        "full": ["#74c476", "#31a354"],
+    },
+    "TradePnLReward": {
+        "autonomous": ["#8c6d31", "#bd9e39"],
+        "standard": ["#e377c2", "#c994c7"],
+        "full": ["#17becf", "#9edae5"],
+    },
+    "HybridActionReward": {
+        "autonomous": ["#7f7f7f", "#bdbdbd"],
+        "standard": ["#d62728", "#ff9896"],
+        "full": ["#1f77b4", "#6baed6"],
+    },
+}
+
 PDF_WIDTH = 720
 PDF_HEIGHT = 650
 
@@ -116,6 +134,20 @@ BASE_DIR = Path(__file__).parent.parent / "results" / TARGET_SUBFOLDER
 def clean_label(raw_col: str) -> str:
     model_part = raw_col.split(" - ")[0]
     return RENAME_MAP.get(model_part, model_part)
+
+
+def parse_model_part(raw_col: str):
+    model_part = raw_col.split(" - ")[0]
+    match = re.search(
+        r"recurrent_ppo_(autonomous|standard|full)_(StepPnLReward|TradePnLReward|HybridActionReward)_(1_0|1_2)",
+        model_part,
+    )
+    if not match:
+        return None, None, None
+    space = match.group(1)
+    reward_type = match.group(2)
+    lam = match.group(3)
+    return reward_type, space, lam
 
 
 def extract_id_from_label(label: str) -> int:
@@ -233,10 +265,15 @@ def generate_wandb_diagnostics(csv_paths: dict, output_dir: Path):
             label = clean_label(col)
             model_id = extract_id_from_label(label)
 
-            color_idx = (
-                (model_id - 1) % len(PUBLICATION_COLORS) if model_id != 999 else 0
-            )
-            color = PUBLICATION_COLORS[color_idx]
+            reward_type, space, lam = parse_model_part(col)
+            if reward_type and space and lam:
+                family = PLOT_SPACE_COLOR_FAMILIES[reward_type][space]
+                color = family[1] if lam == "1_2" else family[0]
+            else:
+                color_idx = (
+                    (model_id - 1) % len(PUBLICATION_COLORS) if model_id != 999 else 0
+                )
+                color = PUBLICATION_COLORS[color_idx]
 
             show_leg = label not in added_to_legend
             if show_leg:

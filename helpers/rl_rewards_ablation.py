@@ -12,7 +12,7 @@ from modules.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-TARGET_EXPERIMENT_FOLDER = "RL OOS lev 10x"
+TARGET_EXPERIMENT_FOLDER = "RL MODELS OOS 10x"
 
 ELSEVIER_FONT = "Arial, sans-serif"
 FONT_SIZE_TICK = 10
@@ -20,7 +20,46 @@ FONT_SIZE_LABEL = 12
 FONT_SIZE_TITLE = 13
 COLOR_BLACK = "black"
 
-PUBLICATION_COLORS = ["#1f77b4", "#d62728", "#2ca02c", "#9467bd", "#ff7f0e", "#8c564b"]
+PUBLICATION_COLORS = [
+    "#1f77b4",
+    "#ff7f0e",
+    "#2ca02c",
+    "#d62728",
+    "#9467bd",
+    "#8c564b",
+    "#e377c2",
+    "#7f7f7f",
+    "#bcbd22",
+    "#17becf",
+    "#393b79",
+    "#5254a3",
+    "#6b6ecf",
+    "#9c9ede",
+    "#637939",
+    "#8ca252",
+    "#b5cf6b",
+    "#cedb9c",
+    "#8c6d31",
+    "#bd9e39",
+]
+
+PLOT_SPACE_COLOR_FAMILIES = {
+    "StepPnLReward": {
+        "autonomous": ["#fdae6b", "#ff7f0e"],
+        "standard": ["#9e9ac8", "#756bb1"],
+        "full": ["#74c476", "#31a354"],
+    },
+    "TradePnLReward": {
+        "autonomous": ["#8c6d31", "#bd9e39"],
+        "standard": ["#e377c2", "#c994c7"],
+        "full": ["#17becf", "#9edae5"],
+    },
+    "HybridActionReward": {
+        "autonomous": ["#7f7f7f", "#bdbdbd"],
+        "standard": ["#d62728", "#ff9896"],
+        "full": ["#1f77b4", "#6baed6"],
+    },
+}
 
 PDF_WIDTH = 720
 PDF_HEIGHT = 400
@@ -171,10 +210,54 @@ def generate_multi_report(target_folder_name: str):
         ret = ret - ret.iloc[0]
 
         grouped_series[reward].append(
-            {"col_id": col_id, "series": ret, "label_full": line_label}
+            {
+                "col_id": col_id,
+                "space": space,
+                "series": ret,
+                "label_full": line_label,
+            }
         )
 
     logger.info("Generating PDF plots...")
+
+    # Build a global color map with plot-specific families:
+    # similar shades within the same space *inside one plot*, but different families across plots.
+    all_series = [
+        item for series_list in grouped_series.values() for item in series_list
+    ]
+    all_col_ids = sorted({item["col_id"] for item in all_series})
+    color_map = {}
+
+    for reward_type, reward_families in PLOT_SPACE_COLOR_FAMILIES.items():
+        reward_items = grouped_series.get(reward_type, [])
+        reward_col_ids = {item["col_id"] for item in reward_items}
+
+        for space_name, family_colors in reward_families.items():
+            space_ids = sorted(
+                {item["col_id"] for item in reward_items if item["space"] == space_name}
+            )
+
+            if len(space_ids) > len(family_colors):
+                raise ValueError(
+                    f"Not enough colors configured for plot '{reward_type}' and space '{space_name}': "
+                    f"{len(space_ids)} series but only {len(family_colors)} colors configured."
+                )
+
+            for idx, cid in enumerate(space_ids):
+                color_map[cid] = family_colors[idx]
+
+        unassigned_ids = sorted(cid for cid in reward_col_ids if cid not in color_map)
+        if unassigned_ids:
+            raise ValueError(
+                f"Missing colors for plot '{reward_type}' and col_id values: {unassigned_ids}"
+            )
+
+    missing_ids = [cid for cid in all_col_ids if cid not in color_map]
+    if missing_ids:
+        raise ValueError(f"Missing colors for col_id values: {missing_ids}")
+
+    # Keep Agent 2 on the same orange highlight color as before.
+    color_map[2] = "#ff7f0e"
 
     for reward_type, series_list in grouped_series.items():
         if not series_list:
@@ -184,15 +267,15 @@ def generate_multi_report(target_folder_name: str):
 
         series_list.sort(key=lambda x: x["col_id"])
 
-        for i, data in enumerate(series_list):
+        for data in series_list:
+            current_color = color_map[data["col_id"]]
+
             fig.add_trace(
                 go.Scatter(
                     x=data["series"].index,
                     y=data["series"],
                     name=data["label_full"],
-                    line=dict(
-                        color=PUBLICATION_COLORS[i % len(PUBLICATION_COLORS)], width=1.5
-                    ),
+                    line=dict(color=current_color, width=1.5),
                 )
             )
 

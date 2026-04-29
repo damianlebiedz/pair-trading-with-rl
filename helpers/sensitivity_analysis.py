@@ -16,11 +16,11 @@ from modules.utils.logger import get_logger
 warnings.filterwarnings("ignore", category=UserWarning, module="choreographer")
 logger = get_logger(__name__)
 
-FOLDER = "Baseline Sensitivity Analysis/Wide"
+FOLDER = "Baseline Sensitivity Analysis 10x/Wide"
 
 BASELINE = {
-    "IS": "baseline_is",
-    "OOS": "baseline_oos",
+    "IS": "BASELINE IS 10x",
+    "OOS": "BASELINE OOS 10x",
 }
 
 LEVERAGE = 1
@@ -324,8 +324,8 @@ def generate_reports(folder_name: str, baseline_dict: dict):
                     go.Scatter(
                         x=ret.index,
                         y=ret,
-                        name="Baseline",
-                        legendgroup="Baseline",
+                        name="Baseline (0.05% fees, 10x lev)",
+                        legendgroup="Baseline (0.05% fees, 10x lev)",
                         line=dict(color=COLOR_BLACK, width=1.5),
                         showlegend=(c == 1),
                     ),
