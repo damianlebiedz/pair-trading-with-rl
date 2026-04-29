@@ -12,7 +12,7 @@ rl:
   reward_lambda: 1.2
   fee_multiplier: 0.2
 
-  obs_space_type: standard
+  obs_space_type: autonomous
   passes_per_pair: 20
   seed: 42
   verbose: 1
