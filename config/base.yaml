@@ -12,7 +12,7 @@ hydra:
   output_subdir: null
 
 wandb:
-  project: research-paper
+  project: pair-trading-with-rl
   mode: online
 
 market:
