@@ -2,10 +2,10 @@
 
 Repository for the paper **"Dynamic Multi-Pair Trading Strategy in Cryptocurrency Markets with Deep Reinforcement Learning"** (Lebiedź and Ślepaczuk, 2026). It implements a **statistical arbitrage** backtesting framework and **reinforcement learning** training and evaluation pipelines used in that study.
 
-| | |
-|---|---|
-| **Paper (arXiv)** | *Coming soon — DOI/link will be added after publication* |
-| **Preprint** | `https://arxiv.org/abs/XXXXXXXX` *(placeholder)* |
+| |                                                          |
+|---|----------------------------------------------------------|
+| **Paper (arXiv)** | *Coming soon - DOI/link will be added after publication* |
+| **Preprint** | `https://arxiv.org/abs/XXXXXXXX` *(placeholder)*         |
 
 **Stack:** Python 3.12 · Poetry · Hydra · Pydantic · pandas · statsmodels · scikit-optimize · Gymnasium · Stable-Baselines3 · SB3-Contrib (Recurrent PPO) · Weights & Biases · joblib (parallel sweeps) · Docker
 
@@ -42,10 +42,10 @@ poetry run python runners/run_backtest.py
 
 What each step does:
 
-1. **`poetry install`** — installs all Python dependencies into a local virtualenv.
-2. **`update_config.py`** — syncs JSON schemas and `docs/configuration.md` with the Pydantic models (run once after clone, and again if you change config fields in code).
-3. **`data_fetching_pipeline.py`** — downloads historical futures data from Binance Data Vision, builds monthly asset universes, and writes parquet files under `data/`. This can take a long time on first run; see [Frozen artifacts](#frozen-artifacts-zenodo) to skip it.
-4. **`run_backtest.py`** — runs the main walk-forward backtest with defaults from `config/run_backtest.yaml`. Outputs go to `results/run_backtest_<timestamp>/`.
+1. **`poetry install`** - installs all Python dependencies into a local virtualenv.
+2. **`update_config.py`** - syncs JSON schemas and `docs/configuration.md` with the Pydantic models (run once after clone, and again if you change config fields in code).
+3. **`data_fetching_pipeline.py`** - downloads historical futures data from Binance Data Vision, builds monthly asset universes, and writes parquet files under `data/`. This can take a long time on first run; see [Frozen artifacts](#frozen-artifacts-zenodo) to skip it.
+4. **`run_backtest.py`** - runs the main walk-forward backtest with defaults from `config/run_backtest.yaml`. Outputs go to `results/run_backtest_<timestamp>/`.
 
 To change parameters without editing YAML, append Hydra overrides, for example:
 
@@ -79,13 +79,13 @@ Volumes `config/`, `data/`, and `results/` are mounted from the host, so outputs
 
 Pick the path that matches your goal:
 
-| Goal | What to do |
-|------|------------|
-| **Reproduce paper numbers quickly** | `make download_artifacts` (Zenodo), then run `run_backtest` with frozen `data/` and pre-trained RL weights in `results/`. |
+| Goal | What to do                                                                                                                                                                                             |
+|------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Reproduce paper numbers quickly** | `make download_artifacts` (Zenodo), then run `run_backtest` with frozen `data/` and pre-trained RL weights in `results/`.                                                                              |
 | **Full pipeline from scratch** | `data_fetching_pipeline` → statistical `run_backtest` (optionally with multirun grids) → `run_backtest` with `save_for_training=true` → `train_agent` → `run_backtest` with `performance.use_rl=true`. |
-| **Only statistical arbitrage** | Skip RL: `performance.use_rl=false` everywhere; no WandB key required for backtests only. |
-| **Hyperparameter search** | Use Hydra multirun + joblib launcher — see [Multirun & hyperparameter grids](#multirun--hyperparameter-grids). |
-| **Tables/plots for the paper** | Run core runners first, then optional scripts in `helpers/analysis_scripts/` (see [Helpers](#helpers)). |
+| **Only statistical arbitrage** | Skip RL: `performance.use_rl=false` everywhere; no WandB key required for backtests only.                                                                                                              |
+| **Hyperparameter search** | Use Hydra multirun + joblib launcher - see [Multirun & hyperparameter grids](#multirun--hyperparameter-grids).                                                                                         |
+| **Tables/plots for the paper** | Run core runners first, then optional scripts in `helpers/analysis_scripts/` (see [Helpers](#helpers)).                                                                                                |
 
 ---
 
@@ -121,16 +121,16 @@ High-level map of the repository:
 └── tests/
 ```
 
-- **`modules/`** — reusable logic: indicators, pair selection, strategy execution, RL environment, data I/O. Runners are thin entry points that wire config to these modules.
-- **`runners/`** — scripts you actually execute (`run_backtest`, `train_agent`, …).
-- **`config/`** — all experiment settings as YAML; edit here or override from the command line.
-- **`helpers/`** — standalone scripts for data download, schema generation, and (optionally) post-processing of `results/`.
-- **`data/`** — persistent inputs used across runs (market data, pair lists, RL datasets, models). Not the same as `results/` (which stores outputs of a single experiment run). See [Data directory](#data-directory) below.
-- **`results/`** — created at runtime; each run gets its own timestamped folder plus a `.hydra/` snapshot of the exact config used.
+- **`modules/`** - reusable logic: indicators, pair selection, strategy execution, RL environment, data I/O. Runners are thin entry points that wire config to these modules.
+- **`runners/`** - scripts you actually execute (`run_backtest`, `train_agent`, …).
+- **`config/`** - all experiment settings as YAML; edit here or override from the command line.
+- **`helpers/`** - standalone scripts for data download, schema generation, and (optionally) post-processing of `results/`.
+- **`data/`** - persistent inputs used across runs (market data, pair lists, RL datasets, models). Not the same as `results/` (which stores outputs of a single experiment run). See [Data directory](#data-directory) below.
+- **`results/`** - created at runtime; each run gets its own timestamped folder plus a `.hydra/` snapshot of the exact config used.
 
 ### Data directory
 
-Everything under `data/` is **input** to the pipelines (or an intermediate cache). Nothing here is a final paper table — those live under `results/`. Typical layout after a full setup:
+Everything under `data/` is **input** to the pipelines (or an intermediate cache). Nothing here is a final paper table - those live under `results/`. Typical layout after a full setup:
 
 ```
 data/
@@ -156,12 +156,12 @@ data/
     └── ...
 ```
 
-| Path | Created by | Used by | Contents |
-|------|------------|---------|----------|
-| **`historical/`** | `helpers/data_fetching_pipeline.py` | `load_data()` in backtests and pair selection | Continuous OHLCV parquet per symbol. Filename pattern: `{SYMBOL}_{interval}_{start}-{end}.parquet`. Universe membership per month is defined separately in `config/schemas/list_of_assets.json`. |
-| **`pair_selection/`** | `runners/run_pair_selection.py` | `runners/run_backtest.py` | For each month (`YYYY-MM/`), a ranked table of cointegrated pairs: `pair_selection_{start}_{end}.parquet` (columns include `pair`, `score`, …). **Required before backtest** — if a month is missing, `run_backtest` stops with an error pointing you to `run_pair_selection.py`. |
-| **`rl_training/`** | `run_backtest` with `save_for_training=true` | `train_agent` (`rl.training_folder` or first subfolder) | Per-pair `returns_{X}_{Y}_{start}_{end}.parquet` copies of test-window strategy data (z-score, beta, vol, etc.) exported from a specific backtest run. Subfolder name matches that backtest’s `results/run_backtest_<timestamp>/` id. |
-| **`rl_models/`** | `train_agent` | `run_backtest` with `performance.use_rl=true` | Stable-Baselines3 model (`.zip`) and `VecNormalize` stats (`_normalize.pkl`). Basename encodes algorithm, observation space, reward, WandB run id, and seed. Pass the basename (without extension) as `rl_model_folder=...`. |
+| Path | Created by | Used by | Contents                                                                                                                                                                                                                                                                          |
+|------|------------|---------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **`historical/`** | `helpers/data_fetching_pipeline.py` | `load_data()` in backtests and pair selection | Continuous OHLCV parquet per symbol. Filename pattern: `{SYMBOL}_{interval}_{start}-{end}.parquet`. Universe membership per month is defined separately in `config/schemas/list_of_assets.json`.                                                                                  |
+| **`pair_selection/`** | `runners/run_pair_selection.py` | `runners/run_backtest.py` | For each month (`YYYY-MM/`), a ranked table of cointegrated pairs: `pair_selection_{start}_{end}.parquet` (columns include `pair`, `score`, …). **Required before backtest** - if a month is missing, `run_backtest` stops with an error pointing you to `run_pair_selection.py`. |
+| **`rl_training/`** | `run_backtest` with `save_for_training=true` | `train_agent` (`rl.training_folder` or first subfolder) | Per-pair `returns_{X}_{Y}_{start}_{end}.parquet` copies of test-window strategy data (z-score, beta, vol, etc.) exported from a specific backtest run. Subfolder name matches that backtest’s `results/run_backtest_<timestamp>/` id.                                             |
+| **`rl_models/`** | `train_agent` | `run_backtest` with `performance.use_rl=true` | Stable-Baselines3 model (`.zip`) and `VecNormalize` stats (`_normalize.pkl`). Basename encodes algorithm, observation space, reward, WandB run id, and seed. Pass the basename (without extension) as `rl_model_folder=...`.                                                      |
 
 **Typical order of population:**
 
@@ -178,7 +178,7 @@ data/
 
 ## Configuration (Hydra + Pydantic)
 
-Experiment settings live in YAML under `config/`. You normally **do not** hard-code parameters in Python — you change YAML or pass overrides on the CLI.
+Experiment settings live in YAML under `config/`. You normally **do not** hard-code parameters in Python - you change YAML or pass overrides on the CLI.
 
 We use a **hybrid Hydra + Pydantic** setup:
 
@@ -233,7 +233,7 @@ Helpers are scripts outside the main `runners/` loop. Two groups: **core** (need
 | [`helpers/update_config.py`](helpers/update_config.py) | Exports Pydantic models → `config/schemas/*.json`; regenerates [`docs/configuration.md`](docs/configuration.md). Run after clone and after any change to `modules/core/config.py`. |
 | [`helpers/data_fetching_pipeline.py`](helpers/data_fetching_pipeline.py) | End-to-end data pipeline: lists all historical USDT-M futures symbols from Binance Data Vision (avoids survivorship bias from “currently listed only”), downloads monthly klines, drops assets with gaps in the pair-selection window, ranks by liquidity, and writes `data/*.parquet` plus `config/schemas/list_of_assets.json` and [`docs/list_of_assets.md`](docs/list_of_assets.md). |
 
-`list_of_assets.json` is required by `run_backtest.py`. For each monthly walk-forward step it defines **which symbols** were tradable and liquid in that period — the same universes used in the paper.
+`list_of_assets.json` is required by `run_backtest.py`. For each monthly walk-forward step it defines **which symbols** were tradable and liquid in that period - the same universes used in the paper.
 
 Tune the pipeline in `config/helpers/data_fetching_pipeline.yaml` (`top_n`, `start`/`end`/`test_end`, `iterations`, `whitelist`/`blacklist`).
 
@@ -244,7 +244,7 @@ poetry run python helpers/data_fetching_pipeline.py
 
 ### Analysis scripts (optional)
 
-Located in [`helpers/analysis_scripts/`](helpers/analysis_scripts/). They read finished runs under `results/` and produce aggregated tables, distribution plots, sensitivity reports, bootstrap tests, WandB exports, etc. **You do not need them** to run a backtest or train an agent — only to replicate paper-style post-processing.
+Located in [`helpers/analysis_scripts/`](helpers/analysis_scripts/). They read finished runs under `results/` and produce aggregated tables, distribution plots, sensitivity reports, bootstrap tests, WandB exports, etc. **You do not need them** to run a backtest or train an agent - only to replicate paper-style post-processing.
 
 > **Note:** These scripts assume the folder names and layout from our experiments (e.g. grouped under `Baseline Optimization/Stage 1/`). If your `results/` tree differs, open the script and adjust the path constants at the top.
 
@@ -265,15 +265,15 @@ Runners are the main programs to execute. Each has a matching Docker Compose ser
 
 | Runner | Command (Poetry) | Compose service | What it does |
 |--------|------------------|-----------------|--------------|
-| Backtest | `poetry run python runners/run_backtest.py` | `run_backtest` | Walk-forward backtest on many pairs: select cointegrated pairs → test with z-score rules (and optionally an RL agent for exits). |
-| RL training | `poetry run python runners/train_agent.py` | `train_agent` | Trains A2C or Recurrent PPO on saved backtest trajectories under `data/rl_training/`. |
-| Pair selection only | `poetry run python runners/run_pair_selection.py` | — | Runs only the pair-selection stage (debugging or custom workflows). |
+| Backtest | `poetry run python runners/run_backtest.py` | `run_backtest`  | Walk-forward backtest on many pairs: select cointegrated pairs → test with z-score rules (and optionally an RL agent for exits). |
+| RL training | `poetry run python runners/train_agent.py` | `train_agent`   | Trains A2C or Recurrent PPO on saved backtest trajectories under `data/rl_training/`. |
+| Pair selection only | `poetry run python runners/run_pair_selection.py` | -               | Runs only the pair-selection stage (debugging or custom workflows). |
 
-**Statistical backtest (baseline)** — default in `run_backtest.yaml` (`performance.use_rl=false`). For each month: pick pairs from `list_of_assets.json`, estimate hedge ratios, apply entry/exit/stop-loss rules on the z-score. Repeats for `performance.iterations` months.
+**Statistical backtest (baseline)** - default in `run_backtest.yaml` (`performance.use_rl=false`). For each month: pick pairs from `list_of_assets.json`, estimate hedge ratios, apply entry/exit/stop-loss rules on the z-score. Repeats for `performance.iterations` months.
 
-**RL backtest** — set `performance.use_rl=true`. The same pair selection and data windows apply, but position management can use a trained policy. Point to a specific checkpoint with `rl_model_folder=<name of folder under results/>` (folder name from a previous `train_agent` run).
+**RL backtest** - set `performance.use_rl=true`. The same pair selection and data windows apply, but position management can use a trained policy. Point to a specific checkpoint with `rl_model_folder=<name of folder under results/>` (folder name from a previous `train_agent` run).
 
-**RL training** — expects training tensors produced by a backtest with `save_for_training=true` (writes under `data/rl_training/<run_id>/`). Logs metrics to [Weights & Biases](https://wandb.ai); set `WANDB_API_KEY` in `.env` and adjust `wandb.project` / `wandb.mode` in `base.yaml` (`online` vs `offline`).
+**RL training** - expects training tensors produced by a backtest with `save_for_training=true` (writes under `data/rl_training/<run_id>/`). Logs metrics to [Weights & Biases](https://wandb.ai); set `WANDB_API_KEY` in `.env` and adjust `wandb.project` / `wandb.mode` in `base.yaml` (`online` vs `offline`).
 
 Typical RL sequence:
 
@@ -323,7 +323,7 @@ Each subdirectory is one point in the sweep, with its own `.hydra/config.yaml`. 
 
 ## Multirun & hyperparameter grids
 
-To try many parameter values in one command, use Hydra **multirun** mode: add `-m` and list comma-separated values (or `range()` syntax). Hydra builds the full Cartesian product — e.g. three entry thresholds × two stop losses = six runs.
+To try many parameter values in one command, use Hydra **multirun** mode: add `-m` and list comma-separated values (or `range()` syntax). Hydra builds the full Cartesian product - e.g. three entry thresholds × two stop losses = six runs.
 
 Use the **joblib launcher** to run combinations in parallel on all CPU cores:
 
@@ -337,9 +337,9 @@ poetry run python runners/run_backtest.py -m \
 
 Why we use this stack for grids:
 
-1. **Pydantic** — every combination is validated; typos in YAML or CLI are caught early.
-2. **Hydra multirun** — reproducible sweeps without maintaining dozens of nearly identical config files.
-3. **hydra-joblib-launcher** — embarrassingly parallel backtests on local hardware (`n_jobs=-1` uses all cores).
+1. **Pydantic** - every combination is validated; typos in YAML or CLI are caught early.
+2. **Hydra multirun** - reproducible sweeps without maintaining dozens of nearly identical config files.
+3. **hydra-joblib-launcher** - embarrassingly parallel backtests on local hardware (`n_jobs=-1` uses all cores).
 
 For long optimization stages from the paper (stage 1 / stage 2 zoom grids, RL sensitivity, etc.), see the ready-made commands in [`docs/experiments_commands.md`](docs/experiments_commands.md). Copy a block, adjust dates if needed, and run.
 
@@ -368,7 +368,7 @@ Open `docs/api/index.html` in a browser after generation.
 
 ## Frozen artifacts (Zenodo)
 
-Re-downloading years of klines or re-training RL for several hours is not always necessary — especially for reviewers who only need to verify reported metrics.
+Re-downloading years of klines or re-training RL for several hours is not always necessary - especially for reviewers who only need to verify reported metrics.
 
 The `Makefile` target `download_artifacts` downloads archived `data/` and `results/` (including pre-trained models) from Zenodo. **Set the Zenodo URLs** in `Makefile` before running:
 
@@ -398,4 +398,4 @@ Research and educational use only. Commercial use prohibited. See [LICENSE](LICE
 
 ---
 
-**Paper (arXiv):** *DOI / arXiv link — to be added after publication.*
+**Paper (arXiv):** *DOI / arXiv link - to be added after publication.*
