@@ -13,8 +13,8 @@ from modules.utils.logger import get_logger
 logger = get_logger(__name__)
 
 STRATEGIES = {
-    "Baseline": "MAIN RESULTS/BASELINE OOS 10x",
-    "Agent 2": "MAIN RESULTS/RL OOS 10x",
+    "Baseline": "Winners Results/BASELINE OOS 10x",
+    "Agent 2": "Winners Results/RL OOS 10x",
 }
 
 QUARTERS = {
@@ -45,7 +45,7 @@ RENAME_MAP = {
 }
 
 current_file = Path(__file__).resolve()
-project_root = current_file.parent.parent
+project_root = current_file.parent.parent.parent
 sys.path.append(str(project_root))
 
 

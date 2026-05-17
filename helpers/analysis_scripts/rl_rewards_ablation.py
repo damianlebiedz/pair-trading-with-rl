@@ -12,7 +12,7 @@ from modules.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-TARGET_EXPERIMENT_FOLDER = "RL MODELS OOS 10x"
+TARGET_EXPERIMENT_FOLDER = "RL OOS 10x"
 
 ELSEVIER_FONT = "Arial, sans-serif"
 FONT_SIZE_TICK = 10
@@ -65,7 +65,7 @@ PDF_WIDTH = 720
 PDF_HEIGHT = 400
 
 current_file = Path(__file__).resolve()
-project_root = current_file.parent.parent
+project_root = current_file.parent.parent.parent
 sys.path.append(str(project_root))
 
 LEGEND_MAP = {

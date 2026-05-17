@@ -47,7 +47,7 @@ def get_column_id_from_folder(folder_name: str) -> int:
 
 def aggregate_models():
     script_dir = Path(__file__).resolve().parent
-    base_path = script_dir.parent / "results" / FOLDER
+    base_path = script_dir.parent.parent / "results" / FOLDER
 
     if not base_path.exists():
         print("Error: The specified folder does not exist.")
@@ -119,7 +119,7 @@ def aggregate_models():
     final_df = pd.DataFrame(records)
     final_df = final_df.sort_values("col_id").reset_index(drop=True)
 
-    output_path = script_dir.parent / "results" / "aggregated_models"
+    output_path = script_dir.parent.parent / "results" / "aggregated_models"
     output_path.mkdir(parents=True, exist_ok=True)
 
     parquet_path = output_path / "aggregated_stats.parquet"

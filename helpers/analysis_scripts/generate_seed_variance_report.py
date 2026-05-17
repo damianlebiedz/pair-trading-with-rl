@@ -16,7 +16,7 @@ from modules.utils.logger import get_logger
 warnings.filterwarnings("ignore", category=UserWarning, module="choreographer")
 logger = get_logger(__name__)
 
-FOLDER = "RL MODELS OOS 10x SEEDS"
+FOLDER = "RL OOS 10x Seeds"
 LEVERAGE = 10
 
 TITLE = "Out-Of-Sample Performance Stability Across Random Seeds"
@@ -49,7 +49,7 @@ PDF_HEIGHT = 350
 
 def generate_seed_variance_report(folder_name: str):
     script_dir = Path(__file__).resolve().parent
-    project_root = script_dir.parent
+    project_root = script_dir.parent.parent
     category_dir = project_root / "results" / folder_name
 
     report_output_dir = category_dir.parent / "seed_variance_report"

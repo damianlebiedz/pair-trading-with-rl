@@ -19,14 +19,13 @@ from runners.core.utils import generate_date_lists
 logger = get_logger(__name__)
 
 OOS_TABLE_STRATEGIES = {
-    # "Baseline (1x)": "baseline_oos",
-    "Baseline (10x)": "MAIN RESULTS/BASELINE OOS 10x",
+    "Baseline (10x)": "Winners Results/BASELINE OOS 10x",
 }
 
 STRATEGY = {
     "Rolling Beta-Hedge": {
-        "IS": "MAIN RESULTS/BASELINE IS 10x",
-        "OOS": "MAIN RESULTS/BASELINE OOS 10x",
+        "IS": "Winners Results/BASELINE IS 10x",
+        "OOS": "Winners Results/BASELINE OOS 10x",
     }
 }
 
@@ -45,7 +44,7 @@ PDF_WIDTH = 720
 PDF_HEIGHT = 350
 
 current_file = Path(__file__).resolve()
-project_root = current_file.parent.parent
+project_root = current_file.parent.parent.parent
 sys.path.append(str(project_root))
 
 SELECTED_METRICS = [

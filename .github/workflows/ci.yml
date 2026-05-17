@@ -45,3 +45,8 @@ jobs:
 
       - name: Format check with Black
         run: poetry run black --check .
+
+      - name: Run tests
+        run: poetry run pytest -q
+        env:
+          PYTHONPATH: .

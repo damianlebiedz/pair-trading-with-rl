@@ -12,7 +12,7 @@ from modules.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-TARGET_SUBFOLDER = "wandb_export_classic"
+TARGET_SUBFOLDER = "Wandb Export Classic 18"
 
 RENAME_MAP = {
     "recurrent_ppo_autonomous_StepPnLReward_1_0": "1 – StepPnLReward, Autonomous, λ=1.0",
@@ -128,7 +128,7 @@ legend_style = dict(
     borderwidth=0,
 )
 
-BASE_DIR = Path(__file__).parent.parent / "results" / TARGET_SUBFOLDER
+BASE_DIR = Path(__file__).parent.parent.parent / "results" / TARGET_SUBFOLDER
 
 
 def clean_label(raw_col: str) -> str:

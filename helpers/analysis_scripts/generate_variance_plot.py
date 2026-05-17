@@ -11,7 +11,7 @@ from modules.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-TARGET_SUBFOLDER = "wandb_export_seeds"
+TARGET_SUBFOLDER = "Wandb Export Seeds 4"
 
 ELSEVIER_FONT = "Arial, sans-serif"
 FONT_SIZE_TICK = 10
@@ -68,7 +68,7 @@ legend_style = dict(
     borderwidth=0,
 )
 
-BASE_DIR = Path(__file__).parent.parent / "results" / TARGET_SUBFOLDER
+BASE_DIR = Path(__file__).parent.parent.parent / "results" / TARGET_SUBFOLDER
 
 
 def generate_variance_plot(csv_path: Path, output_dir: Path):

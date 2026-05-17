@@ -21,8 +21,8 @@ logger = get_logger(__name__)
 LEVERAGE = 10
 
 PLOT_STRATEGIES = {
-    "Baseline": "MAIN RESULTS/BASELINE OOS 10x",
-    "Agent 2": "MAIN RESULTS/RL OOS 10x",
+    "Baseline": "Winners Results/BASELINE OOS 10x",
+    "Agent 2": "Winners Results/RL OOS 10x",
 }
 
 PLOT_COLORS = {
@@ -31,8 +31,8 @@ PLOT_COLORS = {
 }
 
 TABLE_STRATEGIES = {
-    "Baseline (10x)": "MAIN RESULTS/BASELINE OOS 10x",
-    "Agent 2 (10x)": "MAIN RESULTS/RL OOS 10x",
+    "Baseline (10x)": "Winners Results/BASELINE OOS 10x",
+    "Agent 2 (10x)": "Winners Results/RL OOS 10x",
 }
 
 TITLE = "Out-Of-Sample Performance of Agent 2 Against Baseline and Benchmarks (2025)."
@@ -60,7 +60,7 @@ PDF_WIDTH = 720
 PDF_HEIGHT = 400
 
 current_file = Path(__file__).resolve()
-project_root = current_file.parent.parent
+project_root = current_file.parent.parent.parent
 sys.path.append(str(project_root))
 
 SELECTED_METRICS = [

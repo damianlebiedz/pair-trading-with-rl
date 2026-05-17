@@ -1,4 +1,4 @@
-"""Script to generate RL Sensitivity Analysis performance reports, including PDF equity plots and formatted LaTeX tables."""
+"""Script to generate Sensitivity Analysis performance reports, including PDF equity plots and formatted LaTeX tables."""
 
 import os
 import time
@@ -16,13 +16,14 @@ from modules.utils.logger import get_logger
 warnings.filterwarnings("ignore", category=UserWarning, module="choreographer")
 logger = get_logger(__name__)
 
-FOLDER = "RL Sensitivity Analysis 10x/Wide"
+FOLDER = "Baseline Sensitivity Analysis 10x/Wide"
 
 BASELINE = {
-    "OOS": "RL OOS 10x",
+    "IS": "BASELINE IS 10x",
+    "OOS": "BASELINE OOS 10x",
 }
 
-LEVERAGE = 10
+LEVERAGE = 1
 
 ELSEVIER_FONT = "Arial, sans-serif"
 FONT_SIZE_TICK = 10
@@ -59,7 +60,6 @@ ASSUMPTIONS = [
     "beta_hedge",
     "sl_lock",
     "time_decay_sl",
-    "autonomous_agent",
 ]
 
 NAME_MAP = {
@@ -72,22 +72,31 @@ NAME_MAP = {
     "beta_hedge": "Beta Hedge",
     "sl_lock": "SL Lock",
     "time_decay_sl": "Time Decay SL",
-    "autonomous_agent": "Risk Management Overlay",
 }
 
 
 def generate_reports(folder_name: str, baseline_dict: dict):
     script_dir = Path(__file__).resolve().parent
-    project_root = script_dir.parent
+    project_root = script_dir.parent.parent
     category_dir = project_root / "results" / folder_name
 
+    is_base_dir = category_dir / "is"
     oos_base_dir = category_dir / "oos"
 
     report_output_dir = category_dir / "sensitivity_report"
     report_output_dir.mkdir(parents=True, exist_ok=True)
 
-    if not oos_base_dir.exists():
-        raise ValueError(f"Directory 'oos' must exist inside {category_dir}")
+    if not is_base_dir.exists() or not oos_base_dir.exists():
+        raise ValueError(f"Directories 'is' and 'oos' must exist inside {category_dir}")
+
+    base_config_path = project_root / "config" / "base.yaml"
+    if base_config_path.exists():
+        with open(base_config_path, "r", encoding="utf-8") as f:
+            base_config = yaml.safe_load(f)
+            market_cfg = base_config.get("market", {})
+            initial_cash = market_cfg.get("initial_cash")
+    else:
+        raise ValueError("'base.yaml' not found")
 
     axis_style_x = dict(
         showline=True,
@@ -171,28 +180,19 @@ def generate_reports(folder_name: str, baseline_dict: dict):
 
             params = {k: get_cfg(k) for k in (SENSITIVITY_PARAMS + ASSUMPTIONS)}
 
-            initial_cash = ts_df["equity"].iloc[0]
-            ret_series = (ts_df["equity"] / initial_cash) - 1
+            risk_free_rate = float(
+                config.get("market", {}).get("risk_free_rate_annual", 0.0)
+            )
 
-            stats_files = list(run_dir.glob("stats_*.parquet"))
-            if stats_files:
-                df_stats = pd.read_parquet(stats_files[0])
-                if "metric" in df_stats.columns:
-                    df_stats = df_stats.set_index("metric")
-                net_stats = df_stats["net"]
-            else:
-                risk_free_rate = float(
-                    config.get("market", {}).get("risk_free_rate_annual", 0.0)
-                )
-                stats_calc = calculate_stats(
-                    ts_df, exec_df, initial_cash, Interval.H1, risk_free_rate
-                )
-                net_stats = stats_calc["net"]
+            stats = calculate_stats(
+                ts_df, exec_df, initial_cash, Interval.H1, risk_free_rate
+            )
+            net_stats = stats["net"]
 
             return {
                 "params": params,
                 "metrics": net_stats,
-                "ret_series": ret_series,
+                "ret_series": ts_df["total_net_return"],
                 "id": run_dir.name,
             }
         except Exception as e:
@@ -201,12 +201,14 @@ def generate_reports(folder_name: str, baseline_dict: dict):
             )
             return None
 
-    logger.info("Loading baseline model...")
+    logger.info("Loading baseline models...")
+    base_is = get_run_data(is_base_dir / baseline_dict["IS"])
     base_oos = get_run_data(oos_base_dir / baseline_dict["OOS"])
 
-    if not base_oos:
-        raise ValueError("Error loading Baseline OOS.")
+    if not base_is or not base_oos:
+        raise ValueError("Error loading Baseline (IS or OOS).")
 
+    base_is_series = base_is["ret_series"] - base_is["ret_series"].iloc[0]
     base_oos_series = base_oos["ret_series"] - base_oos["ret_series"].iloc[0]
 
     sensitivity_dict = {p: {} for p in SENSITIVITY_PARAMS}
@@ -221,13 +223,33 @@ def generate_reports(folder_name: str, baseline_dict: dict):
         except (ValueError, TypeError):
             return True
 
-    logger.info("Extracting and sorting OOS runs...")
+    def params_to_key(p):
+        return tuple(sorted(p.items()))
+
+    is_runs_dict = {}
+    for d in is_base_dir.iterdir():
+        if d.is_dir() and d.name != baseline_dict["IS"]:
+            run_data = get_run_data(d)
+            if run_data:
+                key = params_to_key(run_data["params"])
+                is_runs_dict[key] = run_data
+
+    logger.info("Extracting and matching OOS with IS...")
     for oos_run_dir in oos_base_dir.iterdir():
         if not oos_run_dir.is_dir() or oos_run_dir.name == baseline_dict["OOS"]:
             continue
 
         run_oos = get_run_data(oos_run_dir)
         if not run_oos:
+            continue
+
+        key = params_to_key(run_oos["params"])
+        run_is = is_runs_dict.get(key)
+
+        if not run_is:
+            logger.warning(
+                f"[{oos_run_dir.name}] REJECTED: IS not found with the same parameters."
+            )
             continue
 
         diffs_sens = [
@@ -243,10 +265,11 @@ def generate_reports(folder_name: str, baseline_dict: dict):
 
         added = False
 
-        if len(diffs_sens) == 1 and len(diffs_assump) == 0:
+        if len(diffs_sens) == 1:
             p_name = diffs_sens[0]
             val = run_oos["params"][p_name]
 
+            run_oos["series_is"] = run_is["ret_series"] - run_is["ret_series"].iloc[0]
             run_oos["series_oos"] = (
                 run_oos["ret_series"] - run_oos["ret_series"].iloc[0]
             )
@@ -263,15 +286,8 @@ def generate_reports(folder_name: str, baseline_dict: dict):
                 val = False
             elif p_name == "fee_rate":
                 val = f"{float(val):.2%}"
-            elif p_name == "autonomous_agent":
-                if isinstance(val, bool):
-                    val = not val
-                elif isinstance(val, str):
-                    if val.lower() == "true":
-                        val = False
-                    elif val.lower() == "false":
-                        val = True
 
+            run_oos["series_is"] = run_is["ret_series"] - run_is["ret_series"].iloc[0]
             run_oos["series_oos"] = (
                 run_oos["ret_series"] - run_oos["ret_series"].iloc[0]
             )
@@ -292,22 +308,30 @@ def generate_reports(folder_name: str, baseline_dict: dict):
 
             fig = make_subplots(
                 rows=1,
-                cols=1,
+                cols=2,
+                shared_yaxes=True,
+                horizontal_spacing=0.03,
                 subplot_titles=[
-                    "Out-of-Sample Performance (2025)",
+                    "Panel A: In-Sample Performance (2024)",
+                    "Panel B: Out-of-Sample Performance (2025)",
                 ],
             )
 
-            fig.add_trace(
-                go.Scatter(
-                    x=base_oos_series.index,
-                    y=base_oos_series,
-                    name="Agent 2",
-                    legendgroup="Agent 2",
-                    line=dict(color="#FF8C00", width=1.5),
-                    showlegend=True,
-                ),
-            )
+            for c, (ret, name) in enumerate(
+                [(base_is_series, "IS"), (base_oos_series, "OOS")], 1
+            ):
+                fig.add_trace(
+                    go.Scatter(
+                        x=ret.index,
+                        y=ret,
+                        name="Baseline (0.05% fees, 10x lev)",
+                        legendgroup="Baseline (0.05% fees, 10x lev)",
+                        line=dict(color=COLOR_BLACK, width=1.5),
+                        showlegend=(c == 1),
+                    ),
+                    row=1,
+                    col=c,
+                )
 
             sorted_vals = sorted(
                 variations.keys(),
@@ -323,16 +347,19 @@ def generate_reports(folder_name: str, baseline_dict: dict):
                 v_data = variations[val]
                 var_label = f"{NAME_MAP.get(param_name, param_name)} = {val}"
 
-                fig.add_trace(
-                    go.Scatter(
-                        x=v_data["series_oos"].index,
-                        y=v_data["series_oos"],
-                        name=var_label,
-                        legendgroup=var_label,
-                        line=dict(color=color, width=1.5),
-                        showlegend=True,
-                    ),
-                )
+                for c, ret in enumerate([v_data["series_is"], v_data["series_oos"]], 1):
+                    fig.add_trace(
+                        go.Scatter(
+                            x=ret.index,
+                            y=ret,
+                            name=var_label,
+                            legendgroup=var_label,
+                            line=dict(color=color, width=1.5),
+                            showlegend=(c == 1),
+                        ),
+                        row=1,
+                        col=c,
+                    )
 
             fig.update_layout(
                 width=PDF_WIDTH,
@@ -357,15 +384,26 @@ def generate_reports(folder_name: str, baseline_dict: dict):
                 **axis_style_x,
                 tickformat="%b\n%Y",
                 dtick="M3",
+                tick0=base_is_series.index[0] if len(base_is_series) > 0 else None,
+                row=1,
+                col=1,
+            )
+
+            fig.update_xaxes(
+                **axis_style_x,
+                tickformat="%b\n%Y",
+                dtick="M3",
                 tick0=base_oos_series.index[0] if len(base_oos_series) > 0 else None,
+                row=1,
+                col=2,
             )
 
             fig.update_yaxes(**axis_style_y, tickformat=".0%")
-            fig.update_yaxes(title_text="Cumulative Return")
+            fig.update_yaxes(title_text="Cumulative Return", row=1, col=1)
 
             pdf_path = (
                 report_output_dir
-                / f"{prefix}_{NAME_MAP.get(param_name, param_name).replace(' ', '_')}.pdf"
+                / f"{prefix}_{NAME_MAP.get(param_name, param_name)}.pdf"
             )
             try:
                 fig.write_image(str(pdf_path), format="pdf")
@@ -406,7 +444,7 @@ def generate_reports(folder_name: str, baseline_dict: dict):
         total_cols = 2 + num_vars
         col_format = "l" + f"*{{{total_cols - 1}}}{{>{{\\centering\\arraybackslash}}X}}"
 
-        header1 = "& Agent 2"
+        header1 = "& Baseline"
         header2 = "& -"
 
         for p in active_params:
@@ -482,14 +520,14 @@ def generate_reports(folder_name: str, baseline_dict: dict):
                     row_str += "[4pt]"
                 rows_tex += row_str + "\n"
 
-        fee = float(base_oos["params"].get("fee_rate", 0.0))
+        fee = base_oos["params"].get("fee_rate", 0.0)
         baseline_str = ", ".join(
             [
                 f"{NAME_MAP.get(p, p)} = {base_oos['params'].get(p, 'N/A')}"
                 for p in params_list
             ]
         )
-        note = f"Agent 2 ({fee * 100:.2f}\\% fees, leverage {int(LEVERAGE)}x): {baseline_str}."
+        note = f"Baseline ({fee * 100:.2f}\\% fees, leverage {int(LEVERAGE)}x): {baseline_str}."
 
         tex = f"""\\begin{{landscape}}
 \\vspace*{{\\fill}}
@@ -521,31 +559,37 @@ def generate_reports(folder_name: str, baseline_dict: dict):
         logger.info(f"LaTeX Table saved: {prefix}_table.tex")
 
     def generate_mechanism_latex_table(results_dict, params_list, prefix, title, label):
-        active_params = [p for p in params_list if results_dict.get(p)]
-        if not active_params:
+        columns_data = []
+        header_cells = []
+
+        for p in params_list:
+            if p in results_dict and results_dict[p]:
+                vals = sorted(
+                    results_dict[p].keys(),
+                    key=lambda x: (
+                        (0, float(x))
+                        if str(x).lstrip("-").replace(".", "", 1).isdigit()
+                        else (1, str(x))
+                    ),
+                )
+                for v in vals:
+                    columns_data.append(results_dict[p][v])
+                    name_str = NAME_MAP.get(p, p)
+
+                    if name_str == "Time Decay SL":
+                        name_str = "Time Decay \\\\ SL"
+
+                    v_str = str(v).replace("%", "\\%")
+
+                    header_cells.append(f"\\makecell{{{name_str} \\\\ {v_str}}}")
+
+        if not columns_data:
             return
 
-        num_vars = sum(len(results_dict[p]) for p in active_params)
-        total_cols = 2 + num_vars
+        total_cols = 2 + len(columns_data)
         col_format = "l" + f"*{{{total_cols - 1}}}{{>{{\\centering\\arraybackslash}}X}}"
 
-        header1 = "& Agent 2"
-        header2 = "& -"
-
-        for p in active_params:
-            vals = sorted(
-                results_dict[p].keys(),
-                key=lambda x: (
-                    (0, float(x))
-                    if str(x).lstrip("-").replace(".", "", 1).isdigit()
-                    else (1, str(x))
-                ),
-            )
-            header1 += f" & \\multicolumn{{{len(vals)}}}{{c}}{{{NAME_MAP.get(p, p)}}}"
-            for v in vals:
-                v_str = f"{v:g}" if isinstance(v, float) else str(v)
-                v_str = v_str.replace("%", "\\%")
-                header2 += f" & {v_str}"
+        header_str = "Metric & Baseline & " + " & ".join(header_cells)
 
         row_groups = [
             [
@@ -587,19 +631,10 @@ def generate_reports(folder_name: str, baseline_dict: dict):
         rows_tex = ""
         for group in row_groups:
             for orig_name, tex_name, fmt in group:
-                row_str = f"{tex_name} & {format_val(base_oos['metrics'].get(orig_name), fmt)}"
-                for p in active_params:
-                    vals = sorted(
-                        results_dict[p].keys(),
-                        key=lambda x: (
-                            (0, float(x))
-                            if str(x).lstrip("-").replace(".", "", 1).isdigit()
-                            else (1, str(x))
-                        ),
-                    )
-                    for v in vals:
-                        metric_val = results_dict[p][v]["metrics"].get(orig_name)
-                        row_str += f" & {format_val(metric_val, fmt)}"
+                row_str = f"        {tex_name} & {format_val(base_oos['metrics'].get(orig_name), fmt)}"
+                for col in columns_data:
+                    metric_val = col["metrics"].get(orig_name)
+                    row_str += f" & {format_val(metric_val, fmt)}"
 
                 row_str += " \\\\"
                 if orig_name in ["max_drawdown", "win_rate", "avg_trade_duration"]:
@@ -614,30 +649,25 @@ def generate_reports(folder_name: str, baseline_dict: dict):
                 baseline_params.append(f"{NAME_MAP.get(p, p)} = {val}")
 
         baseline_str = ", ".join(baseline_params)
-        note = f"Agent 2 ({fee * 100:.2f}\\% fees, leverage {int(LEVERAGE)}x): {baseline_str}."
+        note = f"Baseline ({fee * 100:.2f}\\% fees, leverage {int(LEVERAGE)}x): {baseline_str}."
 
-        tex = f"""\\begin{{landscape}}
-\\vspace*{{\\fill}}
-\\renewcommand{{\\arraystretch}}{{1.2}}
-\\begin{{center}}
-\\footnotesize
-\\captionof{{table}}{{{title}}}
-\\vspace{{12pt}}
-\\label{{{label}}}
-\\begin{{tabularx}}{{\\linewidth}}{{{col_format}}}
-\\toprule
- {header1} \\\\
- {header2} \\\\
-\\midrule
-{rows_tex.strip()}
-\\bottomrule
-\\end{{tabularx}}
-
-\\vspace{{12pt}}
-\\justifying \\noindent \\scriptsize Note: {note}
-\\end{{center}}
-\\vspace*{{\\fill}}
-\\end{{landscape}}"""
+        tex = f"""\\begin{{table}}[H]
+    \\centering
+    \\footnotesize
+    \\renewcommand{{\\arraystretch}}{{1.2}}
+    \\caption{{{title}}}
+    \\label{{{label}}}
+    \\vspace{{12pt}}
+    \\begin{{tabularx}}{{\\linewidth}}{{{col_format}}}
+    \\toprule
+        {header_str} \\\\
+    \\midrule
+{rows_tex.rstrip()}
+    \\bottomrule
+    \\end{{tabularx}}\\\\
+    \\vspace{{12pt}}
+    \\justifying \\noindent \\scriptsize Note: {note}
+\\end{{table}}"""
 
         with open(
             report_output_dir / f"{prefix}_table.tex", "w", encoding="utf-8"
@@ -646,26 +676,26 @@ def generate_reports(folder_name: str, baseline_dict: dict):
         logger.info(f"LaTeX Table saved: {prefix}_table.tex")
 
     logger.info("Generating PDF Plots...")
-    plot_and_save(sensitivity_dict, "rl_sensitivity")
-    plot_and_save(mechanism_dict, "rl_mechanism")
+    plot_and_save(sensitivity_dict, "sensitivity")
+    plot_and_save(mechanism_dict, "mechanism")
 
     logger.info("Generating LaTeX Tables...")
     generate_latex_table(
         sensitivity_dict,
         SENSITIVITY_PARAMS,
         "sensitivity",
-        "Sensitivity Analysis of Out-Of-Sample Agent Performance (2025).",
-        "tab:rl_oos_sensitivity",
+        "Sensitivity Analysis of Out-Of-Sample Baseline Strategy Performance (2025).",
+        "tab:oos_sensitivity",
     )
     generate_mechanism_latex_table(
         mechanism_dict,
         ASSUMPTIONS,
         "mechanism",
-        "Assumptions Verification: Out-Of-Sample Agent Performance (2025).",
-        "tab:rl_oos_mechanism",
+        "Assumptions Verification: Out-Of-Sample Baseline Strategy Performance (2025).",
+        "tab:oos-fee_hedge_sensitivity",
     )
 
-    logger.info("RL Sensitivity Pipeline completed successfully.")
+    logger.info("Sensitivity Pipeline completed successfully.")
 
     logger.info("Ending...")
     os._exit(0)

@@ -1,127 +1,238 @@
-# Pair Trading Framework
-### Repository for a research paper currently in progress.
-This project implements an advanced pairs trading framework comparing two distinct approaches: **Statistical Arbitrage** and **Reinforcement Learning**.
+# Pair Trading Research Framework
 
-- [Key Features](#key-features)
-- [Installation & Setup](#installation--setup)
-  - [Docker](#docker)
-  - [Poetry](#poetry)
-- [Reproducing Results (Paper Evaluation)](#reproducing-results-paper-evaluation)
-- [Project Structure](#project-structure)
-- [Configuration](#Configuration)
-- [License](#license)
+Repository for the "Dynamic Multi-Pair Trading Strategy in Cryptocurrency Markets with Deep Reinforcement Learning" (Lebiedź and Ślepaczuk, 2026). Implements **statistical arbitrage** backtesting framework and **reinforcement learning** training and evaluation pipelines.
 
-## Key Features
-
-### 1. Statistical & Optimization Pipeline
-- **Pair Selection:** Automated search for cointegrated pairs with Hurst Exponent filter.
-- **Optimization:** Hyperparameter tuning using **Random Search** to find optimal entry/exit thresholds and window sizes.
-- **Walk-Forward Analysis:** Robust backtesting engine with rolling windows (Selection → Optimization → Testing).
-
-### 2. Reinforcement Learning Pipeline
-- **Custom Environment:** OpenAI Gym (`gymnasium`) compatible `PairsTradingEnv`.
-- **Algorithms:** Support for A2C (Stable Baselines 3) and Recurrent PPO (SB3 Contrib).
-- **Reward Engineering:** Implements various reward functions: PnL, Risk-Adjusted, and Differential Sharpe Ratio.
-- **Monitoring:** Integrated with **Weights & Biases (WandB)** for experiment tracking.
+**Stack:** Python 3.12 · Poetry · Hydra · Pydantic · pandas · statsmodels · scikit-optimize · Gymnasium · Stable-Baselines3 · SB3-Contrib (Recurrent PPO) · Weights & Biases · joblib (parallel sweeps) · Docker
 
 ---
 
-## Installation & Setup
-
-First, clone the repository and configure your environment variables. You must set up your Weights & Biases (WandB) API key, which is required for tracking the Reinforcement Learning training process.
+## Quick start
 
 ```bash
-# Clone the repository
-git clone [https://github.com/damianlebiedz/research-paper.git](https://github.com/damianlebiedz/research-paper.git)
+git clone https://github.com/damianlebiedz/research-paper.git
 cd research-paper
+cp .env.example .env   # set WANDB_API_KEY (required for RL training monitoring)
 
-# Set up environment variables
-cp .env.example .env
-# Open the .env file and add your actual API key: WANDB_API_KEY=your_key_here
-```
-
-Once the .env file is ready, you can run this project using either Docker (recommended for isolated, reproducible environments) or locally via Poetry.
-
-### Docker
-
-This project uses Docker Compose with a base image to ensure 100% environment consistency.
-
-```bash
-# Build the Base Image
-docker compose build
-```
-
-### Poetry
-
-Ensure you have Python 3.12 and Poetry installed.
-
-```bash
-# Install dependencies
 poetry install
+poetry run python helpers/update_config.py          # refresh schemas + docs/configuration.md
+poetry run python helpers/data_fetching_pipeline.py # fetch data + list_of_assets (long-running)
+poetry run python runners/run_backtest.py
 ```
 
-## Reproducing Results (Paper Evaluation)
-To guarantee academic reproducibility, this project uses a Makefile pipeline.
-
-Why? Relying on live external APIs (like Binance) for historical data can lead to inconsistencies due to changing limits or delisted assets. Furthermore, Reinforcement Learning training can introduce hardware-dependent variance.
-
-To solve this, we provide two separate execution tracks: the **Fast Track** (using frozen artifacts) and the **Full Track** (running everything from scratch).
-
-Note: You must specify the environment by appending `RUN_MODE=docker` (recommended for reviewers) or `RUN_MODE=poetry` to your make commands.
-
-### 1. Fast Track (Recommended for Reviewers)
-This track evaluates the pre-trained RL agent on a frozen, version-controlled dataset hosted on Zenodo (DOI: 10.5281/zenodo.XXXXXXX). It bypasses the Binance API and the lengthy RL training process, guaranteeing identical results to those published in the paper.
+**Docker** - prepend `docker compose run --rm <service>` to any command; Hydra CLI overrides work the same way:
 
 ```bash
-make fast_track RUN_MODE=docker
+docker compose build
+docker compose run --rm update_config
+docker compose run --rm data_fetching_pipeline
+docker compose run --rm run_backtest performance.use_rl=false
+docker compose run --rm train_agent
 ```
-What it does:
-- `download_artifacts`: Downloads and extracts the exact historical/.parquet dataset and the pre-trained .zip RL model from Zenodo.
-- `backtest`: Runs the baseline Statistical Arbitrage backtest.
-- `backtest_rl`: Runs the backtest using the pre-trained Reinforcement Learning agent.
 
-### 2. Full Track (End-to-End Reproduction)
-This track executes the entire pipeline from scratch. It is intended for researchers who want to fetch the latest data or retrain the agent entirely.
+Override the default service command when needed (e.g. multirun):
 
 ```bash
-make full_track RUN_MODE=docker
+docker compose run --rm run_backtest python runners/run_backtest.py -m hydra/launcher=joblib hydra.launcher.n_jobs=-1 performance.entry_threshold=2.0,2.5,3.0
 ```
-What it does:
-- `fetch`: Dynamically generates the asset universe and fetches raw OHLCV data directly from the Binance API.
-- `backtest`: Runs the baseline Statistical Arbitrage backtest.
-- `train`: Trains the Reinforcement Learning agent from scratch (can take several hours).
-- `backtest_rl`: Evaluates your newly trained agent.
 
-(Optional) You can also run individual stages, for example: make train `RUN_MODE=docker`.
+---
 
-## Project Structure
+## Project structure
+
 ```
 .
-├── config/                 # Hydra configuration files (.yaml & .json schemas)
-├── data/                   # Market data (downloaded via helpers or Zenodo)
-├── helpers/                # Scripts for data fetching and schema generationreporting
-├── modules/
-│   ├── core/               # Execution logic, indicators, stat tests
-│   ├── data_services/      # Data loading and merging utils
-│   ├── learning/           # RL environments, agents, and rewards
-│   └── performance/        # Strategy logic, optimization objectives
-├── runners/                # Main entry points (backtesting, training)
-└── results/                # Output metrics, plots, and saved models
+├── config/                      # Hydra YAML + JSON schemas (IDE autocomplete / validation)
+│   ├── base.yaml                # shared defaults (market, wandb, hydra dirs)
+│   ├── run_backtest.yaml        # statistical / RL backtest runner
+│   ├── train_agent.yaml         # RL training runner
+│   ├── rl_algo/                 # A2C / Recurrent PPO presets
+│   ├── helpers/                 # helper-specific YAML (data pipeline)
+│   └── schemas/                 # generated JSON schemas + list_of_assets.json
+├── data/                        # OHLCV parquet (from pipeline or Zenodo)
+├── docs/                        # generated & reference docs (see below)
+├── helpers/
+│   ├── update_config.py         # schema + configuration.md generator
+│   ├── data_fetching_pipeline.py
+│   └── analysis_scripts/        # optional post-hoc analysis (paper-specific)
+├── modules/                     # core library (strategy, RL, data, stats)
+├── runners/
+│   ├── run_backtest.py
+│   ├── train_agent.py
+│   └── run_pair_selection.py
+├── results/                     # run outputs (timestamped; not committed)
+└── tests/
 ```
 
-## Configuration
-The project currently uses standard **Hydra** YAML configuration files located in the `config/` directory.
+---
 
-- `base.yaml`: General global settings.
-- `run_backtest.yaml`: Settings for the backtesting engine.
-- `rl_algo/`: Specific configurations for A2C and Recurrent PPO.
-- `opt_and_test_multi.yaml`: Settings for the statistical pipeline.
+## Configuration (Hydra + Pydantic)
 
-You can dynamically override parameters directly from the CLI without editing files. For example, to run the RL backtest manually with a custom configuration:
+YAML files in `config/` are the runtime source of truth. Each top-level config references a JSON Schema (`# yaml-language-server: $schema=schemas/schema.json`) generated from **Pydantic models** in [`modules/core/config.py`](modules/core/config.py).
+
+| Layer | Role |
+|--------|------|
+| **Hydra** | Compose configs (`defaults`), CLI overrides, **multirun** (`-m`) sweeps |
+| **Pydantic** | Strict validation, cross-field rules, enums, descriptions |
+| **JSON schemas** | IDE autocomplete, inline docs, YAML validation in the editor |
+
+At runtime, runners load `DictConfig` → `Config(**OmegaConf.to_container(cfg, resolve=True))`. Invalid combinations fail fast before any backtest runs.
+
+**After changing** `modules/core/config.py`, regenerate artifacts:
 
 ```bash
-docker compose run --rm run_backtest python runners/run_backtest.py use_rl=True
+poetry run python helpers/update_config.py
+# or: docker compose run --rm update_config
 ```
 
+This updates `config/schemas/*.json` and [`docs/configuration.md`](docs/configuration.md) (auto-generated parameter reference).
+
+**Key YAML files**
+
+| File | Purpose |
+|------|---------|
+| `base.yaml` | `market`, `settings`, `wandb`, Hydra output dirs |
+| `run_backtest.yaml` | pair selection, performance / strategy params |
+| `train_agent.yaml` | RL env + training; pulls `rl_algo` preset |
+| `config/helpers/data_fetching_pipeline.yaml` | universe size, date windows, whitelist/blacklist |
+
+Override any leaf from CLI, e.g. `performance.entry_threshold=3.0 pair_selection.top_n=20`.
+
+---
+
+## Helpers
+
+### Core (required for reproduction)
+
+| Script | Role |
+|--------|------|
+| [`helpers/update_config.py`](helpers/update_config.py) | Exports Pydantic → `config/schemas/*.json`; regenerates `docs/configuration.md` |
+| [`helpers/data_fetching_pipeline.py`](helpers/data_fetching_pipeline.py) | Downloads Binance Data Vision futures klines (no survivorship bias), validates gaps, writes `data/*.parquet`, `config/schemas/list_of_assets.json`, [`docs/list_of_assets.md`](docs/list_of_assets.md) |
+
+`list_of_assets.json` is consumed by `run_backtest.py` — each monthly iteration maps to a liquidity-ranked universe used in pair selection.
+
+Configure the pipeline via `config/helpers/data_fetching_pipeline.yaml` (dates, `top_n`, iterations, whitelist/blacklist).
+
+### Analysis scripts (optional)
+
+Located in [`helpers/analysis_scripts/`](helpers/analysis_scripts/). They aggregate backtest / RL / WandB outputs into tables and plots for the thesis (distributions, sensitivity, IS/OOS, seed variance, bootstrap, etc.).
+
+> **Note:** These scripts were written for the exact folder layout and experiment names used in this paper. For different `results/` layouts or naming, expect to adjust paths/constants inside each script.
+
+Examples:
+
+```bash
+poetry run python helpers/analysis_scripts/generate_distributions.py
+poetry run python helpers/analysis_scripts/sensitivity_analysis.py
+```
+
+See [`docs/experiments_commands.md`](docs/experiments_commands.md) for the multirun commands used during the study and expected `results/` grouping.
+
+---
+
+## Runners
+
+| Runner | Command (Poetry) | Compose service |
+|--------|------------------|-----------------|
+| Backtest | `poetry run python runners/run_backtest.py` | `run_backtest` |
+| RL training | `poetry run python runners/train_agent.py` | `train_agent` |
+| Pair selection only | `poetry run python runners/run_pair_selection.py` | — |
+
+**RL training** logs to [Weights & Biases](https://wandb.ai) (`wandb.project`, `wandb.mode` in `base.yaml`). Set `WANDB_API_KEY` in `.env`.
+
+**Statistical backtest** → walk-forward: pair selection → optimization window → test window, repeated monthly (`performance.iterations`).
+
+**RL backtest** → set `performance.use_rl=true` and optionally `rl_model_folder=<run_folder_name>`.
+
+---
+
+## Results layout
+
+Each single run creates a timestamped directory:
+
+```
+results/run_backtest_2024-01-15_14-30-00_a1b2c3/
+├── .hydra/
+│   ├── config.yaml      # resolved task config
+│   ├── hydra.yaml
+│   └── overrides.yaml
+├── execution.log
+├── <pair>/test/         # per-pair outputs
+└── ...
+```
+
+`.hydra/` is written by [`save_hydra_config_snapshot`](runners/core/utils.py) so every result folder is self-describing for later analysis scripts.
+
+**Multirun** sweeps go to `results/multirun/<timestamp>/` (see `hydra.sweep.dir` in `config/base.yaml`). Each grid point is a subdirectory with its own `.hydra/config.yaml`.
+
+---
+
+## Multirun & hyperparameter grids
+
+Hydra `-m` expands comma-separated or `range()` overrides into a Cartesian grid. Use the **joblib launcher** for parallel execution:
+
+```bash
+poetry run python runners/run_backtest.py -m \
+  hydra/launcher=joblib hydra.launcher.n_jobs=-1 \
+  clean_single_backtests=false generate_plots=false \
+  performance.entry_threshold=2.0,2.25,2.50,2.75,3.0 \
+  performance.exit_threshold=0.0
+```
+
+Why this setup works well:
+
+1. **Pydantic** validates every combination before execution.
+2. **Hydra multirun** gives a reproducible grid without copy-pasting YAML.
+3. **hydra-joblib-launcher** runs independent jobs in parallel (`n_jobs=-1` → all cores).
+
+Full command history for the paper: [`docs/experiments_commands.md`](docs/experiments_commands.md).
+
+---
+
+## Documentation
+
+| Artifact | How to generate |
+|----------|-----------------|
+| [`docs/configuration.md`](docs/configuration.md) | `poetry run python helpers/update_config.py` |
+| [`docs/list_of_assets.md`](docs/list_of_assets.md) | `poetry run python helpers/data_fetching_pipeline.py` |
+| API HTML (`docs/api/`) | `poetry run pdoc ./modules ./helpers ./runners -o ./docs/api` |
+
+**Regenerate everything (schemas + config doc + API):**
+
+```bash
+poetry run python helpers/update_config.py
+poetry run pdoc ./modules ./helpers ./runners -o ./docs/api
+```
+
+Install doc dependencies: `poetry install --with docs`.
+
+Static reference (not auto-generated): [`docs/experiments_commands.md`](docs/experiments_commands.md).
+
+---
+
+## Frozen artifacts (Zenodo)
+
+For reviewers who should not re-fetch data or re-train RL models, use the Makefile (set Zenodo URLs first):
+
+```bash
+make download_artifacts
+```
+
+Then run backtests against extracted `data/` and `results/` (pre-trained models).
+
+---
+
+## Tests & CI
+
+```bash
+poetry run pytest
+poetry run ruff check .
+poetry run black --check .
+```
+
+GitHub Actions (`.github/workflows/ci.yml`) runs Ruff, Black, and **pytest** on push/PR to `main` and `develop`.
+
+---
+
 ## License
-Only for research/educational purposes. Commercial use is prohibited. See LICENSE for full terms.
+
+Research and educational use only. Commercial use prohibited. See [LICENSE](LICENSE).

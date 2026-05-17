@@ -38,7 +38,7 @@ PDF_WIDTH = 720
 PDF_HEIGHT = 300
 
 current_file = Path(__file__).resolve()
-project_root = current_file.parent.parent
+project_root = current_file.parent.parent.parent
 sys.path.append(str(project_root))
 
 

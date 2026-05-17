@@ -9,8 +9,8 @@ import pandas as pd
 from statsmodels.stats.outliers_influence import variance_inflation_factor
 from tqdm import tqdm
 
-INPUT_FOLDER = "results/training_data"
-OUTPUT_FOLDER = "results/correlation_analysis"
+INPUT_FOLDER = "./data/rl_training/training_data"
+OUTPUT_FOLDER = "results/Correlation Analysis"
 FEATURES = ["z_score", "hurst", "position", "signal", "t_pos_norm"]
 REQUIRED_COLUMNS = ["z_score", "hurst", "position", "signal", "window"]
 MIN_ROWS = 50
@@ -135,7 +135,7 @@ def calculate_t_pos_norm(df: pd.DataFrame) -> pd.Series:
 
 def run_post_hoc_analysis() -> None:
     script_dir = Path(__file__).resolve().parent
-    project_root = script_dir.parent
+    project_root = script_dir.parent.parent
 
     input_path = project_root / INPUT_FOLDER
     output_path = project_root / OUTPUT_FOLDER

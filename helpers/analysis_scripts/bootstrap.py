@@ -5,15 +5,18 @@ import sys
 import numpy as np
 from pathlib import Path
 
-from helpers.generate_multi_report import load_strategy_data
+from helpers.analysis_scripts.generate_multi_report import load_strategy_data
 
-current_file = Path(__file__).resolve()
-project_root = current_file.parent.parent
-sys.path.append(str(project_root))
+_current_file = Path(__file__).resolve()
+_project_root = _current_file.parent.parent.parent
+if str(_project_root) not in sys.path:
+    sys.path.insert(0, str(_project_root))
+
+project_root = _project_root
 
 STRATEGIES = {
-    "Baseline": "MAIN RESULTS/BASELINE OOS 10x",
-    "Agent 2": "MAIN RESULTS/RL OOS 10x",
+    "Baseline": "Winners Results/BASELINE OOS 10x",
+    "Agent 2": "Winners Results/RL OOS 10x",
 }
 BLOCK_SIZE = 168
 N_BOOTSTRAP = 10000
