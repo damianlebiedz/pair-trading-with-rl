@@ -1,43 +1,32 @@
-from typing import Literal
+import numpy as np
 import pandas as pd
 
+from modules.core.enums import Interval, BetaHedge, Source
 from modules.core.execution import TradeExecutor
 from modules.core.indicators import (
     calculate_z_score,
-    generate_signal,
     calculate_beta,
-    calculate_half_life_window,
+    generate_signal,
+    calculate_spread_statistics,
+    calculate_hurst,
 )
-from modules.core.search_methods import random_search
 from modules.data_services.data_loaders import load_pair
-from modules.data_services.data_preparation import (
-    add_log_prices,
-    add_c_norm_returns,
-    add_c_returns,
-    add_c_log_returns,
+from modules.data_services.data_utils import add_log_prices
+from modules.learning.agents import RLAgentAdapter
+from modules.performance.models import (
+    PositionState,
+    StrategyResult,
+    ExecLogger,
 )
-from modules.core.models import PositionState, ExecutionContext, StrategyResult
 from modules.performance.stats import calculate_stats
+from modules.learning.models import AgentState
+from modules.utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class Strategy:
-    """
-    Main class for Strategy execution.
-
-    Args:
-        ticker_x (str): Ticker for asset X.
-        ticker_y (str): Ticker for asset Y.
-        start (str): Data start date.
-        end (str): Data end date.
-        interval (str): Data timeframe.
-        fee_rate (float): Transaction fee rate (e.g., 0.001 for 0.1%).
-        initial_cash (float): Starting capital (the same for every trade).
-        risk_free_rate_annual (float): Annual risk-free rate.
-        min_trades_per_pair (int): Minimum number of trades per pair for the objective.
-        window (str): Window mode: "fixed" (manual size), "rolling" (rolling half-life), "static" (initial half-life).
-        source (str): Data source type for beta or/and Z-score calculation.
-        beta_hedge (str): Hedge ratio mode: "rolling", "static" or "no_hedge".
-    """
+    """Main class for Strategy execution."""
 
     def __init__(
         self,
@@ -45,29 +34,22 @@ class Strategy:
         ticker_y: str,
         start: str,
         end: str,
-        interval: Literal["1d", "4h", "1h", "30m", "15m", "5m", "3m", "1m"],
+        interval: Interval,
         fee_rate: float,
         initial_cash: float,
         risk_free_rate_annual: float,
-        min_trades_per_pair: int,
-        window: Literal["rolling", "static", "fixed"],
-        source: Literal["log", "c_returns", "c_log_returns", "c_norm_returns"],
-        beta_hedge: Literal["rolling", "static", "no_hedge"],
+        beta_hedge: BetaHedge,
+        delayed_entry: bool,
+        sl_lock: bool,
+        vol_window: int,
+        time_decay_sl: bool,
+        time_decay_params: tuple[int, int],
+        freeze_std: bool,
+        autonomous_agent: bool,
+        leverage: float,
+        agent: RLAgentAdapter | None = None,
+        source: Source = Source.LOG.value,
     ):
-
-        if window not in ["rolling", "static", "fixed"]:
-            raise ValueError("Invalid window: should be 'rolling', 'static' or 'fixed'")
-
-        if source not in ["log", "c_returns", "c_log_returns", "c_norm_returns"]:
-            raise ValueError(
-                "Invalid source: should be 'log', 'c_returns', 'c_log_returns', or 'c_norm_returns'"
-            )
-
-        if beta_hedge not in ["rolling", "static", "no_hedge"]:
-            raise ValueError(
-                "Invalid beta_hedge: should be 'rolling', 'static' or 'no_hedge'"
-            )
-
         self.ticker_x = ticker_x
         self.ticker_y = ticker_y
         self.start = start
@@ -76,43 +58,63 @@ class Strategy:
         self.fee_rate = fee_rate
         self.initial_cash = initial_cash
         self.risk_free_rate_annual = risk_free_rate_annual
-        self.min_trades_per_pair = min_trades_per_pair
-        self.window = window
-        self.source = source
         self.beta_hedge = beta_hedge
-
-        self.exec_ctx = ExecutionContext(
-            ticker_x=self.ticker_x,
-            ticker_y=self.ticker_y,
-            initial_cash=self.initial_cash,
-            fee_rate=self.fee_rate,
-        )
+        self.delayed_entry = delayed_entry
+        self.sl_lock = sl_lock
+        self.vol_window = vol_window
+        self.time_decay_sl = time_decay_sl
+        self.time_decay_params = time_decay_params
+        self.freeze_std = freeze_std
+        self.autonomous_agent = autonomous_agent
+        self.leverage = leverage
+        self.agent = agent
+        self.source = source
 
         self.data = load_pair(
-            x=ticker_x, y=ticker_y, start=start, end=end, interval=interval
+            x=self.ticker_x,
+            y=self.ticker_y,
+            start=self.start,
+            end=self.end,
+            interval=self.interval,
         )
 
-        source_map = {
-            "c_norm_returns": add_c_norm_returns,
-            "c_returns": add_c_returns,
-            "c_log_returns": add_c_log_returns,
-            "log": add_log_prices,
-        }
-        func_to_call = source_map[self.source]
-        func_to_call(self.data, self.ticker_x, self.ticker_y)
+        add_log_prices(self.data, self.ticker_x, self.ticker_y)
 
     def _execute_loop(
         self,
         df: pd.DataFrame,
+        initial_cash: float,
         entry_threshold: float,
         exit_threshold: float,
-        stop_loss: float,
         test_start: str,
         test_end: str,
-        window: Literal["rolling", "static", "fixed"],
-        window_factor: float | int,
+        z_score_window: int,
         beta_test_start: str,
+        stop_loss: float | None,
     ) -> pd.DataFrame:
+        """
+        Core backtesting loop that iterates through market data to simulate strategy execution.
+
+        This method performs the following steps:
+        1. Calculates static parameters (Beta, Window) based on pre-test data.
+        2. Computes market volatility features for risk assessment.
+        3. Iterates bar-by-bar through the `test_start` to `test_end` range.
+        4. Calculates dynamic indicators (Z-Score, Spread) inside the loop.
+        5. Generates signals and executes trades via TradeExecutor.
+        6. Tracks equity, PnL, fees, and drawdown state.
+        7. Handles stop-loss logic (including time-based decay if enabled).
+        8. Force-closes any open positions at the end of the simulation period.
+
+        Note:
+            - Z-Score window is calculated with the current close included. More in research paper.
+
+        Returns:
+            tuple[pd.DataFrame, pd.DataFrame]:
+                1. Strategy DataFrame: Time-series data containing price, equity curve,
+                   signals, z-scores, PnL per step, and drawdown.
+                2. Execution Logger DataFrame: Detailed record of individual trades (entries/exits),
+                   fees and execution prices.
+        """
         df = df.copy()
 
         x_col = self.ticker_x
@@ -120,176 +122,490 @@ class Strategy:
         source_x_col = f"{x_col}_{self.source}"
         source_y_col = f"{y_col}_{self.source}"
 
-        beta_hedge = self.beta_hedge
+        df[f"next_open_{x_col}"] = df[f"open_{x_col}"].shift(-1).ffill()
+        df[f"next_open_{y_col}"] = df[f"open_{y_col}"].shift(-1).ffill()
 
-        test_start_pos = df.index.get_loc(pd.to_datetime(test_start))
-        start_pos = df.index.get_loc(pd.to_datetime(beta_test_start))
-        end_pos = df.index.get_loc(pd.to_datetime(test_end))
+        offset = pd.Timedelta(self.interval.value)
 
-        if beta_hedge == "no_hedge":
-            initial_beta = 1.0
+        beta_start_dt = pd.to_datetime(beta_test_start)
+        test_start_dt = pd.to_datetime(test_start) + offset
+        test_end_dt = pd.to_datetime(test_end)
+
+        beta_start_pos = df.index.get_indexer([beta_start_dt], method="bfill")[0]
+        test_start_pos = df.index.get_indexer([test_start_dt], method="bfill")[0]
+        end_pos = df.index.get_indexer([test_end_dt], method="ffill")[0]
+
+        if -1 in [beta_start_pos, test_start_pos, end_pos]:
+            raise KeyError(
+                f"Index out of bounds! \n"
+                f"Requested -> Beta: {beta_start_dt}, Test: {test_start_dt}, End: {test_end_dt}\n"
+                f"Available -> First: {df.index[0]}, Last: {df.index[-1]}"
+            )
+
+        X_vals = df[source_x_col].values
+        Y_vals = df[source_y_col].values
+        N = len(df)
+
+        beta_lookback_len = test_start_pos - beta_start_pos + 1
+
+        if beta_lookback_len < 1:
+            raise ValueError("'beta_test_start' cannot be later than 'test_start'")
+        if test_start_pos - z_score_window + 1 < 1:
+            raise ValueError("'z_score_window' cannot be later than 'test_start'")
+
+        if self.beta_hedge == "no_hedge":
+            market_beta = 1.0
         else:
-            initial_beta = calculate_beta(
-                x_col=source_x_col,
-                y_col=source_y_col,
-                df=df.iloc[start_pos:test_start_pos],
+            slice_x_warmup_beta = X_vals[beta_start_pos : test_start_pos + 1]
+            slice_y_warmup_beta = Y_vals[beta_start_pos : test_start_pos + 1]
+            market_beta = calculate_beta(
+                X_slice=slice_x_warmup_beta,
+                Y_slice=slice_y_warmup_beta,
             )
 
-        if window == "fixed":
-            initial_win = int(window_factor)
+        precalc_ols_beta = np.zeros(N)
+        if self.beta_hedge == "rolling":
+            cov = pd.Series(X_vals).rolling(beta_lookback_len).cov(pd.Series(Y_vals))
+            var = pd.Series(Y_vals).rolling(beta_lookback_len).var()
+            precalc_ols_beta = np.nan_to_num((cov / var).values, nan=0.0)
+
+        precalc_hurst_free = np.full(N, 0.5)
+
+        if self.beta_hedge == "no_hedge":
+            base_beta_arr = np.ones(N)
+        elif self.beta_hedge == "static":
+            base_beta_arr = np.full(N, market_beta)
         else:
-            initial_win = calculate_half_life_window(
-                x_col=source_x_col,
-                y_col=source_y_col,
-                beta=initial_beta,
-                df=df.iloc[start_pos:test_start_pos],
-                window_factor=window_factor,
+            base_beta_arr = precalc_ols_beta
+
+        for i in range(test_start_pos, N):
+            b = base_beta_arr[i]
+
+            slice_x_beta = X_vals[i - beta_lookback_len + 1 : i + 1]
+            slice_y_beta = Y_vals[i - beta_lookback_len + 1 : i + 1]
+
+            precalc_hurst_free[i] = calculate_hurst(
+                X_slice=slice_x_beta, Y_slice=slice_y_beta, beta=b
             )
 
-        start_z_score = 0.0
-        if (
-            initial_win is not None
-            and initial_beta > 0
-            and 2 <= initial_win <= (test_start_pos - start_pos)
-        ):
-            start_z_score = calculate_z_score(
-                x_col=source_x_col,
-                y_col=source_y_col,
-                beta=initial_beta,
-                df=df.iloc[test_start_pos - initial_win : test_start_pos],
-            )
-            if pd.isna(start_z_score):
-                start_z_score = 0.0
+        df[f"ret_{self.ticker_x}"] = df[source_x_col].diff().fillna(0.0)
+        df[f"ret_{self.ticker_y}"] = df[source_y_col].diff().fillna(0.0)
 
-        total_fees = 0.0
+        vol_window = self.vol_window
+        df[f"vol_{self.ticker_x}"] = (
+            df[f"ret_{self.ticker_x}"].rolling(window=vol_window).std()
+        )
+        df[f"vol_{self.ticker_y}"] = (
+            df[f"ret_{self.ticker_y}"].rolling(window=vol_window).std()
+        )
+
+        df["market_vol"] = (
+            df[f"vol_{self.ticker_x}"] + df[f"vol_{self.ticker_y}"]
+        ) / 2.0
+        df["market_vol"] = df["market_vol"].fillna(0.0)
+
+        equity = initial_cash
+        equity_peak = initial_cash
+
         total_pnl = 0.0
-        prev_pnl = 0.0
+        total_fees = 0.0
         position_state = PositionState()
+        exec_logger = ExecLogger()
 
-        prev_z_score = start_z_score
-        beta = initial_beta
-        win = initial_win
+        prev_z_score = None
 
+        if stop_loss is not None:
+            stop_loss_thr = entry_threshold * stop_loss
+        else:
+            stop_loss_thr = None
+
+        total_net_pnl = 0.0
+        drawdown_pct = 0.0
+        is_bankrupt = False
+        is_delisted = False
         results_buffer = []
 
         for i in range(test_start_pos, len(df)):
-            if total_pnl == -self.initial_cash:
-                df = df.iloc[:i].copy()
-                break
-
             price_x = df[x_col].iloc[i]
             price_y = df[y_col].iloc[i]
 
-            if beta_hedge == "rolling":
-                beta = calculate_beta(
-                    x_col=source_x_col,
-                    y_col=source_y_col,
-                    df=df.iloc[start_pos + i - test_start_pos : i],
-                )
+            exec_px = df[f"next_open_{x_col}"].iloc[i]
+            exec_py = df[f"next_open_{y_col}"].iloc[i]
 
-            if window == "rolling":
-                win = calculate_half_life_window(
-                    x_col=source_x_col,
-                    y_col=source_y_col,
-                    beta=beta,
-                    df=df.iloc[start_pos + i - test_start_pos : i],
-                    window_factor=window_factor,
-                )
-
-            if win is not None and beta > 0 and 2 <= win <= i:
-                z_score = calculate_z_score(
-                    x_col=source_x_col,
-                    y_col=source_y_col,
-                    beta=beta,
-                    df=df.iloc[i - win : i + 1],
-                )
-                signal = generate_signal(
-                    entry_threshold=entry_threshold, z_score=z_score
-                )
-            else:
-                z_score = None
-                signal = 0
-
-            position_state.signal = signal
             idx = df.index[i]
 
-            pnl, total_fees = TradeExecutor.execute(
-                ctx=self.exec_ctx,
-                position_state=position_state,
-                price_x=price_x,
-                price_y=price_y,
-                z_score=z_score,
-                prev_z_score=prev_z_score,
-                beta=beta,
-                total_fees=total_fees,
-                entry_threshold=entry_threshold,
-                exit_threshold=exit_threshold,
-                stop_loss=stop_loss,
-            )
+            z_score = spread = mean = std = None
+            market_z_score = market_spread = market_mean = market_std = None
+            market_hurst = None
 
-            prev_z_score = 0.0 if z_score is None or pd.isna(z_score) else z_score
+            if pd.isna(price_x) or pd.isna(price_y):
+                if not is_delisted:
+                    is_delisted = True
+                    logger.info(
+                        f"[{idx}] Asset delisted/NaN price detected! Force closing position for {self.ticker_x}-{self.ticker_y}."
+                    )
+                    if position_state.position != 0:
+                        prev_exec_px = df[f"next_open_{x_col}"].iloc[i - 1]
+                        prev_exec_py = df[f"next_open_{y_col}"].iloc[i - 1]
 
-            if pnl != 0:
-                total_pnl = pnl + prev_pnl
+                        pnl, fees = TradeExecutor.call_close_position(
+                            fee_rate=self.fee_rate,
+                            position_state=position_state,
+                            price_x=prev_exec_px,
+                            price_y=prev_exec_py,
+                            exec_logger=exec_logger,
+                        )
+
+                        total_pnl += pnl
+                        total_fees += fees
+                        total_net_pnl = total_pnl - total_fees
+                        equity = initial_cash + total_net_pnl
+
+                        position_state.clear_position()
+
+                        if equity <= 1e-6:
+                            is_bankrupt = True
+                            equity = 0.0
+                            drawdown_pct = -1.0
+                            total_net_pnl = -initial_cash
+                            if total_pnl < -initial_cash:
+                                total_pnl = -initial_cash
+
+                results_buffer.append(
+                    {
+                        "index": idx,
+                        "z_score": None,
+                        "spread": None,
+                        "mean": None,
+                        "std": None,
+                        "beta": (
+                            position_state.entry_beta or market_beta
+                            if not is_bankrupt
+                            else None
+                        ),
+                        "market_z_score": None,
+                        "market_spread": None,
+                        "market_mean": None,
+                        "market_std": None,
+                        "market_beta": None,
+                        "hurst": None,
+                        "window": z_score_window,
+                        "entry_thr": entry_threshold,
+                        "exit_thr": exit_threshold,
+                        "sl_thr": None,
+                        "sl_lock": 0,
+                        "q_x": 0,
+                        "q_y": 0,
+                        "w_x": None,
+                        "w_y": None,
+                        "signal": 0,
+                        "position": 0,
+                        "equity": equity,
+                        "total_pnl": total_pnl,
+                        "total_fees": total_fees,
+                        "total_net_pnl": total_net_pnl,
+                        "total_return": total_pnl / initial_cash,
+                        "total_net_return": total_net_pnl / initial_cash,
+                        "drawdown_pct": drawdown_pct,
+                    }
+                )
+                continue
+
+            if is_bankrupt:
+                total_net_pnl = -initial_cash
+                equity = 0.0
+                drawdown_pct = -1.0
+                signal = 0
+            else:
+                if self.beta_hedge == "rolling":
+                    market_beta = base_beta_arr[i]
+
+                if self.time_decay_sl and stop_loss_thr is not None:
+                    time_decay_start = self.time_decay_params[0]
+                    time_decay_end = self.time_decay_params[1]
+
+                    hl_diff = (time_decay_end * z_score_window) - (
+                        time_decay_start * z_score_window
+                    )
+                    sl_exit_diff = stop_loss_thr - exit_threshold
+                    decay_per_iter = (
+                        sl_exit_diff / hl_diff if hl_diff != 0.0 else sl_exit_diff
+                    )
+                else:
+                    time_decay_start = 0.0
+                    decay_per_iter = 0.0
+
                 if (
                     position_state.position != 0
-                    and position_state.prev_position != position_state.position
+                    and position_state.entry_beta is not None
                 ):
-                    prev_pnl = total_pnl
-            else:
-                prev_pnl = total_pnl
+                    beta = position_state.entry_beta
+                else:
+                    beta = market_beta
 
-            if total_pnl <= -self.initial_cash:
-                total_pnl = -self.initial_cash
+                if beta <= 0:
+                    pass
+                else:
+                    slice_x_win = X_vals[i - z_score_window + 1 : i + 1]
+                    slice_y_win = Y_vals[i - z_score_window + 1 : i + 1]
+
+                    market_spread, market_mean, market_std = (
+                        calculate_spread_statistics(
+                            X_slice=slice_x_win,
+                            Y_slice=slice_y_win,
+                            beta=market_beta,
+                        )
+                    )
+                    market_z_score = calculate_z_score(
+                        spread=market_spread, mean=market_mean, std=market_std
+                    )
+
+                    if (
+                        position_state.position != 0
+                        and position_state.entry_beta is not None
+                    ):
+                        spread, mean, current_std = calculate_spread_statistics(
+                            X_slice=slice_x_win,
+                            Y_slice=slice_y_win,
+                            beta=position_state.entry_beta,
+                        )
+
+                        std = (
+                            position_state.entry_std if self.freeze_std else current_std
+                        )
+
+                        z_score = calculate_z_score(spread=spread, mean=mean, std=std)
+
+                    else:
+                        z_score = market_z_score
+                        spread = market_spread
+                        mean = market_mean
+                        std = market_std
+
+                signal = generate_signal(
+                    z_score=z_score,
+                    prev_z_score=prev_z_score,
+                    entry_threshold=entry_threshold,
+                    stop_loss_thr=stop_loss_thr,
+                    delayed_entry=self.delayed_entry,
+                )
+
+                if position_state.position == 0:
+                    position_state.sl_thr = stop_loss_thr
+                elif (
+                    self.time_decay_sl
+                    and stop_loss_thr is not None
+                    and position_state.time_in_pos >= time_decay_start * z_score_window
+                ):
+                    position_state.sl_thr -= decay_per_iter
+
+                if equity > equity_peak:
+                    equity_peak = equity
+
+                if equity_peak > 0:
+                    drawdown_pct = (equity - equity_peak) / equity_peak
+                else:
+                    drawdown_pct = 0.0
+
+                if position_state.sl_lock:
+                    if z_score is not None and prev_z_score is not None:
+                        break_above = prev_z_score > exit_threshold >= z_score
+                        break_below = prev_z_score < -exit_threshold <= z_score
+                        if break_above or break_below:
+                            position_state.sl_lock = False
+
+                market_hurst = precalc_hurst_free[i]
+
+                action, hit_sl, hit_tp = TradeExecutor.decide(
+                    position_state=position_state,
+                    signal=signal,
+                    z_score=z_score,
+                    exit_threshold=exit_threshold,
+                )
+                if (
+                    hit_sl
+                    and self.sl_lock
+                    and (not self.autonomous_agent or not self.agent)
+                ):
+                    position_state.sl_lock = True
+
+                if self.agent:
+                    if z_score is None or pd.isna(z_score):
+                        action = 0.0
+                    elif not self.autonomous_agent and (hit_sl or hit_tp):
+                        action = 0.0
+                    elif (
+                        self.autonomous_agent
+                        and self.time_decay_sl
+                        and position_state.position != 0
+                        and position_state.time_in_pos >= z_score_window
+                    ):
+                        action = 0.0
+                    else:
+                        current_state = AgentState(
+                            z_score=z_score,
+                            hurst=market_hurst,
+                            position=position_state.position,
+                            signal=action,
+                            norm_time_in_pos=position_state.time_in_pos
+                            / z_score_window,
+                        )
+                        raw_action = self.agent.get_action(current_state)
+                        mapping = {0: -1.0, 1: 0.0, 2: 1.0}
+                        action = mapping[int(raw_action)]
+
+                position_state.open_time = idx
+
+                pnl, fees = TradeExecutor.execute(
+                    fee_rate=self.fee_rate,
+                    position_state=position_state,
+                    action=action,
+                    stop_loss_thr=stop_loss_thr,
+                    price_x=exec_px,
+                    price_y=exec_py,
+                    beta=beta,
+                    equity=equity,
+                    leverage=self.leverage,
+                    exec_logger=exec_logger,
+                    std=std,
+                )
+
+                prev_z_score = z_score
+
+                total_pnl += pnl
+                total_fees += fees
+                total_net_pnl = total_pnl - total_fees
+
+                equity = initial_cash + total_net_pnl
+
+                if equity <= 1e-6:
+                    is_bankrupt = True
+                    position_state.clear_position()
+                    equity = 0.0
+                    drawdown_pct = -1.0
+                    total_net_pnl = -initial_cash
+                    if total_pnl < -initial_cash:
+                        total_pnl = -initial_cash
 
             results_buffer.append(
                 {
                     "index": idx,
                     "z_score": z_score,
-                    "window": win,
-                    "beta": beta,
+                    "spread": spread,
+                    "mean": mean,
+                    "std": std,
+                    "beta": position_state.entry_beta or market_beta,
+                    "market_z_score": market_z_score,
+                    "market_spread": market_spread,
+                    "market_mean": market_mean,
+                    "market_std": market_std,
+                    "market_beta": market_beta,
+                    "hurst": market_hurst,
+                    "window": z_score_window,
                     "entry_thr": entry_threshold,
                     "exit_thr": exit_threshold,
-                    "sl_thr": position_state.stop_loss_threshold,
+                    "sl_thr": position_state.sl_thr,
+                    "sl_lock": int(position_state.sl_lock),
                     "q_x": position_state.q_x,
                     "q_y": position_state.q_y,
                     "w_x": position_state.w_x,
                     "w_y": position_state.w_y,
-                    "signal": position_state.signal,
+                    "signal": signal,
                     "position": position_state.position,
-                    "total_return": total_pnl,
+                    "equity": equity,
+                    "total_pnl": total_pnl,
                     "total_fees": total_fees,
-                    "net_return": total_pnl - total_fees,
+                    "total_net_pnl": total_net_pnl,
+                    "total_return": total_pnl / initial_cash,
+                    "total_net_return": total_net_pnl / initial_cash,
+                    "drawdown_pct": drawdown_pct,
                 }
             )
 
             position_state.prev_position = position_state.position
 
         if results_buffer:
+            if position_state.position != 0:
+                price_x = df[x_col].iloc[-1]
+                price_y = df[y_col].iloc[-1]
+
+                pnl, fees = TradeExecutor.call_close_position(
+                    fee_rate=self.fee_rate,
+                    position_state=position_state,
+                    price_x=price_x,
+                    price_y=price_y,
+                    exec_logger=exec_logger,
+                )
+
+                results_buffer[-1]["total_pnl"] += pnl
+                results_buffer[-1]["total_fees"] += fees
+                results_buffer[-1]["total_net_pnl"] += pnl - fees
+                results_buffer[-1]["equity"] += pnl - fees
+
+                if results_buffer[-1]["equity"] <= 1e-6:
+                    results_buffer[-1]["equity"] = 0.0
+                    results_buffer[-1]["total_net_pnl"] = -initial_cash
+                    if results_buffer[-1]["total_pnl"] < -initial_cash:
+                        results_buffer[-1]["total_pnl"] = -initial_cash
+                    results_buffer[-1]["drawdown_pct"] = -1.0
+                else:
+                    peak = max(equity_peak, results_buffer[-1]["equity"])
+                    if peak > 0:
+                        results_buffer[-1]["drawdown_pct"] = (
+                            results_buffer[-1]["equity"] - peak
+                        ) / peak
+                    else:
+                        results_buffer[-1]["drawdown_pct"] = 0.0
+
+                results_buffer[-1]["total_return"] = (
+                    results_buffer[-1]["total_pnl"] / initial_cash
+                )
+                results_buffer[-1]["total_net_return"] = (
+                    results_buffer[-1]["total_net_pnl"] / initial_cash
+                )
+
+                results_buffer[-1]["q_x"] = 0
+                results_buffer[-1]["q_y"] = 0
+                results_buffer[-1]["w_x"] = None
+                results_buffer[-1]["w_y"] = None
+                results_buffer[-1]["position"] = 0
+
             results_df = pd.DataFrame(results_buffer)
             results_df.set_index("index", inplace=True)
-
             df.loc[results_df.index, results_df.columns] = results_df
 
-        df["total_return_pct"] = df["total_return"] / self.initial_cash
-        df["net_return_pct"] = df["net_return"] / self.initial_cash
-
-        if results_buffer:
             last_processed_idx = results_buffer[-1]["index"]
             last_pos_loc = df.index.get_loc(last_processed_idx)
             final_slice_end = min(last_pos_loc, end_pos)
-            df = df.iloc[test_start_pos : final_slice_end + 1].copy()
-        else:
-            df = df.iloc[test_start_pos : end_pos + 1].copy()
 
-        return df.drop(columns=[source_x_col, source_y_col], errors="ignore")
+            warmup_start = test_start_pos - z_score_window + 1
+            df = df.iloc[warmup_start : final_slice_end + 1].copy()
+        else:
+            warmup_start = test_start_pos - z_score_window + 1
+            df = df.iloc[warmup_start : end_pos + 1].copy()
+
+        exec_log_df = exec_logger.to_df()
+        exec_log_df["ticker"] = self.ticker_x + "-" + self.ticker_y
+
+        return (
+            df.drop(
+                columns=[
+                    f"ret_{self.ticker_x}",
+                    f"ret_{self.ticker_y}",
+                    f"vol_{self.ticker_x}",
+                    f"vol_{self.ticker_y}",
+                ],
+                errors="ignore",
+            ),
+            exec_log_df,
+        )
 
     def run_strategy(
         self,
-        window_factor: float | int,
+        z_score_window: int,
         entry_threshold: float,
-        exit_threshold: float,
-        stop_loss: float,
+        exit_threshold: float | None,
+        stop_loss: float | None,
         test_start: str,
         test_end: str,
         beta_test_start: str,
@@ -297,44 +613,28 @@ class Strategy:
         """
         Executes the strategy backtest with specific parameters.
 
-        Args:
-            window_factor (float | int): Dual-purpose parameter controlling the lookback window.
-                The interpretation depends strictly on the `window` mode defined in `__init__`:
-                * If window="fixed":
-                    `window_factor` is the exact window size (Integer).
-                    Example: `100` means the strategy looks back exactly 100 bars.
-                * If window="rolling" or "static":
-                    `window_factor` is the Half-Life multiplier (Float).
-                    Example: `2.5` means the window size is calculated as `2.5 * Half_Life`.
-            entry_threshold (float): Z-score threshold to open a position.
-            exit_threshold (float): Z-score threshold to close a position.
-            stop_loss (float): Stop loss multiplier (e.g., 1.05 for 5% from current Z-score).
-            test_start (str): Start date for the backtest loop.
-            test_end (str): End date for the backtest loop.
-            beta_test_start (str): Start date for beta and Z-score window calculation.
-
         Returns:
-            StrategyResult: Object containing backtest data and performance statistics.
+            StrategyResult: Object containing backtest data, performance statistics and execution logger.
         """
 
-        data = self._execute_loop(
+        data, exec_log_df = self._execute_loop(
             df=self.data,
+            initial_cash=self.initial_cash,
             entry_threshold=entry_threshold,
             exit_threshold=exit_threshold,
-            stop_loss=stop_loss,
             test_start=test_start,
             test_end=test_end,
-            window=self.window,
-            window_factor=window_factor,
+            z_score_window=z_score_window,
             beta_test_start=beta_test_start,
+            stop_loss=stop_loss,
         )
 
         stats = calculate_stats(
             df=data,
+            exec_log_df=exec_log_df,
             initial_cash=self.initial_cash,
             interval=self.interval,
             risk_free_rate_annual=self.risk_free_rate_annual,
-            min_trades_per_pair=self.min_trades_per_pair,
         )
 
         return StrategyResult(
@@ -345,99 +645,6 @@ class Strategy:
             end=test_end,
             interval=self.interval,
             fee_rate=self.fee_rate,
-            window_factor=window_factor,
             stats=stats,
+            exec_logger=exec_log_df,
         )
-
-    def run_optimization(
-        self,
-        static_params: dict,
-        param_space: list,
-        metric: tuple[str, str],
-        opt_start: str,
-        opt_end: str,
-        beta_opt_start: str,
-        n_iter: int | None = None,
-        replicates: int | None = None,
-        penalty_bad: int | None = None,
-    ) -> tuple[dict, float]:
-        """
-        Runs optimization to find the best parameter combination for the strategy.
-
-        Scenario A: Fixed Window Size (window="fixed")
-        -> 'window_factor' represents the exact window length (int)
-        >>> from skopt.space import Integer, Real
-        >>> param_space = [
-        >>>     Integer(10, 300, name='window_factor'), # Search window size from 10 to 300
-        >>>     Real(1.0, 3.0, name='entry_threshold'),
-        >>>     ...
-        >>> ]
-
-        Scenario B: Dynamic Window (window="rolling" or "static")
-        -> 'window_factor' represents the Half-Life multiplier (float)
-        >>> from skopt.space import Real
-        >>> param_space = [
-        >>>     Real(0.5, 4.0, name='window_factor'),   # Search multiplier from 0.5 to 4.0
-        >>>     Real(1.0, 3.0, name='entry_threshold'),
-        >>>     ...
-        >>> ]
-
-        Scenario C: Locking parameters (static_params)
-        >>> static_params = {'stop_loss': 1.05}         # 'stop_loss' will be constant 1.05 for all iterations.
-
-        Args:
-            static_params (dict): Dictionary of parameters to keep constant (not optimized).
-            param_space (list): List of skopt Dimensions (Integer/Real) for parameters to optimize.
-            metric (tuple[str, str]): Metric to minimize/maximize (e.g., ('stats', 'sharpe_ratio')).
-            opt_start (str): Start date for optimization period.
-            opt_end (str): End date for optimization period.
-            beta_opt_start (str): Start date beta and Z-score window calculation.
-            n_iter (int, optional): Number of optimization iterations.
-            replicates (int, optional): Number of runs per param set to average results (reduces noise).
-            penalty_bad (int, optional): Score assigned to failed/invalid runs.
-
-        Returns:
-            tuple[dict, float]: Best parameters found and the corresponding score.
-        """
-
-        def objective_wrapper(
-            window_factor: float | int,
-            entry_threshold: float,
-            exit_threshold: float,
-            stop_loss: float,
-            **_kwargs,
-        ) -> float:
-            try:
-                result = self.run_strategy(
-                    window_factor=window_factor,
-                    entry_threshold=entry_threshold,
-                    exit_threshold=exit_threshold,
-                    stop_loss=stop_loss,
-                    test_start=opt_start,
-                    test_end=opt_end,
-                    beta_test_start=beta_opt_start,
-                )
-
-                score = result.stats.loc[metric]
-
-                if isinstance(score, pd.Series):
-                    score = score.iloc[0]
-                if pd.isna(score):
-                    return penalty_bad
-                return score
-
-            except Exception as e:
-                print(f"Error in optimization run: {e}")
-                return penalty_bad
-
-        best_params, best_score = random_search(
-            strategy_func=objective_wrapper,
-            param_space=param_space,
-            static_params=static_params,
-            metric=metric,
-            n_iter=n_iter,
-            replicates=replicates,
-            penalty_bad=penalty_bad,
-        )
-
-        return best_params, best_score

@@ -1,0 +1,14 @@
+*
+
+!pyproject.toml
+!poetry.lock
+!README.md
+
+!helpers/
+!modules/
+!runners/
+
+!config/
+
+**/__pycache__/
+**/*.pyc

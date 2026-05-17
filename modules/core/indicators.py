@@ -1,95 +1,127 @@
 import numpy as np
-import pandas as pd
-import statsmodels.api as sm
 
 
-def generate_signal(entry_threshold: float, z_score: float) -> int:
+def generate_signal(
+    z_score: float | None,
+    prev_z_score: float | None,
+    entry_threshold: float,
+    stop_loss_thr: float | None,
+    delayed_entry: bool,
+) -> int:
     """
-    Generate signals for trades depends on current z-score.
+    Generates trading signals based on Z-Score threshold crossings.
 
-    Signal = 1:     Long X, Short Y
-    Signal = -1:    Short X, Long Y
-    Signal = 0:     do nothing
+    Signal Logic:
+    1. **Long Signal (1)**: Implies spread is too low (Long Spread = Long X / Short Y).
+    2. **Short Signal (-1)**: Implies spread is too high (Short Spread = Short X / Long Y).
+    3. **Hold (0)**: No new entry signal.
+
+    Entry Modes:
+    - **Standard Entry**: Triggered when the Z-Score crosses *out* of the bands
+      (e.g., z_score > entry_threshold). Captures divergence immediately.
+    - **Delayed Entry**: Triggered when the Z-Score is extreme but crosses *back* towards the mean (e.g., prev > thr and curr < thr). Captures mean reversion
+      momentum and avoids "catching a falling knife".
+
+    Stop Loss:
+    - If enabled, prevents opening positions if the spread has diverged beyond
+      the 'stop_loss_thr'.
+
+    Returns:
+        int: Signal direction (1 for Long, -1 for Short, 0 for Neutral).
     """
-    signal = 0
-    if z_score is not None:
-        if z_score <= -entry_threshold:
-            signal = 1
-        elif z_score >= entry_threshold:
-            signal = -1
+    if prev_z_score is None or z_score is None:
+        return 0
 
-    return signal
+    if delayed_entry:
+        long_signal = prev_z_score <= -entry_threshold < z_score
+        short_signal = prev_z_score >= entry_threshold > z_score
+    else:
+        if stop_loss_thr:
+            long_signal = -stop_loss_thr <= z_score <= -entry_threshold < prev_z_score
+            short_signal = prev_z_score < entry_threshold <= z_score <= stop_loss_thr
+        else:
+            long_signal = z_score <= -entry_threshold < prev_z_score
+            short_signal = prev_z_score < entry_threshold <= z_score
+
+    if long_signal:
+        return 1
+    elif short_signal:
+        return -1
+    else:
+        return 0
 
 
-def calculate_beta(x_col: str, y_col: str, df: pd.DataFrame) -> float:
-    """Calculate beta from OLS."""
-    X = sm.add_constant(df[y_col])
-    y = df[x_col]
-    model = sm.OLS(y, X, missing="drop").fit()
-    beta = model.params[y_col]
+def calculate_beta(
+    X_slice: np.ndarray,
+    Y_slice: np.ndarray,
+) -> float:
+    """
+    Calculates the hedge ratio (beta) using the Ordinary Least Squares (OLS) method, where 'x_col' is the target
+    and 'y_col' is the feature.
 
+    The function determines 'beta' such that the spread is defined as: spread = x - beta * y.
+    """
+    cov_matrix = np.cov(X_slice, Y_slice, ddof=1)
+    var_y = cov_matrix[1, 1]
+    if var_y == 0:
+        return 0.0
+    beta = cov_matrix[0, 1] / var_y
     return beta
 
 
-def calculate_z_score(
-    x_col: str, y_col: str, beta: float, df: pd.DataFrame
-) -> float | None:
-    """Calculate z-score with provided beta."""
-    spread_series = df[x_col] - (beta * df[y_col])
-
-    historical = spread_series.iloc[:-1]
-    spread = spread_series.iloc[-1]
-
-    mean = historical.mean()
-    std = historical.std()
-
-    if std == 0:
-        return None
-    z_score = (spread - mean) / std
-
-    return z_score
-
-
-def calculate_half_life_window(
-    x_col: str,
-    y_col: str,
-    beta: float,
-    df: pd.DataFrame,
-    window_factor: float,
-) -> int | None:
+def calculate_z_score(spread: float, mean: float, std: float) -> float | None:
     """
-    Estimate OU process half-life for a spread and derive a rolling window size.
+    Calculates the Z-Score (standard score) for a specific spread value.
+
+    The Z-Score measures how many standard deviations the current spread is
+    from its historical mean. In pairs trading, it is the primary indicator
+    used to identify entry and exit signals.
 
     Returns:
-        int: window size based on half-life * window_factor
-        None: if spread is not mean-reverting or window is invalid
+        float | None: The calculated Z-Score value, or None if the standard
+            deviation is zero (avoiding division by zero).
     """
-    # Construct spread using pre-estimated hedge ratio
-    series = df[x_col] - (beta * df[y_col])
-
-    # OU process discretization: ΔX_t = λ X_{t-1} + ε_t
-    lag = series.shift(1)
-    ret = series - lag
-
-    # Align time series
-    lag = lag.iloc[1:]
-    ret = ret.iloc[1:]
-
-    # Regress spread changes on lagged level to estimate mean reversion speed (λ)
-    X = sm.add_constant(lag)
-    model = sm.OLS(ret, X, missing="drop").fit()
-    lam = model.params.iloc[1]
-
-    # Reject non-mean-reverting spreads (λ >= 0)
-    if lam >= 0:
+    if std == 0:
         return None
+    return (spread - mean) / std
 
-    # OU half-life
-    half_life = -np.log(2) / lam
-    window = int(half_life * window_factor)
 
-    # Reject windows larger than available data
-    if window > len(df):
-        return None
+def calculate_hurst(
+    X_slice: np.ndarray, Y_slice: np.ndarray, beta: float, max_lags: int = 20
+) -> float:
+    """
+    Calculates the Hurst Exponent to determine the time series memory.
 
-    return window
+    The Hurst exponent (H) characterizes the long-term memory of a time series.
+    It is used to identify whether a series is mean-reverting, trending, or
+    following a random walk.
+
+    Hurst Exponent Interpretation:
+        - H < 0.5: Mean-reverting series (anti-persistent).
+        - H = 0.5: Random walk (Geometric Brownian Motion).
+        - H > 0.5: Trending series (persistent).
+    """
+    series_val = X_slice - beta * Y_slice
+    if len(series_val) < max_lags * 2:
+        return 0.5
+
+    lags = range(2, max_lags)
+    tau = [np.std(series_val[lag:] - series_val[:-lag], ddof=0) for lag in lags]
+
+    if not tau:
+        return 0.5
+    return np.polyfit(np.log(list(lags)), np.log(tau), 1)[0]
+
+
+def calculate_spread_statistics(
+    X_slice: np.ndarray, Y_slice: np.ndarray, beta: float
+) -> tuple[float, float, float]:
+    """
+    Calculates basic spread statistics for a pair of assets.
+
+    This function derives the spread time series based on the formula:
+    spread = x - beta * y. It then computes the most recent spread value,
+    the rolling mean, and the standard deviation for the provided data window.
+    """
+    spread_arr = X_slice - beta * Y_slice
+    return spread_arr[-1], np.mean(spread_arr), np.std(spread_arr, ddof=1)

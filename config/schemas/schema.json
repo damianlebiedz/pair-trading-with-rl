@@ -1,0 +1,746 @@
+{
+  "$defs": {
+    "A2CAlgo": {
+      "properties": {
+        "algo_name": {
+          "const": "a2c_baseline",
+          "title": "Algo Name",
+          "type": "string"
+        },
+        "policy_type": {
+          "const": "MlpPolicy",
+          "default": "MlpPolicy",
+          "description": "Fixed policy type for A2C algorithm.",
+          "title": "Policy Type",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/A2CBaseline"
+        }
+      },
+      "title": "A2CAlgo",
+      "type": "object"
+    },
+    "A2CBaseline": {
+      "properties": {
+        "learning_rate": {
+          "description": "Step size for the optimizer (learning rate for the A2C policy update).",
+          "title": "Learning Rate",
+          "type": "number"
+        },
+        "n_steps": {
+          "description": "Number of forward steps to run for each environment before updating the network (typically small for A2C, e.g., 5).",
+          "title": "N Steps",
+          "type": "integer"
+        },
+        "gamma": {
+          "description": "Discount factor for future rewards (between 0 and 1).",
+          "title": "Gamma",
+          "type": "number"
+        },
+        "ent_coef": {
+          "description": "Entropy coefficient for the loss calculation. Higher values encourage more exploration.",
+          "title": "Ent Coef",
+          "type": "number"
+        }
+      },
+      "title": "A2CBaseline",
+      "type": "object"
+    },
+    "BetaHedge": {
+      "enum": [
+        "no_hedge",
+        "static",
+        "rolling"
+      ],
+      "title": "BetaHedge",
+      "type": "string"
+    },
+    "DataFetchingPipeline": {
+      "properties": {
+        "top_n": {
+          "description": "Number of top assets to select based on volume/liquidity.",
+          "exclusiveMinimum": 0,
+          "title": "Top N",
+          "type": "integer"
+        },
+        "start": {
+          "description": "Start date for evaluating asset liquidity and volume (YYYY-MM-DD).",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "title": "Start",
+          "type": "string"
+        },
+        "end": {
+          "description": "End date for evaluating asset liquidity and volume (YYYY-MM-DD).",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "title": "End",
+          "type": "string"
+        },
+        "test_end": {
+          "description": "End date for test (YYYY-MM-DD).",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "title": "Test End",
+          "type": "string"
+        },
+        "iterations": {
+          "description": "Number of iterations (monthly) to fetch historical data.",
+          "exclusiveMinimum": 0,
+          "title": "Iterations",
+          "type": "integer"
+        },
+        "whitelist": {
+          "description": "List of tickers to forcibly include in the final list.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Whitelist",
+          "type": "array"
+        },
+        "blacklist": {
+          "description": "List of tickers to forcibly exclude from the final list.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Blacklist",
+          "type": "array"
+        }
+      },
+      "title": "DataFetchingPipeline",
+      "type": "object"
+    },
+    "Interval": {
+      "enum": [
+        "1d",
+        "4h",
+        "1h",
+        "30m",
+        "15m",
+        "5m",
+        "3m",
+        "1m"
+      ],
+      "title": "Interval",
+      "type": "string"
+    },
+    "Market": {
+      "properties": {
+        "initial_cash": {
+          "description": "Starting capital for the backtest.",
+          "exclusiveMinimum": 0,
+          "title": "Initial Cash",
+          "type": "number"
+        },
+        "fee_rate": {
+          "description": "Transaction fee rate (e.g., 0.001 for 0.1%).",
+          "minimum": 0,
+          "title": "Fee Rate",
+          "type": "number"
+        },
+        "risk_free_rate_annual": {
+          "description": "Annual risk-free rate used for Sharpe/Sortino ratios.",
+          "title": "Risk Free Rate Annual",
+          "type": "number"
+        },
+        "interval": {
+          "$ref": "#/$defs/Interval",
+          "description": "Data timeframe used for the simulation. Options: ['1d', '4h', '1h', '30m', '15m', '5m', '3m', '1m']"
+        }
+      },
+      "title": "Market",
+      "type": "object"
+    },
+    "ObsSpaceType": {
+      "enum": [
+        "autonomous",
+        "standard",
+        "full"
+      ],
+      "title": "ObsSpaceType",
+      "type": "string"
+    },
+    "PPOAlgo": {
+      "properties": {
+        "algo_name": {
+          "const": "recurrent_ppo",
+          "title": "Algo Name",
+          "type": "string"
+        },
+        "policy_type": {
+          "const": "MlpLstmPolicy",
+          "default": "MlpLstmPolicy",
+          "description": "Fixed policy type for Recurrent PPO.",
+          "title": "Policy Type",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/RecurrentPPO"
+        }
+      },
+      "title": "PPOAlgo",
+      "type": "object"
+    },
+    "PairSelection": {
+      "properties": {
+        "top_n": {
+          "description": "Factor determining how many top pairs to select.",
+          "exclusiveMinimum": 0,
+          "title": "Top N",
+          "type": "integer"
+        },
+        "start": {
+          "description": "Start date for pair selection (YYYY-MM-DD).",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "title": "Start",
+          "type": "string"
+        },
+        "end": {
+          "description": "End date for pair selection (YYYY-MM-DD).",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "title": "End",
+          "type": "string"
+        }
+      },
+      "title": "PairSelection",
+      "type": "object"
+    },
+    "Performance": {
+      "properties": {
+        "use_rl": {
+          "description": "Flag to use RL model during backtest.",
+          "title": "Use Rl",
+          "type": "boolean"
+        },
+        "autonomous_agent": {
+          "description": "Flag to set a risk management layer for an agent. If True, agent is autonomously deciding about exit. If false, agent is forced to exit while take profit or stop loss hit.",
+          "title": "Autonomous Agent",
+          "type": "boolean"
+        },
+        "leverage": {
+          "description": "Leverage ratio.",
+          "title": "Leverage",
+          "type": "number"
+        },
+        "z_score_window": {
+          "description": "Z-Score lookback window size.",
+          "exclusiveMinimum": 0,
+          "title": "Z Score Window",
+          "type": "integer"
+        },
+        "entry_threshold": {
+          "description": "Z-score threshold to open a position.",
+          "exclusiveMinimum": 0,
+          "title": "Entry Threshold",
+          "type": "number"
+        },
+        "exit_threshold": {
+          "description": "Z-score threshold to close a position.",
+          "title": "Exit Threshold",
+          "type": "number"
+        },
+        "stop_loss": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 1,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Stop loss multiplier (e.g., 1.05 for 5% from entry_threshold), null if trade without SL.",
+          "title": "Stop Loss"
+        },
+        "iterations": {
+          "description": "Number of backtest iterations (monthly).",
+          "exclusiveMinimum": 0,
+          "title": "Iterations",
+          "type": "integer"
+        },
+        "beta_hedge": {
+          "$ref": "#/$defs/BetaHedge",
+          "description": "Hedge ratio mode. Options: ['no_hedge', 'static', 'rolling']"
+        },
+        "delayed_entry": {
+          "description": "Delayed entry flag.",
+          "title": "Delayed Entry",
+          "type": "boolean"
+        },
+        "sl_lock": {
+          "description": "SL lock until mean-reversal flag.",
+          "title": "Sl Lock",
+          "type": "boolean"
+        },
+        "time_decay_sl": {
+          "description": "Time Decay SL flag.",
+          "title": "Time Decay Sl",
+          "type": "boolean"
+        },
+        "freeze_std": {
+          "description": "Flag to use fixed std from entry while calculating in-position Z-Score.",
+          "title": "Freeze Std",
+          "type": "boolean"
+        },
+        "beta_start": {
+          "description": "Lookback window start date for beta calculation.",
+          "title": "Beta Start",
+          "type": "string"
+        },
+        "start": {
+          "description": "Start date for test (YYYY-MM-DD).",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "title": "Start",
+          "type": "string"
+        },
+        "end": {
+          "description": "End date for test (YYYY-MM-DD).",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "title": "End",
+          "type": "string"
+        }
+      },
+      "title": "Performance",
+      "type": "object"
+    },
+    "PolicyKwargs": {
+      "properties": {
+        "lstm_hidden_size": {
+          "description": "Size of the hidden state in the LSTM cell.",
+          "title": "Lstm Hidden Size",
+          "type": "integer"
+        },
+        "n_lstm_layers": {
+          "description": "Number of stacked LSTM layers (usually 1 is sufficient).",
+          "title": "N Lstm Layers",
+          "type": "integer"
+        },
+        "shared_lstm": {
+          "description": "If true, uses a shared LSTM backbone for both Actor and Critic. If false, creates separate LSTMs.",
+          "title": "Shared Lstm",
+          "type": "boolean"
+        },
+        "enable_critic_lstm": {
+          "description": "If true, includes an LSTM layer in the Critic network (only relevant if shared_lstm is false).",
+          "title": "Enable Critic Lstm",
+          "type": "boolean"
+        }
+      },
+      "title": "PolicyKwargs",
+      "type": "object"
+    },
+    "RL": {
+      "properties": {
+        "training_folder": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Name of the folder with training data, if null take first one.",
+          "title": "Training Folder"
+        },
+        "reward": {
+          "$ref": "#/$defs/RLRewards",
+          "description": "Type of RL reward. Options: ['StepPnLReward', 'TradePnLReward', 'HybridActionReward']"
+        },
+        "reward_lambda": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Lambda for reward function.",
+          "title": "Reward Lambda"
+        },
+        "fee_multiplier": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Fee Multiplier for reward function.",
+          "title": "Fee Multiplier"
+        },
+        "obs_space_type": {
+          "$ref": "#/$defs/ObsSpaceType",
+          "description": "Type of observation space. Options: ['autonomous', 'standard', 'full']"
+        },
+        "passes_per_pair": {
+          "description": "Number of passes per pair during training.",
+          "title": "Passes Per Pair",
+          "type": "integer"
+        },
+        "seed": {
+          "description": "Seed for random number generator.",
+          "title": "Seed",
+          "type": "integer"
+        },
+        "verbose": {
+          "description": "Verbosity level in training.",
+          "title": "Verbose",
+          "type": "integer"
+        },
+        "freeze_std": {
+          "description": "Flag to use fixed std from entry while calculating in-position Z-Score in RL.",
+          "title": "Freeze Std",
+          "type": "boolean"
+        },
+        "time_decay_stop": {
+          "description": "Flag to always close position when time in position is >= Z-Score window.",
+          "title": "Time Decay Stop",
+          "type": "boolean"
+        }
+      },
+      "title": "RL",
+      "type": "object"
+    },
+    "RLAlgoDefault": {
+      "properties": {
+        "rl_algo": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RLModelName"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "RL algorithm selection. Options: ['recurrent_ppo', 'a2c_baseline']"
+        }
+      },
+      "title": "RLAlgoDefault",
+      "type": "object"
+    },
+    "RLModelName": {
+      "enum": [
+        "recurrent_ppo",
+        "a2c_baseline"
+      ],
+      "title": "RLModelName",
+      "type": "string"
+    },
+    "RLRewards": {
+      "enum": [
+        "StepPnLReward",
+        "TradePnLReward",
+        "HybridActionReward"
+      ],
+      "title": "RLRewards",
+      "type": "string"
+    },
+    "RecurrentPPO": {
+      "properties": {
+        "learning_rate": {
+          "description": "Step size for the optimizer (learning rate for the PPO policy update). Smaller values often yield more stable PPO training.",
+          "title": "Learning Rate",
+          "type": "number"
+        },
+        "n_steps": {
+          "description": "Number of steps to run for each environment per update (PPO usually requires larger buffers than A2C, e.g., 128 or 256).",
+          "title": "N Steps",
+          "type": "integer"
+        },
+        "batch_size": {
+          "description": "Minibatch size used for each gradient update during the optimization passes.",
+          "title": "Batch Size",
+          "type": "integer"
+        },
+        "n_epochs": {
+          "description": "Number of optimization epochs (passes over the collected rollout data) when updating the network.",
+          "title": "N Epochs",
+          "type": "integer"
+        },
+        "gamma": {
+          "description": "Discount factor for future rewards (between 0 and 1).",
+          "title": "Gamma",
+          "type": "number"
+        },
+        "ent_coef": {
+          "description": "Entropy coefficient for the loss calculation. Higher values encourage more exploration.",
+          "title": "Ent Coef",
+          "type": "number"
+        },
+        "clip_range": {
+          "description": "Range for clipping the surrogate objective. Prevents overly large policy updates to ensure stability (typically 0.2).",
+          "title": "Clip Range",
+          "type": "number"
+        },
+        "policy_kwargs": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PolicyKwargs"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "RecurrentPPO",
+      "type": "object"
+    },
+    "Settings": {
+      "properties": {
+        "vol_window": {
+          "description": "Volatility window size (e.g. 24 = one day in '1h' interval).",
+          "exclusiveMinimum": 0,
+          "title": "Vol Window",
+          "type": "integer"
+        },
+        "time_decay_min": {
+          "description": "Start of Time Decay SL.",
+          "minimum": 0,
+          "title": "Time Decay Min",
+          "type": "number"
+        },
+        "time_decay_max": {
+          "description": "End of Time Decay SL.",
+          "exclusiveMinimum": 0,
+          "title": "Time Decay Max",
+          "type": "number"
+        }
+      },
+      "title": "Settings",
+      "type": "object"
+    },
+    "Wandb": {
+      "properties": {
+        "project": {
+          "description": "WandB project name.",
+          "title": "Project",
+          "type": "string"
+        },
+        "mode": {
+          "$ref": "#/$defs/WandbMode",
+          "description": "WandB tracking mode. Options: ['online', 'offline']"
+        }
+      },
+      "title": "Wandb",
+      "type": "object"
+    },
+    "WandbMode": {
+      "enum": [
+        "online",
+        "offline"
+      ],
+      "title": "WandbMode",
+      "type": "string"
+    }
+  },
+  "description": "Main validator.",
+  "properties": {
+    "name": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Name of the run/job for Hydra.",
+      "title": "Name"
+    },
+    "defaults": {
+      "anyOf": [
+        {
+          "items": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "$ref": "#/$defs/RLAlgoDefault"
+              },
+              {
+                "additionalProperties": true,
+                "type": "object"
+              }
+            ]
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Hydra defaults list.",
+      "title": "Defaults"
+    },
+    "clean_single_backtests": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": false,
+      "description": "Flag to clean the single backtest data ('test' subdirs) during multi-pair/multi-iteration backtesting.",
+      "title": "Clean Single Backtests"
+    },
+    "generate_plots": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": false,
+      "description": "Generate plots if true.",
+      "title": "Generate Plots"
+    },
+    "save_for_training": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": false,
+      "description": "Flag to auto-save backtest data in data/rl_training for RL training.",
+      "title": "Save For Training"
+    },
+    "rl_model_folder": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Name of the folder with RL model, if null take first one or run without RL.",
+      "title": "Rl Model Folder"
+    },
+    "market": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Market"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Market simulation parameters including capital, fees, and timeframe."
+    },
+    "settings": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Settings"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "General strategy parameters, including volatility and time decay bounds."
+    },
+    "pair_selection": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PairSelection"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Configuration for statistical tests and top pair filtering."
+    },
+    "performance": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Performance"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Trading logic flags, SL types, and backtest execution parameters."
+    },
+    "data_fetching_pipeline": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DataFetchingPipeline"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "rl": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RL"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Reinforcement Learning environment parameters and training settings."
+    },
+    "rl_algo": {
+      "anyOf": [
+        {
+          "discriminator": {
+            "mapping": {
+              "a2c_baseline": "#/$defs/A2CAlgo",
+              "recurrent_ppo": "#/$defs/PPOAlgo"
+            },
+            "propertyName": "algo_name"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/A2CAlgo"
+            },
+            {
+              "$ref": "#/$defs/PPOAlgo"
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Rl Algo"
+    },
+    "wandb": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Wandb"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Weights & Biases configuration for experiment tracking and logging."
+    }
+  },
+  "title": "Config",
+  "type": "object"
+}

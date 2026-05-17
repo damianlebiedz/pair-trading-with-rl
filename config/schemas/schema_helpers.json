@@ -1,0 +1,59 @@
+{
+  "properties": {
+    "top_n": {
+      "description": "Number of top assets to select based on volume/liquidity.",
+      "exclusiveMinimum": 0,
+      "title": "Top N",
+      "type": "integer"
+    },
+    "start": {
+      "description": "Start date for evaluating asset liquidity and volume (YYYY-MM-DD).",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "title": "Start",
+      "type": "string"
+    },
+    "end": {
+      "description": "End date for evaluating asset liquidity and volume (YYYY-MM-DD).",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "title": "End",
+      "type": "string"
+    },
+    "test_end": {
+      "description": "End date for test (YYYY-MM-DD).",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "title": "Test End",
+      "type": "string"
+    },
+    "iterations": {
+      "description": "Number of iterations (monthly) to fetch historical data.",
+      "exclusiveMinimum": 0,
+      "title": "Iterations",
+      "type": "integer"
+    },
+    "whitelist": {
+      "description": "List of tickers to forcibly include in the final list.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Whitelist",
+      "type": "array"
+    },
+    "blacklist": {
+      "description": "List of tickers to forcibly exclude from the final list.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Blacklist",
+      "type": "array"
+    }
+  },
+  "required": [
+    "top_n",
+    "start",
+    "end",
+    "test_end",
+    "iterations"
+  ],
+  "title": "DataFetchingPipeline",
+  "type": "object"
+}

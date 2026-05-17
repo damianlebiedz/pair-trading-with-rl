@@ -1,0 +1,35 @@
+x-base: &base_config
+  build:
+    context: .
+    dockerfile: Dockerfile
+  image: research-paper-base
+  env_file:
+    - .env
+  volumes:
+    - ./config:/app/config
+    - ./data:/app/data
+    - ./results:/app/results
+  environment:
+    - HYDRA_FULL_ERROR=1
+    - PYTHONPATH=/app
+
+services:
+  data_fetching_pipeline:
+    <<: *base_config
+    command: python helpers/data_fetching_pipeline.py
+    deploy:
+      restart_policy:
+        condition: on-failure
+        max_attempts: 3
+
+  run_backtest:
+    <<: *base_config
+    command: python runners/run_backtest.py
+
+  train_agent:
+    <<: *base_config
+    command: python runners/train_agent.py
+
+  update_config:
+    <<: *base_config
+    command: python helpers/update_config.py

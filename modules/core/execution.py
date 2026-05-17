@@ -1,198 +1,276 @@
-from modules.core.models import ExecutionContext, PositionState
+from modules.performance.models import (
+    PositionState,
+    ExecLogger,
+)
 
 
 class TradeExecutor:
+    """Stateless class for life-cycle management of positions."""
+
     @staticmethod
-    def get_spread(x: str, y: str, position: float) -> tuple[float, float]:  # TODO
-        """Get spread for two assets depending on position."""
-        if position == 0:
-            # SPREAD FOR POSITION CLOSING
-            return 1.0, 1.0
-        elif position > 0:
-            # SPREAD FOR POSITIVE POSITION OPENING
-            return 1.0, 1.0
+    def decide(
+        position_state: PositionState,
+        signal: float,
+        z_score: float | None,
+        exit_threshold: float,
+    ) -> tuple[float, bool, bool]:
+        """
+        Determines the target position based on strategy rules (Z-score, TP, SL).
+        Used by heuristic strategies. RL agents skip this and provide 'action' directly.
+        """
+        prev_position = position_state.prev_position
+        stop_loss_thr = position_state.sl_thr
+
+        if z_score is None:
+            return 0.0, False, False
+
+        if prev_position != 0:
+            is_long = prev_position > 0
+
+            if (is_long and signal < 0) or (not is_long and signal > 0):
+                return signal, False, False
+
+            if is_long:
+                hit_tp = z_score >= -exit_threshold
+                hit_sl = stop_loss_thr is not None and z_score <= -stop_loss_thr
+                if hit_tp or hit_sl:
+                    return 0.0, hit_sl, hit_tp
+            else:
+                hit_tp = z_score <= exit_threshold
+                hit_sl = stop_loss_thr is not None and z_score >= stop_loss_thr
+                if hit_tp or hit_sl:
+                    return 0.0, hit_sl, hit_tp
+
+            return prev_position, False, False
+
         else:
-            # SPREAD FOR NEGATIVE POSITION OPENING
-            return 1.0, 1.0
+            return signal, False, False
 
     @classmethod
     def execute(
         cls,
-        ctx: ExecutionContext,
+        fee_rate: float,
         position_state: PositionState,
+        stop_loss_thr: float | None,
+        action: float,
         price_x: float,
         price_y: float,
-        z_score: float | None,
-        prev_z_score: float | None,
         beta: float,
-        total_fees: float,
-        entry_threshold: float,
-        exit_threshold: float,
-        stop_loss: float,
+        equity: float,
+        leverage: float,
+        exec_logger: ExecLogger | None,
+        std: float | None,
     ) -> tuple[float, float]:
+        """
+        Mechanically aligns the portfolio with the target 'action'.
+        Handles Open, Close, Hold, and Reversal logic.
+        """
+        prev_position = position_state.prev_position
+        sl_lock = position_state.sl_lock
 
-        # IN POSITION
-        if position_state.prev_position != 0:
-            # CLOSE POSITION (STOP LOSS OR TAKE PROFIT)
-            if z_score is None:
-                # NO MEAN-REVERSION (FROM HALF-LIFE WINDOW CALCULATION) OR BETA < 0
-                return cls._close_position(
-                    ctx, position_state, price_x, price_y, total_fees
-                )
-            elif (
-                position_state.prev_position < 0
-                and (
-                    z_score <= exit_threshold
-                    or (
-                        position_state.stop_loss_threshold is not None  # TODO
-                        and z_score >= position_state.stop_loss_threshold
-                    )
-                )
-            ) or (
-                position_state.prev_position > 0
-                and (
-                    z_score >= -exit_threshold
-                    or (
-                        position_state.stop_loss_threshold is not None  # TODO
-                        and z_score <= -position_state.stop_loss_threshold
-                    )
-                )
-            ):
-                # OPEN REVERSE POSITION
-                if (position_state.prev_position < 0 < position_state.signal) or (
-                    position_state.prev_position > 0 > position_state.signal
-                ):
-                    pnl_close, total_fees_after_close = cls._close_position(
-                        ctx, position_state, price_x, price_y, total_fees
-                    )
-                    _, total_fees_final = cls._open_position(
-                        ctx,
-                        beta,
-                        z_score,
-                        position_state,
-                        price_x,
-                        price_y,
-                        total_fees_after_close,
-                        stop_loss,
-                    )
-                    return pnl_close, total_fees_final
+        if prev_position != 0:
+            curr_dif = position_state.q_x * price_x + position_state.q_y * price_y
+            unrealized_gross_pnl = curr_dif - position_state.entry_dif
 
-                return cls._close_position(
-                    ctx, position_state, price_x, price_y, total_fees
-                )
-            # HOLD POSITION
-            else:
-                return cls._hold_position(position_state, price_x, price_y, total_fees)
+            curr_val = (
+                abs(position_state.q_x) * price_x + abs(position_state.q_y) * price_y
+            )
+            expected_exit_fees = curr_val * fee_rate
 
-        # OUT OF POSITION
-        else:
-            # STAY OUT OF POSITION
-            if z_score is None:
-                return 0, total_fees
-            # OPEN POSITION
-            elif (prev_z_score < entry_threshold and position_state.signal < 0) or (
-                prev_z_score > -entry_threshold and position_state.signal > 0
-            ):
-                return cls._open_position(
-                    ctx,
-                    beta,
-                    z_score,
-                    position_state,
-                    price_x,
-                    price_y,
-                    total_fees,
-                    stop_loss,
+            if (
+                unrealized_gross_pnl - expected_exit_fees
+            ) <= -position_state.entry_equity:
+                action = 0.0
+
+        if action == prev_position:
+            if prev_position != 0:
+                return cls._hold_position(
+                    position_state=position_state, price_x=price_x, price_y=price_y
                 )
-            # STAY OUT OF POSITION
-            else:
-                return 0, total_fees
+            return 0.0, 0.0
+
+        pnl_total = 0.0
+        fees_total = 0.0
+        current_equity = equity
+
+        if prev_position != 0:
+            pnl, fees = cls._close_position(
+                fee_rate=fee_rate,
+                position_state=position_state,
+                price_x=price_x,
+                price_y=price_y,
+                exec_logger=exec_logger,
+            )
+            pnl_total += pnl
+            fees_total += fees
+            current_equity = equity + pnl - fees
+
+        if action != 0 and not sl_lock:
+            _, fees = cls._open_position(
+                fee_rate=fee_rate,
+                stop_loss_thr=stop_loss_thr,
+                action=action,
+                beta=beta,
+                position_state=position_state,
+                price_x=price_x,
+                price_y=price_y,
+                equity=current_equity,
+                exec_logger=exec_logger,
+                std=std,
+                leverage=leverage,
+            )
+            fees_total += fees
+
+        return pnl_total, fees_total
 
     @classmethod
     def _open_position(
         cls,
-        ctx,
-        beta,
-        z_score,
-        position_state,
-        price_x,
-        price_y,
-        total_fees,
-        stop_loss,
+        fee_rate: float,
+        stop_loss_thr: float | None,
+        action: float,
+        beta: float,
+        position_state: PositionState,
+        price_x: float,
+        price_y: float,
+        equity: float,
+        exec_logger: ExecLogger | None,
+        std: float,
+        leverage: float,
     ) -> tuple[float, float]:
         wx = 1 / (beta + 1)
         wy = beta / (beta + 1)
 
-        x_spread, y_spread = cls.get_spread(
-            ctx.ticker_x, ctx.ticker_y, position_state.position
-        )
+        margin_allocated = equity * abs(action)
+        notional_value = margin_allocated * leverage
 
-        if position_state.signal > 0:
-            qx = ctx.initial_cash * wx / (price_x * x_spread)
-            qy = -(ctx.initial_cash * wy) / (price_y * y_spread)
-        elif position_state.signal < 0:
-            qx = -(ctx.initial_cash * wx) / (price_x * x_spread)
-            qy = ctx.initial_cash * wy / (price_y * y_spread)
+        if action > 0:
+            qx = notional_value * wx / price_x
+            qy = -(notional_value * wy) / price_y
         else:
-            raise ValueError("Cannot open the position while 'position' is 0")
+            qx = -(notional_value * wx) / price_x
+            qy = notional_value * wy / price_y
 
-        if stop_loss is not None:
-            stop_loss_thr = abs(z_score * stop_loss)
-        else:
-            stop_loss_thr = None
-
-        entry_dif = qx * (price_x * x_spread) + qy * (price_y * y_spread)
+        entry_dif = qx * price_x + qy * price_y
 
         position_state.update_position(
-            position=position_state.signal,
-            prev_position=position_state.prev_position,
+            position=action,
             q_x=qx,
             q_y=qy,
             w_x=wx,
             w_y=wy,
-            stop_loss_threshold=stop_loss_thr,
             entry_dif=entry_dif,
+            prev_dif=entry_dif,
+            entry_equity=margin_allocated,
+            sl_thr=stop_loss_thr,
+            entry_beta=beta,
+            entry_std=std,
         )
 
-        pos_fees = ctx.initial_cash * ctx.fee_rate
-        t_fees = total_fees + pos_fees
+        fees = notional_value * fee_rate
 
-        return 0, t_fees
+        if exec_logger:
+            exec_logger.log(
+                open_time=position_state.open_time,
+                price_x=price_x,
+                price_y=price_y,
+                qx=qx,
+                qy=qy,
+                position=position_state.position,
+                fees=fees,
+                pnl=0.0,
+                entry_equity=margin_allocated,
+                time_in_pos=0,
+            )
+
+        return 0.0, fees
 
     @classmethod
     def _close_position(
-        cls, ctx, position_state, price_x, price_y, total_fees
+        cls,
+        fee_rate: float,
+        position_state: PositionState,
+        price_x: float,
+        price_y: float,
+        exec_logger: ExecLogger | None,
     ) -> tuple[float, float]:
-        x_spread, y_spread = cls.get_spread(ctx.ticker_x, ctx.ticker_y, 0)
+        exit_dif = position_state.q_x * price_x + position_state.q_y * price_y
+        unrealized_gross_pnl = exit_dif - position_state.entry_dif
 
-        exit_dif = position_state.q_x * (price_x * x_spread) + position_state.q_y * (
-            price_y * y_spread
-        )
-        exit_val = abs(position_state.q_x) * (price_x * x_spread) + abs(
-            position_state.q_y
-        ) * (price_y * y_spread)
-        pos_fees = exit_val * ctx.fee_rate
+        exit_val = abs(position_state.q_x) * price_x + abs(position_state.q_y) * price_y
+        fees = exit_val * fee_rate
 
-        if position_state.prev_position != 0:
-            pnl = exit_dif - position_state.entry_dif
-        else:
-            raise ValueError("Cannot close the position while 'position' is 0")
+        if (unrealized_gross_pnl - fees) <= -position_state.entry_equity:
+            exit_dif = position_state.entry_dif - position_state.entry_equity
+            fees = 0.0
+
+        pnl = exit_dif - position_state.prev_dif
+
+        position_state.time_in_pos += 1
+
+        if exec_logger:
+            exec_logger.log(
+                open_time=position_state.open_time,
+                price_x=price_x,
+                price_y=price_y,
+                qx=0.0,
+                qy=0.0,
+                position=0.0,
+                fees=fees,
+                pnl=exit_dif - position_state.entry_dif,
+                entry_equity=position_state.entry_equity,
+                time_in_pos=position_state.time_in_pos,
+            )
 
         position_state.clear_position()
-        t_fees = total_fees + pos_fees
 
-        return pnl, t_fees
+        return pnl, fees
 
     @staticmethod
     def _hold_position(
-        position_state, price_x, price_y, total_fees
+        position_state: PositionState, price_x: float, price_y: float
     ) -> tuple[float, float]:
         curr_dif = position_state.q_x * price_x + position_state.q_y * price_y
 
-        if position_state.prev_position != 0:
-            pnl = curr_dif - position_state.entry_dif
-        else:
-            raise ValueError("Cannot hold the position while 'position' is 0")
-
         position_state.position = position_state.prev_position
+        position_state.time_in_pos += 1
 
-        return pnl, total_fees
+        pnl = curr_dif - position_state.prev_dif
+        position_state.prev_dif = curr_dif
+
+        return pnl, 0.0
+
+    @classmethod
+    def call_close_position(
+        cls,
+        fee_rate: float,
+        position_state: PositionState,
+        price_x: float,
+        price_y: float,
+        exec_logger: ExecLogger | None,
+    ) -> tuple[float, float]:
+        """
+        Public wrapper to close a position.
+
+        Purpose:
+            Provides a safe, explicit way to close a position at the end of a simulation or
+            in special scenarios, without exposing the private `_close_position` logic
+            directly. Useful for finalizing results.
+
+        Rationale:
+            _close_position is private because normal execution flow should control
+            position closing. This wrapper allows intentional closure from outside
+            the main execution loop while preserving fee and PnL logging.
+
+        Returns:
+            Tuple containing:
+                - pnl (float): Profit or loss realized from closing the position.
+                - fees (float): Transaction fees incurred during closure.
+        """
+        return cls._close_position(
+            fee_rate=fee_rate,
+            position_state=position_state,
+            price_x=price_x,
+            price_y=price_y,
+            exec_logger=exec_logger,
+        )

@@ -1,0 +1,27 @@
+# yaml-language-server: $schema=schemas/schema.json
+
+defaults:
+  - override hydra/job_logging: none
+
+hydra:
+  run:
+    dir: .
+  sweep:
+    dir: results/multirun/${now:%Y-%m-%d_%H-%M-%S}
+    subdir: .
+  output_subdir: null
+
+wandb:
+  project: pair-trading-with-rl
+  mode: online
+
+market:
+  initial_cash: 100000
+  fee_rate: 0.0005
+  risk_free_rate_annual: 0.00
+  interval: 1h
+
+settings:
+  vol_window: 24
+  time_decay_min: 0.5
+  time_decay_max: 1.0
