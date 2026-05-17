@@ -23,11 +23,20 @@ dependencies = [
     "hydra-joblib-launcher>=1.2.0,<2.0.0",
     "tensorboard>=2.20.0,<3.0.0",
     "kaleido (>=1.2.0,<2.0.0)",
+    "torch (>=2.3.0,<3.0.0)",
 ]
 
 
 [tool.poetry]
 packages = [{ include = "modules" }]
+
+[tool.poetry.dependencies]
+torch = { version = ">=2.3.0,<3.0.0", source = "pytorch-cpu" }
+
+[[tool.poetry.source]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+priority = "explicit"
 
 [tool.poetry.group.dev.dependencies]
 ruff = "^0.3.0"
