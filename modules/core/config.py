@@ -54,6 +54,10 @@ class RL(BaseModel):
     reward: RLRewards = Field(
         description=f"Type of RL reward. Options: {[e.value for e in RLRewards]}"
     )
+    reward_lambda: float | None = Field(description="Lambda for reward function.")
+    fee_multiplier: float | None = Field(
+        description="Fee Multiplier for reward function."
+    )
     obs_space_type: ObsSpaceType = Field(
         description=f"Type of observation space. Options: {[e.value for e in ObsSpaceType]}"
     )
@@ -62,6 +66,12 @@ class RL(BaseModel):
     )
     seed: int = Field(description="Seed for random number generator.")
     verbose: int = Field(description="Verbosity level in training.")
+    freeze_std: bool = Field(
+        description="Flag to use fixed std from entry while calculating in-position Z-Score in RL."
+    )
+    time_decay_stop: bool = Field(
+        description="Flag to always close position when time in position is >= Z-Score window."
+    )
 
 
 class PairSelection(BaseModel):
@@ -80,14 +90,18 @@ class PairSelection(BaseModel):
 
 class Performance(BaseModel):
     use_rl: bool = Field(description="Flag to use RL model during backtest.")
+    autonomous_agent: bool = Field(
+        description="Flag to set a risk management layer for an agent. If True, agent is autonomously deciding about exit. If false, agent is forced to exit while take profit or stop loss hit."
+    )
+    leverage: float = Field(description="Leverage ratio.")
     z_score_window: int = Field(
         gt=0,
         description="Z-Score lookback window size.",
     )
-    entry_threshold: float = Field(description="Z-score threshold to open a position.")
-    exit_threshold: float | Literal["-entry_threshold"] = Field(
-        description="Z-score threshold to close a position. Can be positive or negative (also equals to -entry_threshold)."
+    entry_threshold: float = Field(
+        gt=0, description="Z-score threshold to open a position."
     )
+    exit_threshold: float = Field(description="Z-score threshold to close a position.")
     stop_loss: float | None = Field(
         gt=1,
         description="Stop loss multiplier (e.g., 1.05 for 5% from entry_threshold), null if trade without SL.",
@@ -119,21 +133,16 @@ class Performance(BaseModel):
             raise ValueError("Test: 'beta_start' date must be before 'start' date.")
         return self
 
-
-class FetchHistoricalData(BaseModel):
-    interval: Interval = Field(
-        description=f"Data timeframe for the fetcher. Options: {[e.value for e in Interval]}"
-    )
-    limit_per_request: int = Field(
-        default=1000,
-        description="Maximum number of data points per single API request.",
-    )
-    timeout: int = Field(
-        default=30, description="Network timeout in seconds for API calls."
-    )
+    @model_validator(mode="after")
+    def validate_thresholds(self) -> "Performance":
+        if abs(self.exit_threshold) > self.entry_threshold:
+            raise ValueError(
+                "Test: abs(exit_threshold) cannot be bigger than entry_threshold."
+            )
+        return self
 
 
-class GenerateAssetsList(BaseModel):
+class DataFetchingPipeline(BaseModel):
     top_n: int = Field(
         gt=0, description="Number of top assets to select based on volume/liquidity."
     )
@@ -148,9 +157,6 @@ class GenerateAssetsList(BaseModel):
         gt=0,
         description="Number of iterations (monthly) to fetch historical data.",
     )
-    limit_per_request: int = Field(
-        default=1000, description="API limit for asset listing requests."
-    )
     whitelist: list[str] = Field(
         default_factory=list,
         description="List of tickers to forcibly include in the final list.",
@@ -161,7 +167,7 @@ class GenerateAssetsList(BaseModel):
     )
 
     @model_validator(mode="after")
-    def validate_dates(self) -> "GenerateAssetsList":
+    def validate_dates(self) -> "DataFetchingPipeline":
         if pd.to_datetime(self.start) >= pd.to_datetime(self.end):
             raise ValueError(
                 "GenerateAssetsList: 'start' date must be before 'end' date."
@@ -230,6 +236,7 @@ class RecurrentPPO(BaseModel):
     clip_range: float = Field(
         description="Range for clipping the surrogate objective. Prevents overly large policy updates to ensure stability (typically 0.2)."
     )
+    policy_kwargs: PolicyKwargs | None = None
 
 
 class PPOAlgo(BaseModel):
@@ -242,7 +249,10 @@ class PPOAlgo(BaseModel):
 
 
 class RLAlgoDefault(BaseModel):
-    rl_algo: RLModelName
+    rl_algo: RLModelName | None = Field(
+        default=None,
+        description=f"RL algorithm selection. Options: {[n.value for n in RLModelName]}",
+    )
 
 
 class Wandb(BaseModel):
@@ -266,11 +276,15 @@ class Config(BaseModel):
     defaults: list[str | RLAlgoDefault | dict[str, Any]] | None = Field(
         default=None, description="Hydra defaults list."
     )
+    clean_single_backtests: bool | None = Field(
+        default=False,
+        description="Flag to clean the single backtest data ('test' subdirs) during multi-pair/multi-iteration backtesting.",
+    )
     generate_plots: bool | None = Field(
-        default=None, description="Generate plots if true."
+        default=False, description="Generate plots if true."
     )
     save_for_training: bool | None = Field(
-        default=None,
+        default=False,
         description="Flag to auto-save backtest data in data/rl_training for RL training.",
     )
     rl_model_folder: str | None = Field(
@@ -293,21 +307,13 @@ class Config(BaseModel):
         default=None,
         description="Trading logic flags, SL types, and backtest execution parameters.",
     )
-    fetch_historical_data: FetchHistoricalData | None = Field(
-        default=None,
-        description="Parameters for the historical data downloading utility.",
-    )
-    generate_assets_list: GenerateAssetsList | None = Field(
-        default=None,
-        description="Parameters for the asset universe generation and filtering utility.",
-    )
+    data_fetching_pipeline: DataFetchingPipeline | None = Field(default=None)
     rl: RL | None = Field(
         default=None,
         description="Reinforcement Learning environment parameters and training settings.",
     )
     rl_algo: RLAlgoConfig | None = Field(
         default=None,
-        description="RL algorithm selection (e.g., A2C, PPO) and its specific hyperparameters.",
     )
     wandb: Wandb | None = Field(
         default=None,

@@ -1,11 +1,6 @@
 [project]
-name = "research-paper"
+name = "pair-trading-with-rl"
 version = "0.1.0"
-description = ""
-authors = [
-    {name = "Damian Lebiedź"}
-]
-license = {text = "Proprietary"}
 readme = "README.md"
 requires-python = "==3.12.*"
 dependencies = [
@@ -27,6 +22,7 @@ dependencies = [
     "sb3-contrib>=2.7.1,<3.0.0",
     "hydra-joblib-launcher>=1.2.0,<2.0.0",
     "tensorboard>=2.20.0,<3.0.0",
+    "kaleido (>=1.2.0,<2.0.0)",
 ]
 
 
@@ -37,6 +33,8 @@ packages = [{ include = "modules" }]
 ruff = "^0.3.0"
 mypy = "^1.9.0"
 black = "^24.0.0"
+pytest = "^8.0.0"
+pytest-cov = "^7.1.0"
 
 [tool.poetry.group.docs.dependencies]
 pdoc = "^16.0.0"

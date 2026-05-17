@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import Any
 import pandas as pd
 
-from modules.core.enums import BetaHedge
 from modules.performance.models import StrategyResult
 from modules.data_services.data_utils import (
     save_strategy_result,
@@ -23,7 +22,7 @@ from modules.data_services.merge_utils import (
 from modules.performance.pair_selector import PairSelector
 from modules.performance.stats import calculate_stats
 from modules.performance.strategy import Strategy
-from modules.utils.plots import plot_returns, plot_zscore_pos, plot_spread_pos
+from modules.utils.plots import plot_returns, plot_zscore_pos
 
 logger = logging.getLogger(__name__)
 
@@ -70,9 +69,9 @@ def execute_testing(
     beta_test_start: str,
     test_start: str,
     test_end: str,
-    interval: str,
     plot: bool,
-    tickers: list[str],
+    btc_data: pd.DataFrame,
+    ewp_data: pd.DataFrame,
     subdir: str | None = None,
 ) -> StrategyResult:
 
@@ -114,18 +113,6 @@ def execute_testing(
 
     if plot:
         plot_zscore_pos(result, directory=output_dir, save=True)
-        plot_spread_pos(result, directory=output_dir, save=True)
-        btc_data = load_btc_benchmark(
-            test_start=test_start,
-            test_end=test_end,
-            interval=interval,
-        )
-        ewp_data = load_ewp_benchmark(
-            tickers=tickers,
-            test_start=test_start,
-            test_end=test_end,
-            interval=interval,
-        )
         plot_returns(
             result=result,
             btc_data=btc_data,
@@ -143,11 +130,8 @@ def execute_pair_selection(
     tickers: list[str],
     ps_start: str,
     ps_end: str,
-    beta_test_start: str,
     interval: str,
-    top_n: float,
     output_dir: str,
-    beta_hedge: BetaHedge,
 ) -> pd.DataFrame:
     logger.info("Starting Pair Selection Pipeline.")
 
@@ -157,10 +141,7 @@ def execute_pair_selection(
         tickers=tickers,
         ps_start=ps_start,
         ps_end=ps_end,
-        beta_test_start=beta_test_start,
         interval=interval,
-        top_n=top_n,
-        beta_hedge=beta_hedge,
     )
 
     if final_df.empty:
@@ -185,9 +166,9 @@ def merge_multi_pair_results(
     risk_free_rate_annual: float,
     test_start: str,
     test_end: str,
-    interval: str,
     plot: bool,
-    tickers: list[str],
+    btc_data: pd.DataFrame,
+    ewp_data: pd.DataFrame,
     prefix: str | None = "",
 ) -> StrategyResult:
     """Merges multiple StrategyResult objects into one aggregate result and saves it."""
@@ -235,17 +216,6 @@ def merge_multi_pair_results(
     )
 
     if plot:
-        btc_data = load_btc_benchmark(
-            test_start=final_result.start,
-            test_end=final_result.end,
-            interval=interval,
-        )
-        ewp_data = load_ewp_benchmark(
-            tickers=tickers,
-            test_start=final_result.start,
-            test_end=final_result.end,
-            interval=interval,
-        )
         plot_returns(
             result=final_result,
             btc_data=btc_data,
@@ -297,6 +267,9 @@ def merge_multi_period_results(
     ewp_dfs = []
     btc_dfs = []
 
+    iter_sortino_net = []
+    iter_sortino_gross = []
+
     for d in iter_dirs:
         pattern = f"{prefix}returns_{ticker_x}_{ticker_y}_*.parquet"
         files = list(d.glob(pattern))
@@ -309,21 +282,49 @@ def merge_multi_period_results(
         res = load_strategy_result(file_stem, directory=str(d))
         results.append(res)
 
+        if res.stats is not None and not res.stats.empty:
+            if "sortino_ratio_annual" in res.stats.index:
+                net_val = res.stats.loc["sortino_ratio_annual", "net"]
+                gross_val = res.stats.loc["sortino_ratio_annual", "gross"]
+
+                if isinstance(net_val, pd.Series):
+                    net_val = net_val.iloc[0]
+                if isinstance(gross_val, pd.Series):
+                    gross_val = gross_val.iloc[0]
+
+                if pd.notna(net_val):
+                    iter_sortino_net.append(net_val)
+                if pd.notna(gross_val):
+                    iter_sortino_gross.append(gross_val)
+
         if plot:
             iter_num = int(d.name)
             iter_tickers = tickers_dict[iter_num]
 
-            btc_period = load_btc_benchmark(res.start, res.end, interval)
-            ewp_period = load_ewp_benchmark(iter_tickers, res.start, res.end, interval)
+            btc_period = load_btc_benchmark(
+                test_start=res.start,
+                test_end=res.end,
+                interval=interval,
+                fee_rate=results[0].fee_rate,
+            )
+            ewp_period = load_ewp_benchmark(
+                tickers=iter_tickers,
+                test_start=res.start,
+                test_end=res.end,
+                interval=interval,
+                fee_rate=results[0].fee_rate,
+            )
 
             btc_dfs.append(btc_period[["BTC_pct"]])
-            ewp_dfs.append(ewp_period[["portfolio_pct"]])
+            ewp_dfs.append(ewp_period[["ewp_pct"]])
 
     if not results:
         logger.warning("No results collected for merging.")
         return None
 
-    final_df, final_exec_df = stitch_strategy_results(results)
+    final_df, final_exec_df = stitch_strategy_results(
+        results=results, initial_cash=initial_cash
+    )
 
     stats = calculate_stats(
         df=final_df,
@@ -370,7 +371,7 @@ def merge_multi_period_results(
 
         final_ewp = pd.concat(ewp_dfs).sort_index()
         final_ewp = final_ewp[~final_ewp.index.duplicated(keep="first")]
-        final_ewp["ewp_return"] = (1 + final_ewp["portfolio_pct"]).cumprod() - 1
+        final_ewp["ewp_return"] = (1 + final_ewp["ewp_pct"]).cumprod() - 1
 
         plot_returns(
             result=final_result,

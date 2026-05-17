@@ -2,7 +2,7 @@ import logging
 import numpy as np
 import pandas as pd
 
-from modules.core.enums import Source, BetaHedge
+from modules.core.enums import Source
 from modules.core.indicators import (
     calculate_beta,
     calculate_hurst,
@@ -38,48 +38,72 @@ class PairSelector:
         tickers: list[str],
         ps_start: str,
         ps_end: str,
-        beta_test_start: str,
         interval: str,
-        top_n: int,
-        beta_hedge: BetaHedge,
     ) -> pd.DataFrame:
         """
-        Executes the Pair Selection pipeline using a Composite Score (Ranking & Validation) approach.
+        Executes the Pair Selection pipeline using a Two-Stage "Filter-then-Rank" methodology.
 
-        The process prioritizes pairs that exhibit BOTH strong long-term equilibrium (Cointegration)
-        and strong short-term linear dependency (Correlation/$R^2$).
+        This process prioritizes pairs that exhibit strong long-term equilibrium (Cointegration)
+        and short-term linear dependency (R-squared), while strictly filtering out pairs that
+        lack tradable structural characteristics (Mean Reversion and valid Hedge Ratio).
 
-        The process consists of two main phases:
-        1. **Scoring & Ranking**: Calculates a weighted score for all pairs on historical data (`ps_start` to `ps_end`).
-           Score = 0.5 * Norm(Cointegration) + 0.5 * R_Squared.
-        2. **Validation**: Verifies if the top candidates maintain mean-reverting properties
-           on the calibration data (`test_start` to `test_end`) using Beta and Hurst.
+        The process consists of two main phases executed on the same historical data window:
+        1. Scoring (Quality Assessment): Calculates an initial composite score for all pairs.
+        2. Filtering (Structural Validation): Verifies if candidates are actually tradable
+           using the Hurst Exponent and Beta. Fails result in a strict penalty.
+
+        Score Calculation & Penalty Logic:
+        ----------------------------------
+        Initial Score = (0.5 * Normalized Cointegration) + (0.5 * R-squared)
+
+        A hard penalty (Score = 0.0) is applied if either structural constraint is violated:
+        - Hurst >= 0.5: Indicates the spread is trending (or is a pure random walk), violating mean-reversion assumptions.
+        - Beta <= 0: Indicates assets move inversely or lack a valid linear relationship for hedging.
 
         Algorithm Stages:
         -----------------
-        1. **Data Loading (Selection)**: Loads price data for the `ps_start` - `ps_end` period.
-        2. **Composite Scoring**:
-           - Runs Cointegration Test (EG) -> Normalizes result to 0-1 scale.
-           - Calculates Correlation ($R^2$) -> Already 0-1 scale.
-           - Computes `Score = (0.5 * Norm_Coint) + (0.5 * R_Squared)`.
-           - Sorts pairs by `Score` in descending order. This filters out pairs with high cointegration
-             but weak hedging capability (low beta/correlation).
-        3. **Data Loading (Validation)**: Loads price data for the `test_start` - `test_end` period.
-           This serves as the 'Calibration' period for trading parameters.
-        4. **Iterative Validation**:
-           Iterates through the top-scored candidates and checks on Validation Data:
-           - **Beta Check**: Rejects if Beta <= 0.
-        5. **Final Selection**: Picks the first `top_n` pairs that pass all validation filters.
+        1. Data Loading: Loads and cleans price data for the ps_start to ps_end period.
+        2. Composite Scoring: Evaluates all possible asset combinations, calculates the
+           initial Score based on Engle-Granger and R-squared, and ranks them.
+        3. Validation & Penalty: Iterates through the ranked candidates. Computes Beta
+           and Hurst on the same data window. If constraints fail, the score is zeroed out.
+        4. Final Selection: Returns the processed dataframe, allowing the downstream
+           strategy to safely select the top_n viable candidates.
+
+        Methodological Notes:
+        - Closing Prices: All statistical tests (Cointegration, Correlation, Hurst, Beta)
+          are evaluated strictly on historical closing prices to eliminate intraday noise.
+        - Logarithmic Transformation: Price series are transformed into natural logarithms
+          prior to analysis so that the spread and hedge ratio reflect proportional relationships.
+
+        Args:
+            tickers (list[str]): List of asset tickers to evaluate.
+            ps_start (str): Start date for the selection data window.
+            ps_end (str): End date for the selection data window.
+            interval (str): Timeframe interval (e.g., '1h', '1d').
 
         Returns:
-            pd.DataFrame: DataFrame containing the selected `top_n` pairs with their
-            validation metrics (Beta, Hurst, Window). Returns empty DataFrame if no pairs found.
+            pd.DataFrame: DataFrame containing all evaluated pairs, their validation metrics
+            (validation_beta, validation_hurst), and the final penalized score.
         """
-
         logger.debug(f"Loading data for Pair Selection: {ps_start} - {ps_end}")
         df_ps = load_data(
             tickers=tickers, start=ps_start, end=ps_end, interval=interval
         )
+
+        assets_with_nans = df_ps.columns[df_ps.isna().any()].tolist()
+        if assets_with_nans:
+            logger.warning(
+                f"Dropping assets with NaNs from Pair Selection: {assets_with_nans}"
+            )
+            df_ps = df_ps.dropna(axis=1)
+
+        if df_ps.shape[1] < 2:
+            logger.warning(
+                "Not enough valid assets left to form pairs after dropping NaNs."
+            )
+            return pd.DataFrame()
+
         source_df_ps = np.log(df_ps) if self.source == Source.LOG.value else df_ps
         candidates = self._run_scoring_ranking(source_df_ps)
 
@@ -91,20 +115,6 @@ class PairSelector:
             f"Pre-ranked {len(candidates)} pairs. Validating with Hurst, Beta & Window..."
         )
 
-        df_val = load_data(
-            tickers=tickers, start=beta_test_start, end=ps_end, interval=interval
-        )
-
-        numeric_cols = df_val.select_dtypes(include=["float64", "float32"])
-        log_df = np.log(numeric_cols)
-        log_df.columns = [f"{col}_{Source.LOG.value}" for col in numeric_cols.columns]
-        df_val = pd.concat([df_val, log_df], axis=1)
-
-        target_beta_date = pd.to_datetime(beta_test_start)
-        beta_start_pos = df_val.index.get_indexer([target_beta_date], method="bfill")[0]
-        if df_val.index[beta_start_pos] == target_beta_date:
-            beta_start_pos += 1
-
         validated_pairs = []
 
         for idx, row in candidates.iterrows():
@@ -112,35 +122,31 @@ class PairSelector:
             t_x, t_y = pair.split("-")
 
             try:
-                source_x_col = f"{t_x}_{self.source}"
-                source_y_col = f"{t_y}_{self.source}"
+                X_vals_full = source_df_ps[t_x].values
+                Y_vals_full = source_df_ps[t_y].values
 
-                X_vals_full = df_val[source_x_col].values
-                Y_vals_full = df_val[source_y_col].values
+                res_row = row.to_dict()
 
-                X_vals_beta = X_vals_full[beta_start_pos:]
-                Y_vals_beta = Y_vals_full[beta_start_pos:]
-
-                if beta_hedge != BetaHedge.NO_HEDGE:
-                    beta = calculate_beta(X_slice=X_vals_beta, Y_slice=Y_vals_beta)
-                else:
-                    beta = 1
+                beta = calculate_beta(X_slice=X_vals_full, Y_slice=Y_vals_full)
 
                 if beta <= 0:
-                    logger.debug(f"Pair {pair} rejected. Beta {beta:.3f} <= 0")
-                    continue
+                    logger.debug(
+                        f"Pair {pair} penalized. Beta {beta:.3f} <= 0. Score reset to 0."
+                    )
+                    res_row["score"] = 0.0
 
                 hurst = calculate_hurst(
-                    X_slice=X_vals_beta,
-                    Y_slice=Y_vals_beta,
+                    X_slice=X_vals_full,
+                    Y_slice=Y_vals_full,
                     beta=beta,
                 )
 
-                if hurst > 0.5:
-                    logger.debug(f"Pair {pair} rejected. Hurst {hurst:.3f} > 0.5")
-                    continue
+                if hurst >= 0.5:
+                    logger.debug(
+                        f"Pair {pair} penalized. Hurst {hurst:.3f} >= 0.5. Score reset to 0."
+                    )
+                    res_row["score"] = 0.0
 
-                res_row = row.to_dict()
                 res_row.update(
                     {
                         "validation_beta": beta,
@@ -148,9 +154,6 @@ class PairSelector:
                     }
                 )
                 validated_pairs.append(res_row)
-
-                if len(validated_pairs) >= top_n:
-                    break
 
             except Exception as e:
                 logger.error(f"Error validating {pair}: {e}")

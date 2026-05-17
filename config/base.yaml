@@ -12,12 +12,12 @@ hydra:
   output_subdir: null
 
 wandb:
-  project: research-paper
+  project: pair-trading-with-rl
   mode: online
 
 market:
   initial_cash: 100000
-  fee_rate: 0.001
+  fee_rate: 0.0005
   risk_free_rate_annual: 0.00
   interval: 1h
 

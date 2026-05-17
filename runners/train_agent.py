@@ -1,5 +1,7 @@
+import os
 import copy
 import logging
+import shutil
 from pathlib import Path
 import hydra
 import numpy as np
@@ -8,10 +10,9 @@ from dotenv import load_dotenv
 from omegaconf import DictConfig, OmegaConf
 from stable_baselines3 import A2C
 from sb3_contrib import RecurrentPPO
-from stable_baselines3.common.callbacks import BaseCallback
+from stable_baselines3.common.callbacks import BaseCallback, CheckpointCallback
 from stable_baselines3.common.utils import set_random_seed
 from stable_baselines3.common.vec_env import VecNormalize
-import os
 from wandb.integration.sb3 import WandbCallback
 
 from modules.core.config import Config
@@ -24,7 +25,10 @@ from runners.core.utils import save_hydra_config_snapshot, get_first_subdirector
 logger = logging.getLogger(__name__)
 load_dotenv()
 
-ALGO_MAP = {RLModelName.A2C_BASELINE: A2C, RLModelName.RECURRENT_PPO: RecurrentPPO}
+ALGO_MAP = {
+    RLModelName.A2C_BASELINE.value: A2C,
+    RLModelName.RECURRENT_PPO.value: RecurrentPPO,
+}
 
 
 class LogEquityCallback(BaseCallback):
@@ -84,7 +88,7 @@ def train_agent(cfg: DictConfig):
     training_folder = cfg.rl.training_folder
 
     if not training_folder:
-        training_root = os.path.join(project_root, "data", "training_data")
+        training_root = os.path.join(project_root, "data", "rl_training")
         try:
             training_folder = get_first_subdirectory(training_root)
             logger.info(
@@ -95,7 +99,7 @@ def train_agent(cfg: DictConfig):
             return
 
     training_data_dir = os.path.join(
-        project_root, "data", "training_data", training_folder
+        project_root, "data", "rl_training", training_folder
     )
 
     model_dir = os.path.join(project_root, "data", "rl_models")
@@ -107,16 +111,26 @@ def train_agent(cfg: DictConfig):
 
     save_hydra_config_snapshot(cfg=cfg, root_dir=root)
 
-    cfg = Config(**OmegaConf.to_container(cfg, resolve=True))
+    config_dict = OmegaConf.to_container(cfg, resolve=True)
+    cfg = Config(**config_dict)
 
     seed = cfg.rl.seed
     set_random_seed(seed)
     logger.info(f"Random seed set to: {seed}")
 
+    if cfg.rl.reward_lambda is not None:
+        safe_lambda = str(cfg.rl.reward_lambda).replace(".", "_")
+        reward_lambda_str = f"_{safe_lambda}"
+    else:
+        reward_lambda_str = ""
+
+    run_name = f"{cfg.rl_algo.algo_name.value}_{cfg.rl.obs_space_type.value}_{cfg.rl.reward.value}{reward_lambda_str}"
+
     run = wandb.init(
         project=cfg.wandb.project,
+        name=run_name,
         mode=cfg.wandb.mode,
-        config=OmegaConf.to_container(cfg, resolve=True),
+        config=config_dict,
         sync_tensorboard=True,
         monitor_gym=True,
         save_code=True,
@@ -152,7 +166,7 @@ def train_agent(cfg: DictConfig):
         "market_std",
         "market_beta",
         "hurst",
-        "market_win",
+        "window",
         "market_vol",
     ]
 
@@ -210,19 +224,23 @@ def train_agent(cfg: DictConfig):
         obs_space_type=cfg.rl.obs_space_type,
         fee_rate=cfg.market.fee_rate,
         seed=seed,
+        freeze_std=cfg.rl.freeze_std,
+        time_decay_stop=cfg.rl.time_decay_stop,
+        reward_lambda=cfg.rl.reward_lambda,
+        fee_multiplier=cfg.rl.fee_multiplier,
     )
     vec_env = VecNormalize(vec_env, norm_obs=True, norm_reward=True, clip_obs=10.0)
 
-    algo_name = cfg.rl_algo.algo_name
+    algo_name = cfg.rl_algo.algo_name.value
     algo_class = ALGO_MAP.get(algo_name)
 
     if algo_class is None:
         raise ValueError(f"RL algorithm not found: {algo_name}")
 
-    model_params = OmegaConf.to_container(cfg.rl_algo.params, resolve=True)
+    model_params = cfg.rl_algo.params.model_dump()
 
     model = algo_class(
-        policy=cfg.rl_algo.policy_type,
+        policy=cfg.rl_algo.policy_type.value,
         env=vec_env,
         verbose=cfg.rl.verbose,
         tensorboard_log=log_dir,
@@ -231,7 +249,21 @@ def train_agent(cfg: DictConfig):
     )
 
     logger.info(
-        f"Starting {algo_name} training on {len(results)} pairs (Run ID: {run.id})..."
+        f"Starting {algo_name} training on {len(results)} pairs (Run ID: {run.id}, Space: {cfg.rl.obs_space_type.value}, Reward: {cfg.rl.reward.value}{reward_lambda_str})..."
+    )
+
+    checkpoint_dir = f"{model_dir}/{run.id}_checkpoints"
+    os.makedirs(checkpoint_dir, exist_ok=True)
+
+    num_envs = len(results)
+    actual_save_freq = max(100_000 // num_envs, 1)
+
+    checkpoint_callback = CheckpointCallback(
+        save_freq=actual_save_freq,
+        save_path=checkpoint_dir,
+        name_prefix=f"{algo_name}_{cfg.rl.obs_space_type.value}_{cfg.rl.reward.value}{reward_lambda_str}",
+        save_replay_buffer=False,
+        save_vecnormalize=True,
     )
 
     callbacks = [
@@ -241,6 +273,7 @@ def train_agent(cfg: DictConfig):
             verbose=2,
         ),
         LogEquityCallback(),
+        checkpoint_callback,
     ]
 
     try:
@@ -251,16 +284,21 @@ def train_agent(cfg: DictConfig):
         model.learn(total_timesteps=calculated_timesteps, callback=callbacks)
         logger.info("Training finished.")
 
-        final_model_name = f"{algo_name}_{cfg.rl.obs_space_type}_{run.id}_seed{seed}"
+        final_model_name = f"{algo_name}_{cfg.rl.obs_space_type.value}_{cfg.rl.reward.value}{reward_lambda_str}_{run.id}_seed{seed}"
         save_path = f"{model_dir}/{final_model_name}"
         model.save(save_path)
         vec_env.save(f"{save_path}_normalize.pkl")
 
+        checkpoint_dir = f"{model_dir}/{run.id}"
+        if os.path.exists(checkpoint_dir):
+            shutil.rmtree(checkpoint_dir)
+            logger.debug(f"Deleted checkpoint: {checkpoint_dir}")
+
         if wandb.run is not None:
             model_artifact = wandb.Artifact(
-                name=f"{algo_name}_{cfg.rl.obs_space_type}_model_{run.id}",
+                name=f"{final_model_name}_model",
                 type="model",
-                description=f"Trained {algo_name} model (Space: {cfg.rl.obs_space_type})",
+                description=f"Trained {algo_name} model (Space: {cfg.rl.obs_space_type.value}, Reward: {cfg.rl.reward.value}{reward_lambda_str})",
             )
             model_artifact.add_file(f"{save_path}.zip")
             model_artifact.add_file(f"{save_path}_normalize.pkl")
@@ -269,18 +307,21 @@ def train_agent(cfg: DictConfig):
 
     except KeyboardInterrupt:
         logger.info("Training interrupted manually. Saving current model...")
-        final_model_name = (
-            f"{algo_name}_{cfg.rl.obs_space_type}_{run.id}_seed{seed}_interrupted"
-        )
+        final_model_name = f"{algo_name}_{cfg.rl.obs_space_type.value}_{cfg.rl.reward.value}{reward_lambda_str}_{run.id}_seed{seed}_interrupted"
         save_path = f"{model_dir}/{final_model_name}"
         model.save(save_path)
         vec_env.save(f"{save_path}_normalize.pkl")
 
+        checkpoint_dir = f"{model_dir}/{run.id}"
+        if os.path.exists(checkpoint_dir):
+            shutil.rmtree(checkpoint_dir)
+            logger.debug(f"Deleted checkpoint: {checkpoint_dir}")
+
         if wandb.run is not None:
             model_artifact = wandb.Artifact(
-                name=f"{algo_name}_{cfg.rl.obs_space_type}_model_{run.id}_interrupted",
+                name=f"{final_model_name}_model_interrupted",
                 type="model",
-                description=f"Interrupted {algo_name} (Space: {cfg.rl.obs_space_type})",
+                description=f"Interrupted {algo_name} (Space: {cfg.rl.obs_space_type.value}, Reward: {cfg.rl.reward.value}{reward_lambda_str})",
             )
             model_artifact.add_file(f"{save_path}.zip")
             model_artifact.add_file(f"{save_path}_normalize.pkl")

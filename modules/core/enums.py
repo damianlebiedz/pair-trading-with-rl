@@ -23,7 +23,7 @@ class Source(str, Enum):
 
 
 class ObsSpaceType(str, Enum):
-    MINIMAL = "minimal"
+    AUTONOMOUS = "autonomous"
     STANDARD = "standard"
     FULL = "full"
 
@@ -34,8 +34,9 @@ class RLModelName(str, Enum):
 
 
 class RLRewards(str, Enum):
-    PNL = "pnl"
-    PNL_SIGNAL = "pnl_signal"
+    STEP_PNL_REWARD = "StepPnLReward"
+    TRADE_PNL_REWARD = "TradePnLReward"
+    HYBRID_ACTION_REWARD = "HybridActionReward"
 
 
 class RLPolicyType(str, Enum):

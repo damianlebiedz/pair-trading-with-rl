@@ -1,13 +1,24 @@
+"""
+Configuration Management Helper.
+
+This project utilizes a hybrid Pydantic-Hydra configuration setup.
+Whenever you add, modify, or remove parameters in the Pydantic models
+located in `modules/core/config.py`, you must run this helper script (`update_config.py`).
+
+Running this script automatically updates the JSON schemas in the `config/schemas/`
+directory. This ensures that your YAML configuration files benefit from IDE features
+like auto-completion, inline descriptions, and automatic validation against the schema.
+"""
+
 import json
 from pathlib import Path
-from typing import Union, Any
+from typing import Any
 from pydantic import TypeAdapter
 
 from modules.core.config import (
     Config,
     RLAlgoConfig,
-    FetchHistoricalData,
-    GenerateAssetsList,
+    DataFetchingPipeline,
 )
 from modules.utils.logger import get_logger
 
@@ -15,6 +26,9 @@ logger = get_logger(__name__)
 
 
 def strip_required(schema: Any) -> None:
+    """
+    Recursively removes the 'required' key from the generated JSON schema dictionaries.
+    """
     if isinstance(schema, dict):
         schema.pop("required", None)
         for value in schema.values():
@@ -25,13 +39,16 @@ def strip_required(schema: Any) -> None:
 
 
 def generate_schemas():
+    """
+    Generates JSON schemas from Pydantic models and exports them to the schemas directory.
+    """
     target_dir = Path(__file__).resolve().parent.parent / "config" / "schemas"
 
     schema_dict = Config.model_json_schema()
     strip_required(schema_dict)
 
     with open(target_dir / "schema.json", "w", encoding="utf-8") as f:
-        json.dump(Config.model_json_schema(), f, indent=2)
+        json.dump(schema_dict, f, indent=2)
     logger.debug(f"Schema saved to: {target_dir / "schema.json"}")
 
     rl_adapter = TypeAdapter(RLAlgoConfig)
@@ -39,16 +56,18 @@ def generate_schemas():
         json.dump(rl_adapter.json_schema(), f, indent=2)
     logger.debug(f"Schema saved to: {target_dir / "schema_rl_algo.json"}")
 
-    HelpersUnion = Union[FetchHistoricalData, GenerateAssetsList]
-    helpers_adapter = TypeAdapter(HelpersUnion)
+    helper_adapter = TypeAdapter(DataFetchingPipeline)
     with open(target_dir / "schema_helpers.json", "w", encoding="utf-8") as f:
-        json.dump(helpers_adapter.json_schema(), f, indent=2)
+        json.dump(helper_adapter.json_schema(), f, indent=2)
     logger.debug(f"Schema saved to: {target_dir / "schema_helpers.json"}")
 
     logger.info(f"Schemas saved to: {target_dir}")
 
 
 def generate_docs():
+    """
+    Parses the main configuration schema to generate a Markdown documentation file.
+    """
     schema = Config.model_json_schema()
 
     md_lines = [
@@ -88,7 +107,7 @@ def generate_docs():
     with open(output_path, "w", encoding="utf-8") as f:
         f.write("\n".join(md_lines))
 
-    logger.info(f"Documentation successfully generated at: {output_path}")
+    logger.info(f"Documentation generated at: {output_path}")
 
 
 if __name__ == "__main__":

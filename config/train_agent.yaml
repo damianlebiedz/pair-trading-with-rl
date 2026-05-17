@@ -7,8 +7,14 @@ defaults:
 
 rl:
   training_folder: null
-  reward: pnl_signal
-  obs_space_type: minimal
-  passes_per_pair: 10
+
+  reward: StepPnLReward
+  reward_lambda: 1.2
+  fee_multiplier: 0.2
+
+  obs_space_type: autonomous
+  passes_per_pair: 20
   seed: 42
   verbose: 1
+  freeze_std: true
+  time_decay_stop: true

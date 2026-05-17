@@ -18,10 +18,6 @@
           "$ref": "#/$defs/A2CBaseline"
         }
       },
-      "required": [
-        "algo_name",
-        "params"
-      ],
       "title": "A2CAlgo",
       "type": "object"
     },
@@ -48,12 +44,6 @@
           "type": "number"
         }
       },
-      "required": [
-        "learning_rate",
-        "n_steps",
-        "gamma",
-        "ent_coef"
-      ],
       "title": "A2CBaseline",
       "type": "object"
     },
@@ -66,32 +56,7 @@
       "title": "BetaHedge",
       "type": "string"
     },
-    "FetchHistoricalData": {
-      "properties": {
-        "interval": {
-          "$ref": "#/$defs/Interval",
-          "description": "Data timeframe for the fetcher. Options: ['1d', '4h', '1h', '30m', '15m', '5m', '3m', '1m']"
-        },
-        "limit_per_request": {
-          "default": 1000,
-          "description": "Maximum number of data points per single API request.",
-          "title": "Limit Per Request",
-          "type": "integer"
-        },
-        "timeout": {
-          "default": 30,
-          "description": "Network timeout in seconds for API calls.",
-          "title": "Timeout",
-          "type": "integer"
-        }
-      },
-      "required": [
-        "interval"
-      ],
-      "title": "FetchHistoricalData",
-      "type": "object"
-    },
-    "GenerateAssetsList": {
+    "DataFetchingPipeline": {
       "properties": {
         "top_n": {
           "description": "Number of top assets to select based on volume/liquidity.",
@@ -123,12 +88,6 @@
           "title": "Iterations",
           "type": "integer"
         },
-        "limit_per_request": {
-          "default": 1000,
-          "description": "API limit for asset listing requests.",
-          "title": "Limit Per Request",
-          "type": "integer"
-        },
         "whitelist": {
           "description": "List of tickers to forcibly include in the final list.",
           "items": {
@@ -146,14 +105,7 @@
           "type": "array"
         }
       },
-      "required": [
-        "top_n",
-        "start",
-        "end",
-        "test_end",
-        "iterations"
-      ],
-      "title": "GenerateAssetsList",
+      "title": "DataFetchingPipeline",
       "type": "object"
     },
     "Interval": {
@@ -194,18 +146,12 @@
           "description": "Data timeframe used for the simulation. Options: ['1d', '4h', '1h', '30m', '15m', '5m', '3m', '1m']"
         }
       },
-      "required": [
-        "initial_cash",
-        "fee_rate",
-        "risk_free_rate_annual",
-        "interval"
-      ],
       "title": "Market",
       "type": "object"
     },
     "ObsSpaceType": {
       "enum": [
-        "minimal",
+        "autonomous",
         "standard",
         "full"
       ],
@@ -230,10 +176,6 @@
           "$ref": "#/$defs/RecurrentPPO"
         }
       },
-      "required": [
-        "algo_name",
-        "params"
-      ],
       "title": "PPOAlgo",
       "type": "object"
     },
@@ -258,11 +200,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "top_n",
-        "start",
-        "end"
-      ],
       "title": "PairSelection",
       "type": "object"
     },
@@ -273,6 +210,16 @@
           "title": "Use Rl",
           "type": "boolean"
         },
+        "autonomous_agent": {
+          "description": "Flag to set a risk management layer for an agent. If True, agent is autonomously deciding about exit. If false, agent is forced to exit while take profit or stop loss hit.",
+          "title": "Autonomous Agent",
+          "type": "boolean"
+        },
+        "leverage": {
+          "description": "Leverage ratio.",
+          "title": "Leverage",
+          "type": "number"
+        },
         "z_score_window": {
           "description": "Z-Score lookback window size.",
           "exclusiveMinimum": 0,
@@ -281,21 +228,14 @@
         },
         "entry_threshold": {
           "description": "Z-score threshold to open a position.",
+          "exclusiveMinimum": 0,
           "title": "Entry Threshold",
           "type": "number"
         },
         "exit_threshold": {
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "const": "-entry_threshold",
-              "type": "string"
-            }
-          ],
-          "description": "Z-score threshold to close a position. Can be positive or negative (also equals to -entry_threshold).",
-          "title": "Exit Threshold"
+          "description": "Z-score threshold to close a position.",
+          "title": "Exit Threshold",
+          "type": "number"
         },
         "stop_loss": {
           "anyOf": [
@@ -358,23 +298,33 @@
           "type": "string"
         }
       },
-      "required": [
-        "use_rl",
-        "z_score_window",
-        "entry_threshold",
-        "exit_threshold",
-        "stop_loss",
-        "iterations",
-        "beta_hedge",
-        "delayed_entry",
-        "sl_lock",
-        "time_decay_sl",
-        "freeze_std",
-        "beta_start",
-        "start",
-        "end"
-      ],
       "title": "Performance",
+      "type": "object"
+    },
+    "PolicyKwargs": {
+      "properties": {
+        "lstm_hidden_size": {
+          "description": "Size of the hidden state in the LSTM cell.",
+          "title": "Lstm Hidden Size",
+          "type": "integer"
+        },
+        "n_lstm_layers": {
+          "description": "Number of stacked LSTM layers (usually 1 is sufficient).",
+          "title": "N Lstm Layers",
+          "type": "integer"
+        },
+        "shared_lstm": {
+          "description": "If true, uses a shared LSTM backbone for both Actor and Critic. If false, creates separate LSTMs.",
+          "title": "Shared Lstm",
+          "type": "boolean"
+        },
+        "enable_critic_lstm": {
+          "description": "If true, includes an LSTM layer in the Critic network (only relevant if shared_lstm is false).",
+          "title": "Enable Critic Lstm",
+          "type": "boolean"
+        }
+      },
+      "title": "PolicyKwargs",
       "type": "object"
     },
     "RL": {
@@ -393,11 +343,35 @@
         },
         "reward": {
           "$ref": "#/$defs/RLRewards",
-          "description": "Type of RL reward. Options: ['pnl', 'pnl_signal']"
+          "description": "Type of RL reward. Options: ['StepPnLReward', 'TradePnLReward', 'HybridActionReward']"
+        },
+        "reward_lambda": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Lambda for reward function.",
+          "title": "Reward Lambda"
+        },
+        "fee_multiplier": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Fee Multiplier for reward function.",
+          "title": "Fee Multiplier"
         },
         "obs_space_type": {
           "$ref": "#/$defs/ObsSpaceType",
-          "description": "Type of observation space. Options: ['minimal', 'standard', 'full']"
+          "description": "Type of observation space. Options: ['autonomous', 'standard', 'full']"
         },
         "passes_per_pair": {
           "description": "Number of passes per pair during training.",
@@ -413,28 +387,36 @@
           "description": "Verbosity level in training.",
           "title": "Verbose",
           "type": "integer"
+        },
+        "freeze_std": {
+          "description": "Flag to use fixed std from entry while calculating in-position Z-Score in RL.",
+          "title": "Freeze Std",
+          "type": "boolean"
+        },
+        "time_decay_stop": {
+          "description": "Flag to always close position when time in position is >= Z-Score window.",
+          "title": "Time Decay Stop",
+          "type": "boolean"
         }
       },
-      "required": [
-        "training_folder",
-        "reward",
-        "obs_space_type",
-        "passes_per_pair",
-        "seed",
-        "verbose"
-      ],
       "title": "RL",
       "type": "object"
     },
     "RLAlgoDefault": {
       "properties": {
         "rl_algo": {
-          "$ref": "#/$defs/RLModelName"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RLModelName"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "RL algorithm selection. Options: ['recurrent_ppo', 'a2c_baseline']"
         }
       },
-      "required": [
-        "rl_algo"
-      ],
       "title": "RLAlgoDefault",
       "type": "object"
     },
@@ -448,8 +430,9 @@
     },
     "RLRewards": {
       "enum": [
-        "pnl",
-        "pnl_signal"
+        "StepPnLReward",
+        "TradePnLReward",
+        "HybridActionReward"
       ],
       "title": "RLRewards",
       "type": "string"
@@ -490,17 +473,19 @@
           "description": "Range for clipping the surrogate objective. Prevents overly large policy updates to ensure stability (typically 0.2).",
           "title": "Clip Range",
           "type": "number"
+        },
+        "policy_kwargs": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PolicyKwargs"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
-      "required": [
-        "learning_rate",
-        "n_steps",
-        "batch_size",
-        "n_epochs",
-        "gamma",
-        "ent_coef",
-        "clip_range"
-      ],
       "title": "RecurrentPPO",
       "type": "object"
     },
@@ -525,11 +510,6 @@
           "type": "number"
         }
       },
-      "required": [
-        "vol_window",
-        "time_decay_min",
-        "time_decay_max"
-      ],
       "title": "Settings",
       "type": "object"
     },
@@ -545,10 +525,6 @@
           "description": "WandB tracking mode. Options: ['online', 'offline']"
         }
       },
-      "required": [
-        "project",
-        "mode"
-      ],
       "title": "Wandb",
       "type": "object"
     },
@@ -603,6 +579,19 @@
       "description": "Hydra defaults list.",
       "title": "Defaults"
     },
+    "clean_single_backtests": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": false,
+      "description": "Flag to clean the single backtest data ('test' subdirs) during multi-pair/multi-iteration backtesting.",
+      "title": "Clean Single Backtests"
+    },
     "generate_plots": {
       "anyOf": [
         {
@@ -612,7 +601,7 @@
           "type": "null"
         }
       ],
-      "default": null,
+      "default": false,
       "description": "Generate plots if true.",
       "title": "Generate Plots"
     },
@@ -625,7 +614,7 @@
           "type": "null"
         }
       ],
-      "default": null,
+      "default": false,
       "description": "Flag to auto-save backtest data in data/rl_training for RL training.",
       "title": "Save For Training"
     },
@@ -690,29 +679,16 @@
       "default": null,
       "description": "Trading logic flags, SL types, and backtest execution parameters."
     },
-    "fetch_historical_data": {
+    "data_fetching_pipeline": {
       "anyOf": [
         {
-          "$ref": "#/$defs/FetchHistoricalData"
+          "$ref": "#/$defs/DataFetchingPipeline"
         },
         {
           "type": "null"
         }
       ],
-      "default": null,
-      "description": "Parameters for the historical data downloading utility."
-    },
-    "generate_assets_list": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/GenerateAssetsList"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Parameters for the asset universe generation and filtering utility."
+      "default": null
     },
     "rl": {
       "anyOf": [
@@ -750,7 +726,6 @@
         }
       ],
       "default": null,
-      "description": "RL algorithm selection (e.g., A2C, PPO) and its specific hyperparameters.",
       "title": "Rl Algo"
     },
     "wandb": {

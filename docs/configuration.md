@@ -4,6 +4,7 @@ Below is an automatically generated list of all configuration parameters support
 
 ## Root Parameters
 
+- **`clean_single_backtests`**: Flag to clean the single backtest data ('test' subdirs) during multi-pair/multi-iteration backtesting.
 - **`generate_plots`**: Generate plots if true.
 - **`save_for_training`**: Flag to auto-save backtest data in data/rl_training for RL training.
 - **`rl_model_folder`**: Name of the folder with RL model, if null take first one or run without RL.
@@ -11,10 +12,9 @@ Below is an automatically generated list of all configuration parameters support
 - **`settings`**: General strategy parameters, including volatility and time decay bounds.
 - **`pair_selection`**: Configuration for statistical tests and top pair filtering.
 - **`performance`**: Trading logic flags, SL types, and backtest execution parameters.
-- **`fetch_historical_data`**: Parameters for the historical data downloading utility.
-- **`generate_assets_list`**: Parameters for the asset universe generation and filtering utility.
+- **`data_fetching_pipeline`**: *No description provided*
 - **`rl`**: Reinforcement Learning environment parameters and training settings.
-- **`rl_algo`**: RL algorithm selection (e.g., A2C, PPO) and its specific hyperparameters.
+- **`rl_algo`**: *No description provided*
 - **`wandb`**: Weights & Biases configuration for experiment tracking and logging.
 
 ---
@@ -34,19 +34,12 @@ Below is an automatically generated list of all configuration parameters support
 - **`ent_coef`**: Entropy coefficient for the loss calculation. Higher values encourage more exploration.
 
 
-### FetchHistoricalData
-- **`interval`**: Data timeframe for the fetcher. Options: ['1d', '4h', '1h', '30m', '15m', '5m', '3m', '1m']
-- **`limit_per_request`**: Maximum number of data points per single API request.
-- **`timeout`**: Network timeout in seconds for API calls.
-
-
-### GenerateAssetsList
+### DataFetchingPipeline
 - **`top_n`**: Number of top assets to select based on volume/liquidity.
 - **`start`**: Start date for evaluating asset liquidity and volume (YYYY-MM-DD).
 - **`end`**: End date for evaluating asset liquidity and volume (YYYY-MM-DD).
 - **`test_end`**: End date for test (YYYY-MM-DD).
 - **`iterations`**: Number of iterations (monthly) to fetch historical data.
-- **`limit_per_request`**: API limit for asset listing requests.
 - **`whitelist`**: List of tickers to forcibly include in the final list.
 - **`blacklist`**: List of tickers to forcibly exclude from the final list.
 
@@ -72,9 +65,11 @@ Below is an automatically generated list of all configuration parameters support
 
 ### Performance
 - **`use_rl`**: Flag to use RL model during backtest.
+- **`autonomous_agent`**: Flag to set a risk management layer for an agent. If True, agent is autonomously deciding about exit. If false, agent is forced to exit while take profit or stop loss hit.
+- **`leverage`**: Leverage ratio.
 - **`z_score_window`**: Z-Score lookback window size.
 - **`entry_threshold`**: Z-score threshold to open a position.
-- **`exit_threshold`**: Z-score threshold to close a position. Can be positive or negative (also equals to -entry_threshold).
+- **`exit_threshold`**: Z-score threshold to close a position.
 - **`stop_loss`**: Stop loss multiplier (e.g., 1.05 for 5% from entry_threshold), null if trade without SL.
 - **`iterations`**: Number of backtest iterations (monthly).
 - **`beta_hedge`**: Hedge ratio mode. Options: ['no_hedge', 'static', 'rolling']
@@ -87,17 +82,28 @@ Below is an automatically generated list of all configuration parameters support
 - **`end`**: End date for test (YYYY-MM-DD).
 
 
+### PolicyKwargs
+- **`lstm_hidden_size`**: Size of the hidden state in the LSTM cell.
+- **`n_lstm_layers`**: Number of stacked LSTM layers (usually 1 is sufficient).
+- **`shared_lstm`**: If true, uses a shared LSTM backbone for both Actor and Critic. If false, creates separate LSTMs.
+- **`enable_critic_lstm`**: If true, includes an LSTM layer in the Critic network (only relevant if shared_lstm is false).
+
+
 ### RL
 - **`training_folder`**: Name of the folder with training data, if null take first one.
-- **`reward`**: Type of RL reward. Options: ['pnl', 'pnl_signal']
-- **`obs_space_type`**: Type of observation space. Options: ['minimal', 'standard', 'full']
+- **`reward`**: Type of RL reward. Options: ['StepPnLReward', 'TradePnLReward', 'HybridActionReward']
+- **`reward_lambda`**: Lambda for reward function.
+- **`fee_multiplier`**: Fee Multiplier for reward function.
+- **`obs_space_type`**: Type of observation space. Options: ['autonomous', 'standard', 'full']
 - **`passes_per_pair`**: Number of passes per pair during training.
 - **`seed`**: Seed for random number generator.
 - **`verbose`**: Verbosity level in training.
+- **`freeze_std`**: Flag to use fixed std from entry while calculating in-position Z-Score in RL.
+- **`time_decay_stop`**: Flag to always close position when time in position is >= Z-Score window.
 
 
 ### RLAlgoDefault
-- **`rl_algo`**: *No description provided*
+- **`rl_algo`**: RL algorithm selection. Options: ['recurrent_ppo', 'a2c_baseline']
 
 
 ### RecurrentPPO
@@ -108,6 +114,7 @@ Below is an automatically generated list of all configuration parameters support
 - **`gamma`**: Discount factor for future rewards (between 0 and 1).
 - **`ent_coef`**: Entropy coefficient for the loss calculation. Higher values encourage more exploration.
 - **`clip_range`**: Range for clipping the surrogate objective. Prevents overly large policy updates to ensure stability (typically 0.2).
+- **`policy_kwargs`**: *No description provided*
 
 
 ### Settings

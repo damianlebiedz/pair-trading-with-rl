@@ -4,7 +4,8 @@ import pandas as pd
 from gymnasium import spaces
 from stable_baselines3.common.monitor import Monitor
 
-from modules.core.enums import ObsSpaceType, RLRewards, Source
+import modules.learning.rewards as rewards_module
+from modules.core.enums import ObsSpaceType, Source, RLRewards
 from modules.core.indicators import calculate_z_score, calculate_spread_statistics
 from modules.performance.models import (
     StrategyResult,
@@ -12,15 +13,18 @@ from modules.performance.models import (
 )
 from modules.core.execution import TradeExecutor
 from modules.learning.models import AgentState
-from modules.learning.rewards import RewardScheme, PnLReward, PnLSignalReward
 from stable_baselines3.common.vec_env import DummyVecEnv
 
 
 def build_multi_env(
     results: list[StrategyResult],
-    rl_reward: str,
+    rl_reward: RLRewards,
     obs_space_type: ObsSpaceType,
     fee_rate: float,
+    freeze_std: bool,
+    time_decay_stop: bool,
+    reward_lambda: float = 1.0,
+    fee_multiplier: float = 0.2,
     seed: int = None,
 ) -> DummyVecEnv:
     env_fns = []
@@ -28,16 +32,18 @@ def build_multi_env(
     for res in results:
 
         def make_env(result=res):
-            reward_map = {
-                RLRewards.PNL: PnLReward,
-                RLRewards.PNL_SIGNAL: PnLSignalReward,
-            }
-            reward_schema = reward_map[rl_reward]()
+            reward_class = getattr(rewards_module, rl_reward.value)
+            reward_schema = reward_class(
+                reward_lambda=reward_lambda, fee_multiplier=fee_multiplier
+            )
+
             env = PairsTradingEnv(
                 result=result,
                 reward_scheme=reward_schema,
                 obs_space_type=obs_space_type,
                 fee_rate=fee_rate,
+                freeze_std=freeze_std,
+                time_decay_stop=time_decay_stop,
             )
             return Monitor(env)
 
@@ -77,9 +83,11 @@ class PairsTradingEnv(gym.Env):
     def __init__(
         self,
         result: StrategyResult,
-        reward_scheme: RewardScheme,
+        reward_scheme: rewards_module.RewardScheme,
         obs_space_type: ObsSpaceType,
         fee_rate: float,
+        freeze_std: bool,
+        time_decay_stop: bool,
     ):
         super(PairsTradingEnv, self).__init__()
 
@@ -88,6 +96,8 @@ class PairsTradingEnv(gym.Env):
         self.position_state = PositionState()
         self.action_space = spaces.Discrete(3)
         self.fee_rate = fee_rate
+        self.freeze_std = freeze_std
+        self.time_decay_stop = time_decay_stop
 
         obs_shape = AgentState.get_obs_shape(obs_space_type)
 
@@ -138,15 +148,21 @@ class PairsTradingEnv(gym.Env):
         return self.state.get_state_arr(self.obs_space_type), {}
 
     def step(self, action):
-        self.position_state.prev_position = self.position_state.position
+        prev_pos = self.position_state.position
+        self.position_state.prev_position = prev_pos
 
         mapping = {0: -1.0, 1: 0.0, 2: 1.0}
         target_position = mapping[int(action)]
 
         row = self.df.iloc[self.current_step]
-        price_x = row[self.result.ticker_x]
-        price_y = row[self.result.ticker_y]
-        position = row["position"]
+        price_x = row[f"next_open_{self.result.ticker_x}"]
+        price_y = row[f"next_open_{self.result.ticker_y}"]
+        position_signal = row["position"]
+        exec_win = row["window"]
+
+        if self.time_decay_stop and self.position_state.position != 0:
+            if self.position_state.time_in_pos >= exec_win:
+                target_position = 0.0
 
         if (
             self.position_state.position != 0
@@ -171,7 +187,7 @@ class PairsTradingEnv(gym.Env):
                 X_slice=slice_x, Y_slice=slice_y, beta=exec_beta
             )
 
-            exec_std = self.position_state.entry_std
+            exec_std = self.position_state.entry_std if self.freeze_std else current_std
         else:
             exec_beta = row["market_beta"]
             exec_std = row["market_std"]
@@ -189,7 +205,6 @@ class PairsTradingEnv(gym.Env):
             equity=self.equity,
             exec_logger=None,
             std=exec_std,
-            sl_lock=False,
         )
 
         self.equity += step_pnl - step_fees
@@ -207,6 +222,7 @@ class PairsTradingEnv(gym.Env):
             self.current_trade_duration += 1
 
         trade_ended = (prev_pos != 0) and (curr_pos != prev_pos)
+        final_trade_pnl = self.current_trade_net_pnl if trade_ended else 0.0
 
         if trade_ended:
             self.ep_trades += 1
@@ -214,11 +230,7 @@ class PairsTradingEnv(gym.Env):
                 self.ep_wins += 1
             self.ep_total_hold_time += self.current_trade_duration
 
-            self.current_trade_net_pnl = 0.0
-            self.current_trade_duration = 0
-
         self.current_step += 1
-
         is_bankrupt = self.equity <= 0.0
         terminated = (self.current_step >= len(self.df) - 1) or is_bankrupt
         truncated = False
@@ -237,25 +249,29 @@ class PairsTradingEnv(gym.Env):
             "step_fees": step_fees,
             "is_bankrupt": is_bankrupt,
             "ep_total_fees": self.ep_total_fees,
+            "win_rate": self.ep_wins / self.ep_trades if self.ep_trades > 0 else 0.0,
+            "avg_hold_time": (
+                self.ep_total_hold_time / self.ep_trades if self.ep_trades > 0 else 0.0
+            ),
         }
-
-        if self.ep_trades > 0:
-            info["win_rate"] = self.ep_wins / self.ep_trades
-            info["avg_hold_time"] = self.ep_total_hold_time / self.ep_trades
-        else:
-            info["win_rate"] = 0.0
-            info["avg_hold_time"] = 0.0
 
         reward = self.reward_scheme.calculate(
             step_pnl=step_pnl,
             equity=self.equity,
-            position=self.position_state.position,
-            signal=position,
+            prev_position=prev_pos,
+            curr_position=curr_pos,
+            signal=position_signal,
             step_fees=step_fees,
             is_bankrupt=is_bankrupt,
             fee_rate=self.fee_rate,
+            trade_ended=trade_ended,
+            trade_pnl=final_trade_pnl,
             win=exec_win,
         )
+
+        if trade_ended:
+            self.current_trade_net_pnl = 0.0
+            self.current_trade_duration = 0
 
         return self._get_observation(), reward, terminated, truncated, info
 
@@ -269,12 +285,9 @@ class PairsTradingEnv(gym.Env):
     def _update_state_object(self):
         row = self.df.iloc[self.current_step]
 
-        window = row.get("window")
+        window = int(row.get("window"))
         market_z_score = row.get("market_z_score")
-        market_beta = row.get("market_beta")
-        market_std = row.get("market_std")
         hurst = row.get("hurst")
-        market_vol = row.get("market_vol")
         signal = row.get("position")
 
         if (
@@ -293,11 +306,11 @@ class PairsTradingEnv(gym.Env):
                 self.df[source_y_col].iloc[start_idx : self.current_step + 1].values
             )
 
-            spread, mean, _ = calculate_spread_statistics(
+            spread, mean, current_std = calculate_spread_statistics(
                 X_slice=slice_x, Y_slice=slice_y, beta=self.position_state.entry_beta
             )
 
-            std = self.position_state.entry_std
+            std = self.position_state.entry_std if self.freeze_std else current_std
 
             z_score = calculate_z_score(spread=spread, mean=mean, std=std)
         else:
@@ -308,20 +321,10 @@ class PairsTradingEnv(gym.Env):
         if pd.notna(window) and window > 0:
             norm_time = time_in_pos / window
 
-        drawdown_pct = 0.0
-        if self.peak_equity > 0:
-            drawdown_pct = (self.peak_equity - self.equity) / self.peak_equity
-
         self.state = AgentState(
-            market_z_score=float(market_z_score),
             z_score=float(z_score),
-            market_beta=market_beta,
-            market_std=float(market_std),
             hurst=float(hurst),
-            window=int(window),
             position=float(self.position_state.position),
             signal=float(signal),
             norm_time_in_pos=float(norm_time),
-            drawdown_pct=float(drawdown_pct),
-            current_market_vol=float(market_vol),
         )

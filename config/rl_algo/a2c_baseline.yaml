@@ -5,5 +5,5 @@ algo_name: a2c_baseline
 params:
   learning_rate: 0.0007
   n_steps: 5
-  gamma: 0.99
+  gamma: 0.999
   ent_coef: 0.01

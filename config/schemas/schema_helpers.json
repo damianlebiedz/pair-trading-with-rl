@@ -1,116 +1,59 @@
 {
-  "$defs": {
-    "FetchHistoricalData": {
-      "properties": {
-        "interval": {
-          "$ref": "#/$defs/Interval",
-          "description": "Data timeframe for the fetcher. Options: ['1d', '4h', '1h', '30m', '15m', '5m', '3m', '1m']"
-        },
-        "limit_per_request": {
-          "default": 1000,
-          "description": "Maximum number of data points per single API request.",
-          "title": "Limit Per Request",
-          "type": "integer"
-        },
-        "timeout": {
-          "default": 30,
-          "description": "Network timeout in seconds for API calls.",
-          "title": "Timeout",
-          "type": "integer"
-        }
-      },
-      "required": [
-        "interval"
-      ],
-      "title": "FetchHistoricalData",
-      "type": "object"
+  "properties": {
+    "top_n": {
+      "description": "Number of top assets to select based on volume/liquidity.",
+      "exclusiveMinimum": 0,
+      "title": "Top N",
+      "type": "integer"
     },
-    "GenerateAssetsList": {
-      "properties": {
-        "top_n": {
-          "description": "Number of top assets to select based on volume/liquidity.",
-          "exclusiveMinimum": 0,
-          "title": "Top N",
-          "type": "integer"
-        },
-        "start": {
-          "description": "Start date for evaluating asset liquidity and volume (YYYY-MM-DD).",
-          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-          "title": "Start",
-          "type": "string"
-        },
-        "end": {
-          "description": "End date for evaluating asset liquidity and volume (YYYY-MM-DD).",
-          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-          "title": "End",
-          "type": "string"
-        },
-        "test_end": {
-          "description": "End date for test (YYYY-MM-DD).",
-          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-          "title": "Test End",
-          "type": "string"
-        },
-        "iterations": {
-          "description": "Number of iterations (monthly) to fetch historical data.",
-          "exclusiveMinimum": 0,
-          "title": "Iterations",
-          "type": "integer"
-        },
-        "limit_per_request": {
-          "default": 1000,
-          "description": "API limit for asset listing requests.",
-          "title": "Limit Per Request",
-          "type": "integer"
-        },
-        "whitelist": {
-          "description": "List of tickers to forcibly include in the final list.",
-          "items": {
-            "type": "string"
-          },
-          "title": "Whitelist",
-          "type": "array"
-        },
-        "blacklist": {
-          "description": "List of tickers to forcibly exclude from the final list.",
-          "items": {
-            "type": "string"
-          },
-          "title": "Blacklist",
-          "type": "array"
-        }
-      },
-      "required": [
-        "top_n",
-        "start",
-        "end",
-        "test_end",
-        "iterations"
-      ],
-      "title": "GenerateAssetsList",
-      "type": "object"
-    },
-    "Interval": {
-      "enum": [
-        "1d",
-        "4h",
-        "1h",
-        "30m",
-        "15m",
-        "5m",
-        "3m",
-        "1m"
-      ],
-      "title": "Interval",
+    "start": {
+      "description": "Start date for evaluating asset liquidity and volume (YYYY-MM-DD).",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "title": "Start",
       "type": "string"
+    },
+    "end": {
+      "description": "End date for evaluating asset liquidity and volume (YYYY-MM-DD).",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "title": "End",
+      "type": "string"
+    },
+    "test_end": {
+      "description": "End date for test (YYYY-MM-DD).",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "title": "Test End",
+      "type": "string"
+    },
+    "iterations": {
+      "description": "Number of iterations (monthly) to fetch historical data.",
+      "exclusiveMinimum": 0,
+      "title": "Iterations",
+      "type": "integer"
+    },
+    "whitelist": {
+      "description": "List of tickers to forcibly include in the final list.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Whitelist",
+      "type": "array"
+    },
+    "blacklist": {
+      "description": "List of tickers to forcibly exclude from the final list.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Blacklist",
+      "type": "array"
     }
   },
-  "anyOf": [
-    {
-      "$ref": "#/$defs/FetchHistoricalData"
-    },
-    {
-      "$ref": "#/$defs/GenerateAssetsList"
-    }
-  ]
+  "required": [
+    "top_n",
+    "start",
+    "end",
+    "test_end",
+    "iterations"
+  ],
+  "title": "DataFetchingPipeline",
+  "type": "object"
 }

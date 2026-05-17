@@ -4,10 +4,10 @@ algo_name: recurrent_ppo
 
 params:
   learning_rate: 0.0003
-  n_steps: 128
+  n_steps: 256
   batch_size: 256
   n_epochs: 10
-  gamma: 0.99
+  gamma: 0.999
   ent_coef: 0.01
   clip_range: 0.2
   policy_kwargs:

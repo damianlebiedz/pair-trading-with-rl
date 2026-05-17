@@ -20,6 +20,9 @@ from modules.performance.models import (
 )
 from modules.performance.stats import calculate_stats
 from modules.learning.models import AgentState
+from modules.utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class Strategy:
@@ -42,6 +45,8 @@ class Strategy:
         time_decay_sl: bool,
         time_decay_params: tuple[int, int],
         freeze_std: bool,
+        autonomous_agent: bool,
+        leverage: float,
         agent: RLAgentAdapter | None = None,
         source: Source = Source.LOG.value,
     ):
@@ -60,6 +65,8 @@ class Strategy:
         self.time_decay_sl = time_decay_sl
         self.time_decay_params = time_decay_params
         self.freeze_std = freeze_std
+        self.autonomous_agent = autonomous_agent
+        self.leverage = leverage
         self.agent = agent
         self.source = source
 
@@ -114,6 +121,9 @@ class Strategy:
         y_col = self.ticker_y
         source_x_col = f"{x_col}_{self.source}"
         source_y_col = f"{y_col}_{self.source}"
+
+        df[f"next_open_{x_col}"] = df[f"open_{x_col}"].shift(-1).ffill()
+        df[f"next_open_{y_col}"] = df[f"open_{y_col}"].shift(-1).ffill()
 
         offset = pd.Timedelta(self.interval.value)
 
@@ -209,17 +219,97 @@ class Strategy:
         else:
             stop_loss_thr = None
 
+        total_net_pnl = 0.0
+        drawdown_pct = 0.0
         is_bankrupt = False
+        is_delisted = False
         results_buffer = []
 
         for i in range(test_start_pos, len(df)):
             price_x = df[x_col].iloc[i]
             price_y = df[y_col].iloc[i]
+
+            exec_px = df[f"next_open_{x_col}"].iloc[i]
+            exec_py = df[f"next_open_{y_col}"].iloc[i]
+
             idx = df.index[i]
 
             z_score = spread = mean = std = None
             market_z_score = market_spread = market_mean = market_std = None
             market_hurst = None
+
+            if pd.isna(price_x) or pd.isna(price_y):
+                if not is_delisted:
+                    is_delisted = True
+                    logger.info(
+                        f"[{idx}] Asset delisted/NaN price detected! Force closing position for {self.ticker_x}-{self.ticker_y}."
+                    )
+                    if position_state.position != 0:
+                        prev_exec_px = df[f"next_open_{x_col}"].iloc[i - 1]
+                        prev_exec_py = df[f"next_open_{y_col}"].iloc[i - 1]
+
+                        pnl, fees = TradeExecutor.call_close_position(
+                            fee_rate=self.fee_rate,
+                            position_state=position_state,
+                            price_x=prev_exec_px,
+                            price_y=prev_exec_py,
+                            exec_logger=exec_logger,
+                        )
+
+                        total_pnl += pnl
+                        total_fees += fees
+                        total_net_pnl = total_pnl - total_fees
+                        equity = initial_cash + total_net_pnl
+
+                        position_state.clear_position()
+
+                        if equity <= 1e-6:
+                            is_bankrupt = True
+                            equity = 0.0
+                            drawdown_pct = -1.0
+                            total_net_pnl = -initial_cash
+                            if total_pnl < -initial_cash:
+                                total_pnl = -initial_cash
+
+                results_buffer.append(
+                    {
+                        "index": idx,
+                        "z_score": None,
+                        "spread": None,
+                        "mean": None,
+                        "std": None,
+                        "beta": (
+                            position_state.entry_beta or market_beta
+                            if not is_bankrupt
+                            else None
+                        ),
+                        "market_z_score": None,
+                        "market_spread": None,
+                        "market_mean": None,
+                        "market_std": None,
+                        "market_beta": None,
+                        "hurst": None,
+                        "window": z_score_window,
+                        "entry_thr": entry_threshold,
+                        "exit_thr": exit_threshold,
+                        "sl_thr": None,
+                        "sl_lock": 0,
+                        "q_x": 0,
+                        "q_y": 0,
+                        "w_x": None,
+                        "w_y": None,
+                        "signal": 0,
+                        "position": 0,
+                        "equity": equity,
+                        "total_pnl": total_pnl,
+                        "total_fees": total_fees,
+                        "total_net_pnl": total_net_pnl,
+                        "total_return": total_pnl / initial_cash,
+                        "total_net_return": total_net_pnl / initial_cash,
+                        "drawdown_pct": drawdown_pct,
+                    }
+                )
+                continue
 
             if is_bankrupt:
                 total_net_pnl = -initial_cash
@@ -318,11 +408,7 @@ class Strategy:
                     drawdown_pct = 0.0
 
                 if position_state.sl_lock:
-                    if (
-                        z_score is not None
-                        and prev_z_score is not None
-                        and exit_threshold is not None
-                    ):
+                    if z_score is not None and prev_z_score is not None:
                         break_above = prev_z_score > exit_threshold >= z_score
                         break_below = prev_z_score < -exit_threshold <= z_score
                         if break_above or break_below:
@@ -330,30 +416,43 @@ class Strategy:
 
                 market_hurst = precalc_hurst_free[i]
 
-                action, sl_lock = TradeExecutor.decide(
+                action, hit_sl, hit_tp = TradeExecutor.decide(
                     position_state=position_state,
                     signal=signal,
                     z_score=z_score,
                     exit_threshold=exit_threshold,
                 )
-                if sl_lock and self.sl_lock:
+                if (
+                    hit_sl
+                    and self.sl_lock
+                    and (not self.autonomous_agent or not self.agent)
+                ):
                     position_state.sl_lock = True
 
                 if self.agent:
-                    current_state = AgentState(
-                        market_z_score=market_z_score,
-                        z_score=z_score,
-                        market_std=market_std,
-                        market_beta=market_beta,
-                        hurst=market_hurst,
-                        window=z_score_window,
-                        position=position_state.position,
-                        signal=action,
-                        norm_time_in_pos=position_state.time_in_pos / z_score_window,
-                        drawdown_pct=drawdown_pct,
-                        current_market_vol=df["market_vol"].iloc[i],
-                    )
-                    action = self.agent.get_action(current_state)
+                    if z_score is None or pd.isna(z_score):
+                        action = 0.0
+                    elif not self.autonomous_agent and (hit_sl or hit_tp):
+                        action = 0.0
+                    elif (
+                        self.autonomous_agent
+                        and self.time_decay_sl
+                        and position_state.position != 0
+                        and position_state.time_in_pos >= z_score_window
+                    ):
+                        action = 0.0
+                    else:
+                        current_state = AgentState(
+                            z_score=z_score,
+                            hurst=market_hurst,
+                            position=position_state.position,
+                            signal=action,
+                            norm_time_in_pos=position_state.time_in_pos
+                            / z_score_window,
+                        )
+                        raw_action = self.agent.get_action(current_state)
+                        mapping = {0: -1.0, 1: 0.0, 2: 1.0}
+                        action = mapping[int(raw_action)]
 
                 position_state.open_time = idx
 
@@ -362,13 +461,13 @@ class Strategy:
                     position_state=position_state,
                     action=action,
                     stop_loss_thr=stop_loss_thr,
-                    price_x=price_x,
-                    price_y=price_y,
+                    price_x=exec_px,
+                    price_y=exec_py,
                     beta=beta,
                     equity=equity,
+                    leverage=self.leverage,
                     exec_logger=exec_logger,
                     std=std,
-                    sl_lock=position_state.sl_lock,
                 )
 
                 prev_z_score = z_score
@@ -379,7 +478,7 @@ class Strategy:
 
                 equity = initial_cash + total_net_pnl
 
-                if equity < 0.0:
+                if equity <= 1e-6:
                     is_bankrupt = True
                     position_state.clear_position()
                     equity = 0.0
@@ -438,8 +537,33 @@ class Strategy:
                     exec_logger=exec_logger,
                 )
 
+                results_buffer[-1]["total_pnl"] += pnl
                 results_buffer[-1]["total_fees"] += fees
                 results_buffer[-1]["total_net_pnl"] += pnl - fees
+                results_buffer[-1]["equity"] += pnl - fees
+
+                if results_buffer[-1]["equity"] <= 1e-6:
+                    results_buffer[-1]["equity"] = 0.0
+                    results_buffer[-1]["total_net_pnl"] = -initial_cash
+                    if results_buffer[-1]["total_pnl"] < -initial_cash:
+                        results_buffer[-1]["total_pnl"] = -initial_cash
+                    results_buffer[-1]["drawdown_pct"] = -1.0
+                else:
+                    peak = max(equity_peak, results_buffer[-1]["equity"])
+                    if peak > 0:
+                        results_buffer[-1]["drawdown_pct"] = (
+                            results_buffer[-1]["equity"] - peak
+                        ) / peak
+                    else:
+                        results_buffer[-1]["drawdown_pct"] = 0.0
+
+                results_buffer[-1]["total_return"] = (
+                    results_buffer[-1]["total_pnl"] / initial_cash
+                )
+                results_buffer[-1]["total_net_return"] = (
+                    results_buffer[-1]["total_net_pnl"] / initial_cash
+                )
+
                 results_buffer[-1]["q_x"] = 0
                 results_buffer[-1]["q_y"] = 0
                 results_buffer[-1]["w_x"] = None

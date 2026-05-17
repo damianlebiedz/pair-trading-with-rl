@@ -5,29 +5,34 @@ from modules.performance.models import StrategyResult
 
 def stitch_strategy_results(
     results: list[StrategyResult],
+    initial_cash: float,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
-    Stitches sequential strategy results into a continuous timeline (Horizontal/Chronological Merge).
+    Stitches sequential strategy results into a continuous timeline (Horizontal/Chronological Merge)
+    with compounding applied to both the equity curve and the execution logs.
 
     This function is designed for Multi-Period analysis (e.g., Walk-Forward Optimization)
     where the simulation is executed in distinct, consecutive time chunks. It ensures
-    that the equity curve remains continuous by applying the accumulated PnL/Return
-    from the previous period as an offset to the next.
+    that the equity curve remains continuous by applying a compounding factor based on
+    the accumulated Net PnL from previous periods.
 
     Key operations:
     - Preserves chronological order of the provided results.
-    - Adjusts cumulative columns (`total_pnl`, `total_net_pnl`, `total_return`,
-      `total_net_return`) so that period N starts with the final values of period N-1.
-    - Concatenates execution logs to form a complete trading history.
+    - Scales execution logs (`pnl`, `fees`, `entry_equity`) by the current compounding factor.
+    - Adjusts cumulative cash columns (`total_pnl`, `total_net_pnl`, `total_fees`) scaling
+      them by the compounding factor and adding the offset from the previous period.
+    - Recalculates percentage returns (`total_return`, `total_net_return`) based on the globally compounded PnL.
+    - Concatenates execution logs to form a complete, compounded trading history.
 
     Args:
         results (list[StrategyResult]): A list of strategy results ordered chronologically
             (e.g., Period 1, Period 2, ...).
+        initial_cash (float): The starting capital, used to calculate the compounding factor.
 
     Returns:
         tuple[pd.DataFrame, pd.DataFrame]:
-            1. merged_df: A continuous time-series DataFrame with adjusted cumulative metrics.
-            2. merged_exec_log_df: A combined execution log containing trades from all
+            1. merged_df: A continuous time-series DataFrame with compounded cumulative metrics.
+            2. merged_exec_log_df: A combined execution log containing scaled trades from all
                periods, sorted by time.
 
     Raises:
@@ -42,12 +47,11 @@ def stitch_strategy_results(
     cumulative_cols = [
         "total_pnl",
         "total_net_pnl",
-        "total_return",
-        "total_net_return",
         "total_fees",
     ]
 
     offsets = {col: 0.0 for col in cumulative_cols}
+    compounding_factor = 1.0
 
     for res in results:
         df = res.data.dropna(subset=["equity"]).copy()
@@ -55,27 +59,40 @@ def stitch_strategy_results(
         if "open_time" in df.columns:
             df = df.set_index("open_time")
 
-        for col in cumulative_cols:
-            if col in df.columns:
-                df[col] += offsets[col]
-
-        if "equity" in df.columns:
-            df["equity"] += offsets.get("total_net_pnl", 0.0)
-
-        merged_dfs.append(df)
-
         if not res.exec_logger.empty:
             temp_exec_df = res.exec_logger.copy()
-
+            if "pnl" in temp_exec_df.columns:
+                temp_exec_df["pnl"] *= compounding_factor
+            if "fees" in temp_exec_df.columns:
+                temp_exec_df["fees"] *= compounding_factor
             if "entry_equity" in temp_exec_df.columns:
-                temp_exec_df["entry_equity"] += offsets.get("total_net_pnl", 0.0)
+                temp_exec_df["entry_equity"] *= compounding_factor
 
             exec_dfs.append(temp_exec_df)
 
         if not df.empty:
             for col in cumulative_cols:
                 if col in df.columns:
+                    df[col] = (df[col] * compounding_factor) + offsets[col]
+
+            if "total_net_pnl" in df.columns:
+                df["equity"] = initial_cash + df["total_net_pnl"]
+                df["total_net_return"] = df["total_net_pnl"] / initial_cash
+
+            if "total_pnl" in df.columns:
+                df["total_return"] = df["total_pnl"] / initial_cash
+
+            merged_dfs.append(df)
+
+            for col in cumulative_cols:
+                if col in df.columns:
                     offsets[col] = df[col].iloc[-1]
+
+            if "total_net_pnl" in df.columns:
+                current_equity = initial_cash + offsets["total_net_pnl"]
+                compounding_factor = current_equity / initial_cash
+        else:
+            merged_dfs.append(df)
 
     final_df = pd.concat(merged_dfs).sort_index()
     final_df = final_df[~final_df.index.duplicated(keep="first")]
