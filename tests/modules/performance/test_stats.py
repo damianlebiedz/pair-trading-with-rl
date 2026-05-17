@@ -73,41 +73,33 @@ class TestCalculateStatsYearLogic:
     def test_single_leap_year(self) -> None:
         gross = list(np.linspace(0, 500, 60))
         df = _strategy_df(gross, start="2024-01-15")
-        result = calculate_stats(
-            df, pd.DataFrame(), 10_000.0, Interval.D1, 0.02
-        )
+        result = calculate_stats(df, pd.DataFrame(), 10_000.0, Interval.D1, 0.02)
         assert result.loc["total_return", "gross"] is not None
 
     def test_single_non_leap_year(self) -> None:
         gross = list(np.linspace(0, 300, 50))
         df = _strategy_df(gross, start="2023-02-01")
-        result = calculate_stats(
-            df, pd.DataFrame(), 10_000.0, Interval.D1, 0.02
+        result = calculate_stats(df, pd.DataFrame(), 10_000.0, Interval.D1, 0.02)
+        assert result.loc["cagr", "gross"] is not None or pd.isna(
+            result.loc["cagr", "gross"]
         )
-        assert result.loc["cagr", "gross"] is not None or pd.isna(result.loc["cagr", "gross"])
 
     def test_multi_year_span(self) -> None:
         gross = list(np.linspace(0, 800, 400))
         df = _strategy_df(gross, start="2023-01-01")
-        result = calculate_stats(
-            df, pd.DataFrame(), 10_000.0, Interval.D1, 0.02
-        )
+        result = calculate_stats(df, pd.DataFrame(), 10_000.0, Interval.D1, 0.02)
         assert result.shape[0] == 19
 
     def test_jan_first_end_adjustment(self) -> None:
         gross = [0.0, 50.0, 100.0]
         df = _strategy_df(gross, start="2024-06-01")
-        df = df.reindex(
-            list(df.index) + [pd.Timestamp("2025-01-01")]
-        )
+        df = df.reindex(list(df.index) + [pd.Timestamp("2025-01-01")])
         df.loc[pd.Timestamp("2025-01-01"), ["equity", "total_pnl", "total_net_pnl"]] = [
             10_150.0,
             150.0,
             140.0,
         ]
-        result = calculate_stats(
-            df, pd.DataFrame(), 10_000.0, Interval.D1, 0.02
-        )
+        result = calculate_stats(df, pd.DataFrame(), 10_000.0, Interval.D1, 0.02)
         assert not result.empty
 
     def test_end_year_clamped_to_start_year(self) -> None:
@@ -119,9 +111,7 @@ class TestCalculateStatsYearLogic:
             },
             index=pd.DatetimeIndex(["2025-06-01", "2025-01-01"]),
         )
-        result = calculate_stats(
-            df, pd.DataFrame(), 10_000.0, Interval.D1, 0.02
-        )
+        result = calculate_stats(df, pd.DataFrame(), 10_000.0, Interval.D1, 0.02)
         assert result.loc["total_return", "gross"] == pytest.approx(0.02, rel=1e-3)
 
 
@@ -132,49 +122,43 @@ class TestCalculateStatsTimeSeries:
         gross = np.cumsum(shocks).tolist()
         net = (np.array(gross) - 5).tolist()
         df = _strategy_df(gross, net, start="2024-01-01")
-        result = calculate_stats(
-            df, pd.DataFrame(), 10_000.0, Interval.H1, 0.03
-        )
+        result = calculate_stats(df, pd.DataFrame(), 10_000.0, Interval.H1, 0.03)
         assert result.loc["sharpe_ratio", "gross"] is not None
         assert result.loc["sortino_ratio", "gross"] is not None
         assert result.loc["max_drawdown", "gross"] >= 0
 
     def test_zero_volatility_and_nan_sharpe(self) -> None:
         df = _strategy_df([0.0, 100.0], start="2024-05-01")
-        result = calculate_stats(
-            df, pd.DataFrame(), 10_000.0, Interval.D1, 0.02
+        result = calculate_stats(df, pd.DataFrame(), 10_000.0, Interval.D1, 0.02)
+        assert (
+            pd.isna(result.loc["volatility", "gross"])
+            or result.loc["volatility", "gross"] is None
         )
-        assert pd.isna(result.loc["volatility", "gross"]) or result.loc["volatility", "gross"] is None
-        assert pd.isna(result.loc["sharpe_ratio", "gross"]) or result.loc["sharpe_ratio", "gross"] is None
+        assert (
+            pd.isna(result.loc["sharpe_ratio", "gross"])
+            or result.loc["sharpe_ratio", "gross"] is None
+        )
 
     def test_cagr_none_when_terminal_equity_non_positive(self) -> None:
         df = _strategy_df([0.0, -10_500.0], start="2024-04-01")
-        result = calculate_stats(
-            df, pd.DataFrame(), 10_000.0, Interval.D1, 0.02
-        )
+        result = calculate_stats(df, pd.DataFrame(), 10_000.0, Interval.D1, 0.02)
         assert pd.isna(result.loc["cagr", "gross"])
 
     def test_cagr_none_when_initial_equity_non_positive(self) -> None:
         df = _strategy_df([-10_500.0, -10_400.0], start="2024-04-01")
-        result = calculate_stats(
-            df, pd.DataFrame(), 10_000.0, Interval.D1, 0.02
-        )
+        result = calculate_stats(df, pd.DataFrame(), 10_000.0, Interval.D1, 0.02)
         assert pd.isna(result.loc["cagr", "gross"])
 
     def test_sortino_none_when_no_downside_returns(self) -> None:
         gross = list(np.linspace(0, 1000, 30))
         df = _strategy_df(gross, start="2024-07-01")
-        result = calculate_stats(
-            df, pd.DataFrame(), 10_000.0, Interval.D1, 0.0
-        )
+        result = calculate_stats(df, pd.DataFrame(), 10_000.0, Interval.D1, 0.0)
         assert pd.isna(result.loc["sortino_ratio", "gross"])
 
     def test_calmar_none_when_no_drawdown(self) -> None:
         gross = list(np.linspace(0, 500, 25))
         df = _strategy_df(gross, start="2024-08-01")
-        result = calculate_stats(
-            df, pd.DataFrame(), 10_000.0, Interval.D1, 0.02
-        )
+        result = calculate_stats(df, pd.DataFrame(), 10_000.0, Interval.D1, 0.02)
         assert result.loc["max_drawdown", "gross"] == pytest.approx(0.0, abs=1e-9)
         assert pd.isna(result.loc["calmar_ratio", "gross"])
 
@@ -182,9 +166,7 @@ class TestCalculateStatsTimeSeries:
         rng = np.random.default_rng(1)
         gross = np.cumsum(rng.normal(20, 80, 200)).tolist()
         df = _strategy_df(gross, start="2023-03-01")
-        result = calculate_stats(
-            df, pd.DataFrame(), 10_000.0, Interval.D1, 0.01
-        )
+        result = calculate_stats(df, pd.DataFrame(), 10_000.0, Interval.D1, 0.01)
         assert result.loc["sharpe_ratio_annual", "gross"] is not None or pd.isna(
             result.loc["sharpe_ratio_annual", "gross"]
         )
@@ -196,9 +178,7 @@ class TestCalculateStatsTimeSeries:
 class TestCalculateStatsTrades:
     def test_empty_exec_log_trade_defaults(self) -> None:
         df = _strategy_df([0.0, 50.0, 80.0])
-        result = calculate_stats(
-            df, pd.DataFrame(), 10_000.0, Interval.D1, 0.02
-        )
+        result = calculate_stats(df, pd.DataFrame(), 10_000.0, Interval.D1, 0.02)
         assert result.loc["win_count", "gross"] == 0
         assert result.loc["avg_trade_duration", "gross"] == 0.0
 
@@ -230,9 +210,7 @@ class TestCalculateStatsTrades:
 
     def test_result_is_rounded_dataframe(self) -> None:
         df = _strategy_df([0.0, 33.3333])
-        result = calculate_stats(
-            df, pd.DataFrame(), 10_000.0, Interval.D1, 0.02
-        )
+        result = calculate_stats(df, pd.DataFrame(), 10_000.0, Interval.D1, 0.02)
         assert isinstance(result, pd.DataFrame)
         assert list(result.columns) == ["gross", "net"]
         assert result.loc["total_return", "gross"] == pytest.approx(0.0033, abs=1e-4)

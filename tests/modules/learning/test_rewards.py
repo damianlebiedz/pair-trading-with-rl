@@ -57,15 +57,23 @@ class TestStepPnLReward:
 class TestTradePnLReward:
     def test_bankrupt(self) -> None:
         reward = TradePnLReward()
-        assert reward.calculate(1000, is_bankrupt=True, trade_ended=True, trade_pnl=50) == -1.0
+        assert (
+            reward.calculate(1000, is_bankrupt=True, trade_ended=True, trade_pnl=50)
+            == -1.0
+        )
 
     def test_no_trade_no_reward(self) -> None:
         reward = TradePnLReward()
-        assert reward.calculate(1000, is_bankrupt=False, trade_ended=False, trade_pnl=50) == 0.0
+        assert (
+            reward.calculate(1000, is_bankrupt=False, trade_ended=False, trade_pnl=50)
+            == 0.0
+        )
 
     def test_positive_trade_reward(self) -> None:
         reward = TradePnLReward()
-        assert reward.calculate(1000, is_bankrupt=False, trade_ended=True, trade_pnl=100) == pytest.approx(0.1)
+        assert reward.calculate(
+            1000, is_bankrupt=False, trade_ended=True, trade_pnl=100
+        ) == pytest.approx(0.1)
 
     def test_negative_trade_reward_scaled(self) -> None:
         reward = TradePnLReward(reward_lambda=3.0)

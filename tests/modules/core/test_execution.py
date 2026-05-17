@@ -265,7 +265,9 @@ class TestExecute:
         assert state.position == 0.0
         assert pnl < 0.0
 
-    def test_execute_with_exec_logger_on_open_and_close(self, open_time: pd.Timestamp) -> None:
+    def test_execute_with_exec_logger_on_open_and_close(
+        self, open_time: pd.Timestamp
+    ) -> None:
         logger = ExecLogger()
         state = PositionState(open_time=open_time)
 
