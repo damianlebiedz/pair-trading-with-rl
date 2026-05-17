@@ -72,7 +72,22 @@ class StepPnLReward(RewardScheme):
 
 class TradePnLReward(RewardScheme):
     """
-    TODO
+    Sparse, trade-based reward with configurable Asymmetric Loss Aversion.
+
+    Unlike StepPnLReward, the agent receives feedback only when a position is
+    closed (trade_ended), ignoring intra-trade drawdowns and temporary noise.
+    Based on Prospect Theory (Kahneman & Tversky) and risk-sensitive RL
+    (Mihatsch & Neuneier, 2002).
+
+    If reward_lambda = 1.0, finalized gains and losses are weighted symmetrically.
+    If reward_lambda > 1.0, losing trades are penalized more heavily than
+    winning trades are rewarded.
+
+    Formula:
+        r_trade = PnL_trade / Equity_t
+        R_t = r_trade           if trade_ended and r_trade >= 0
+            = r_trade * lambda  if trade_ended and r_trade < 0
+            = 0                 otherwise
     """
 
     def __init__(self, reward_lambda: float = 1.0, **_):
@@ -103,7 +118,30 @@ class TradePnLReward(RewardScheme):
 
 class HybridActionReward(RewardScheme):
     """
-    TODO
+    Hybrid reward combining sparse TradePnL with dense signal-action shaping.
+
+    Realized trade PnL uses the same asymmetric scaling as TradePnLReward.
+    On entry from flat (prev_position == 0), an immediate component Phi_t
+    reinforces alignment with the baseline mean-reversion signal (S_t) relative
+    to the round-trip fee 2 * fee_rate and tuning multiplier fee_multiplier (m).
+
+    This scheme tests guided exploration: omission and contrarian penalties
+    embed the baseline heuristic into the reward landscape rather than training
+    a fully autonomous policy (Yang et al., 2024).
+
+    Default fee_multiplier = 0.2 yields an action bonus of 40% of the
+    round-trip transaction cost (Phi_t = +2 * fee_rate * m when A_t = S_t).
+
+    Entry shaping (only when prev_position == 0 and signal != 0):
+        Phi_t = +2 * fee_rate * m       if curr_position == signal  (Action Bonus)
+              = -2 * fee_rate * m       if curr_position == 0        (Omission Penalty)
+              = -4 * fee_rate * m       otherwise                    (Contrarian Penalty)
+
+    On trade close:
+        R_trade = trade_pnl / equity, scaled by reward_lambda if negative.
+
+    Formula:
+        R_t = R_trade + Phi_t
     """
 
     def __init__(self, reward_lambda: float = 1.0, fee_multiplier: float = 0.2, **_):

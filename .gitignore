@@ -16,6 +16,4 @@ docs/*
 !docs/configuration.md
 !docs/list_of_assets.md
 
-.aiassistant/
-
 .env

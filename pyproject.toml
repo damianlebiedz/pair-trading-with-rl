@@ -38,6 +38,7 @@ packages = [{ include = "modules" }]
 ruff = "^0.3.0"
 mypy = "^1.9.0"
 black = "^24.0.0"
+pytest-cov = "^7.1.0"
 
 [tool.poetry.group.docs.dependencies]
 pdoc = "^16.0.0"

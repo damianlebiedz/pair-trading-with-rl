@@ -1,7 +1,8 @@
 x-base: &base_config
   build:
     context: .
-    image: research-paper-base
+    dockerfile: Dockerfile
+  image: research-paper-base
   env_file:
     - .env
   volumes:
@@ -13,9 +14,9 @@ x-base: &base_config
     - PYTHONPATH=/app
 
 services:
-  fetch_historical_data:
+  data_fetching_pipeline:
     <<: *base_config
-    command: python helpers/fetch_historical_data.py
+    command: python helpers/data_fetching_pipeline.py
     deploy:
       restart_policy:
         condition: on-failure
@@ -29,14 +30,6 @@ services:
     <<: *base_config
     command: python runners/train_agent.py
 
-  generate_assets_list:
+  update_config:
     <<: *base_config
-    command: python helpers/generate_assets_list.py
-    deploy:
-      restart_policy:
-        condition: on-failure
-        max_attempts: 3
-
-  generate_schemas:
-    <<: *base_config
-    command: python helpers/generate_schemas.py
+    command: python helpers/update_config.py
