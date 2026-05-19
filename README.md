@@ -61,6 +61,7 @@ Docker gives the same environment on every machine. Build once, then **prepend**
 docker compose build
 docker compose run --rm update_config
 docker compose run --rm data_fetching_pipeline
+docker compose run --rm run_pair_selection
 docker compose run --rm run_backtest
 docker compose run --rm train_agent
 ```
@@ -261,13 +262,13 @@ Command history and expected `results/` grouping for the study: [`docs/experimen
 
 ## Runners
 
-Runners are the main programs to execute. Each has a matching Docker Compose service (except pair selection-only).
+Runners are the main programs to execute. Each has a matching Docker Compose service.
 
-| Runner | Command (Poetry) | Compose service | What it does |
-|--------|------------------|-----------------|--------------|
-| Backtest | `poetry run python runners/run_backtest.py` | `run_backtest`  | Walk-forward backtest on many pairs: select cointegrated pairs → test with z-score rules (and optionally an RL agent for exits). |
-| RL training | `poetry run python runners/train_agent.py` | `train_agent`   | Trains A2C or Recurrent PPO on saved backtest trajectories under `data/rl_training/`. |
-| Pair selection only | `poetry run python runners/run_pair_selection.py` | -               | Runs only the pair-selection stage (debugging or custom workflows). |
+| Runner | Command (Poetry) | Compose service      | What it does |
+|--------|------------------|----------------------|--------------|
+| Backtest | `poetry run python runners/run_backtest.py` | `run_backtest`       | Walk-forward backtest on many pairs: select cointegrated pairs → test with z-score rules (and optionally an RL agent for exits). |
+| RL training | `poetry run python runners/train_agent.py` | `train_agent`        | Trains A2C or Recurrent PPO on saved backtest trajectories under `data/rl_training/`. |
+| Pair selection only | `poetry run python runners/run_pair_selection.py` | `run_pair_selection` | Runs only the pair-selection stage (debugging or custom workflows). |
 
 **Statistical backtest (baseline)** - default in `run_backtest.yaml` (`performance.use_rl=false`). For each month: pick pairs from `list_of_assets.json`, estimate hedge ratios, apply entry/exit/stop-loss rules on the z-score. Repeats for `performance.iterations` months.
 
