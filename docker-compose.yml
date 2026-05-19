@@ -26,6 +26,10 @@ services:
     <<: *base_config
     command: python runners/run_backtest.py
 
+  run_pair_selection:
+    <<: *base_config
+    command: python runners/run_pair_selection.py
+
   train_agent:
     <<: *base_config
     command: python runners/train_agent.py
