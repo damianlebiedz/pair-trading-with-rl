@@ -17,10 +17,10 @@ make download_artifacts
 
 This pulls two archives from Zenodo:
 
-| Archive | What you get                                                                                                                                                                                                       |
-|---------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **`data/`** | Inputs used in the paper: historical prices, monthly pair lists, RL training exports, and trained model checkpoints.                                                                                               |
-| **`results/`** | Complete outputs of every experiment run cited in the paper - each backtest is its own timestamped folder (config snapshot, per-pair returns, trades, logs). You can open these directly without running any code. |
+| Archive | What you get                                                                                                                                                                                                     |
+|---------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **`data/`** | Inputs used in the paper: historical prices, monthly pair lists, RL training exports, and trained model checkpoints.                                                                                             |
+| **`results/`** | Parquet outputs for every experiment cited in the paper (per-pair returns, trades, stats), plus `.hydra/config.yaml` and `.hydra/overrides.yaml` for reproducibility. |
 
 To **re-run** backtests on the frozen inputs, continue with [Quick start](#quick-start) below. Details: [Frozen artifacts (Zenodo)](#frozen-artifacts-zenodo).
 
@@ -390,13 +390,21 @@ Open `docs/api/index.html` in a browser after generation.
 
 Re-downloading years of klines or re-training RL for several hours is not always necessary - especially for reviewers who only need to verify reported metrics or inspect individual backtests from the paper.
 
-The `Makefile` target `download_artifacts` downloads both archived trees from Zenodo: **`data/`** (inputs and RL checkpoints) and **`results/`** (full experiment outputs). **Set the Zenodo URLs** in `Makefile` before running:
+The `Makefile` target `download_artifacts` downloads both archived trees from Zenodo. **Set the Zenodo URLs** in `Makefile` before running:
 
 ```bash
 make download_artifacts
 ```
 
+| Archive | Contents |
+|---------|----------|
+| **`data/`** | Historical prices, monthly pair lists, RL training exports, and trained model checkpoints. |
+| **`results/`** | Per-run parquet outputs (returns, trades, stats) and `.hydra/config.yaml` + `.hydra/overrides.yaml`. Does **not** include `execution.log` or `.hydra/hydra.yaml` (local filesystem paths). |
+
 Then run backtests against the extracted parquet files and evaluate the bundled RL checkpoints with `performance.use_rl=true`, without calling `data_fetching_pipeline` or `train_agent` again.
+
+**Disclaimer:**
+`data/historical` from Zenodo contains processed historical market data for Binance USD-M Futures. The raw data was originally sourced from the public AWS S3 repository Binance Data Vision via `helpers/data_fetching_pipeline.py` script. These raw market data remains the intellectual property of Binance. This dataset is not an official Binance release. It is provided here exclusively for non-commercial purposes to ensure the reproducibility of the associated academic research.
 
 ---
 
