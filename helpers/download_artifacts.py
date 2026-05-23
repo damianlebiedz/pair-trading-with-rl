@@ -14,7 +14,7 @@ def download_and_extract(url: str, output_zip: str, extract_to: Path) -> None:
     urllib.request.urlretrieve(url, output_zip)
 
     print(f"Extracting {output_zip}...")
-    with zipfile.ZipFile(output_zip, 'r') as zip_ref:
+    with zipfile.ZipFile(output_zip, "r") as zip_ref:
         zip_ref.extractall(extract_to)
 
     Path(output_zip).unlink()
