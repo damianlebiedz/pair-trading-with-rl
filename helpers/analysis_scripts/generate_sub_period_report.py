@@ -13,8 +13,8 @@ from modules.utils.logger import get_logger
 logger = get_logger(__name__)
 
 STRATEGIES = {
-    "Baseline": "Winners Results/BASELINE OOS 10x",
-    "Agent 2": "Winners Results/RL OOS 10x",
+    "Baseline": "MAIN RESULTS/BASELINE OOS 10x",
+    "Agent 2": "MAIN RESULTS/RL OOS 10x",
 }
 
 QUARTERS = {
@@ -211,7 +211,7 @@ def generate_sub_period_report():
     \\end{{tabularx}}
 
     \\vspace{{10pt}}
-    \\justifying \\noindent \\scriptsize \\textit{{Note: Performance metrics isolated for each calendar quarter of 2025. All metrics are calculated by rebasing the initial capital at the start of each period to ensure independent evaluation. Baseline and Agent 2 utilize 0.05\\% fees and 10x leverage.}}
+    \\justifying \\noindent \\scriptsize \\textit{{Note: }}
 \\end{{table}}
 """
 

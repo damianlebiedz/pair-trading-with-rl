@@ -6,10 +6,12 @@ Repository for the paper **"Dynamic Multi-Pair Trading Strategy in Cryptocurrenc
 |---|----------------------------------------------------------|
 | **Paper (arXiv)** | *Coming soon - DOI/link will be added after publication* |
 | **Preprint** | `https://arxiv.org/abs/XXXXXXXX` *(placeholder)*         |
+| **Frozen artifacts (Zenodo)** | `https://zenodo.org/record/XXXXXXX` *(placeholder)*    |
+| **Zenodo DOI** | `10.5281/zenodo.XXXXXXX` *(placeholder)*                 |
 
 ### For reviewers (fast path)
 
-If you only need to **inspect the study** without re-downloading market data from Binance or re-running experiments:
+**Inspect only** - download frozen outputs and browse them:
 
 ```bash
 make download_artifacts
@@ -17,12 +19,19 @@ make download_artifacts
 
 This pulls two archives from Zenodo:
 
-| Archive | What you get                                                                                                                                                                                                       |
-|---------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **`data/`** | Inputs used in the paper: historical prices, monthly pair lists, RL training exports, and trained model checkpoints.                                                                                               |
-| **`results/`** | Complete outputs of every experiment run cited in the paper - each backtest is its own timestamped folder (config snapshot, per-pair returns, trades, logs). You can open these directly without running any code. |
+| Archive | What you get                                                                                                                                                          |
+|---------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **`data/`** | `pair_selection/`, `rl_training/`, and `rl_models/`. **Does not include `historical/`** - see below.                                                                  |
+| **`results/`** | Parquet outputs for every experiment cited in the paper (per-pair returns, trades, stats), plus `.hydra/config.yaml` and `.hydra/overrides.yaml` for reproducibility. |
 
-To **re-run** backtests on the frozen inputs, continue with [Quick start](#quick-start) below. Details: [Frozen artifacts (Zenodo)](#frozen-artifacts-zenodo).
+> **`data/historical/` is not on Zenodo.** OHLCV from [Binance Data Vision](https://data.binance.vision/) is excluded. To **re-run** backtests you must fetch it locally:
+
+```bash
+poetry run python helpers/data_fetching_pipeline.py
+# or: docker compose run --rm data_fetching_pipeline
+```
+
+**Re-run backtests:** `make download_artifacts` → `data_fetching_pipeline` → `run_backtest`. Details: [Quick start](#quick-start) and [Frozen artifacts (Zenodo)](#frozen-artifacts-zenodo).
 
 ___
 
@@ -63,7 +72,7 @@ What each step does:
 
 1. **`poetry install`** - installs all Python dependencies into a local virtualenv.
 2. **`update_config.py`** - syncs JSON schemas and `docs/configuration.md` with the Pydantic models (run once after clone, and again if you change config fields in code).
-3. **`data_fetching_pipeline.py`** - downloads historical futures data from Binance Data Vision, builds monthly asset universes, and writes parquet files under `data/`. This can take a long time on first run; see [For reviewers (fast path)](#for-reviewers-fast-path) to download `data/` and `results/` from Zenodo instead.
+3. **`data_fetching_pipeline.py`** - downloads historical futures data from Binance Data Vision into `data/historical/`, builds monthly asset universes, and writes `config/schemas/list_of_assets.json`. This step is **always required before re-running backtests** - `data/historical/` is not on Zenodo (see [For reviewers (fast path)](#for-reviewers-fast-path)). Other `data/` folders can be fetched from Zenodo instead of recomputing.
 4. **`run_backtest.py`** - runs the main walk-forward backtest with defaults from `config/run_backtest.yaml`. Outputs go to `results/run_backtest_<timestamp>/`.
 
 To change parameters without editing YAML, append Hydra overrides, for example:
@@ -101,7 +110,8 @@ Pick the path that matches your goal:
 
 | Goal | What to do                                                                                                                                                                                             |
 |------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **Inspect or reproduce paper results quickly** | `make download_artifacts` (Zenodo) → browse `results/` as-is, or re-run `run_backtest` against frozen `data/` and bundled RL checkpoints.                                                              |
+| **Inspect paper results only** | `make download_artifacts` → browse `results/` (no code to run). |
+| **Re-run backtests with paper inputs** | `make download_artifacts` → `data_fetching_pipeline` (historical OHLCV) → `run_backtest` (uses Zenodo `pair_selection/` + `rl_models/`). |
 | **Full pipeline from scratch** | `data_fetching_pipeline` → statistical `run_backtest` (optionally with multirun grids) → `run_backtest` with `save_for_training=true` → `train_agent` → `run_backtest` with `performance.use_rl=true`. |
 | **Only statistical arbitrage** | Skip RL: `performance.use_rl=false` everywhere; no WandB key required for backtests only.                                                                                                              |
 | **Hyperparameter search** | Use Hydra multirun + joblib launcher - see [Multirun & hyperparameter grids](#multirun--hyperparameter-grids).                                                                                         |
@@ -178,7 +188,7 @@ data/
 
 | Path | Created by | Used by | Contents                                                                                                                                                                                                                                                                          |
 |------|------------|---------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **`historical/`** | `helpers/data_fetching_pipeline.py` | `load_data()` in backtests and pair selection | Continuous OHLCV parquet per symbol. Filename pattern: `{SYMBOL}_{interval}_{start}-{end}.parquet`. Universe membership per month is defined separately in `config/schemas/list_of_assets.json`.                                                                                  |
+| **`historical/`** | `helpers/data_fetching_pipeline.py` | `load_data()` in backtests and pair selection | Continuous OHLCV parquet per symbol. Filename pattern: `{SYMBOL}_{interval}_{start}-{end}.parquet`. Universe membership per month is defined separately in `config/schemas/list_of_assets.json`. **Not on Zenodo** - fetch locally via `data_fetching_pipeline`.                  |
 | **`pair_selection/`** | `runners/run_pair_selection.py` | `runners/run_backtest.py` | For each month (`YYYY-MM/`), a ranked table of cointegrated pairs: `pair_selection_{start}_{end}.parquet` (columns include `pair`, `score`, …). **Required before backtest** - if a month is missing, `run_backtest` stops with an error pointing you to `run_pair_selection.py`. |
 | **`rl_training/`** | `run_backtest` with `save_for_training=true` | `train_agent` (`rl.training_folder` or first subfolder) | Per-pair `returns_{X}_{Y}_{start}_{end}.parquet` copies of test-window strategy data (z-score, beta, vol, etc.) exported from a specific backtest run. Subfolder name matches that backtest’s `results/run_backtest_<timestamp>/` id.                                             |
 | **`rl_models/`** | `train_agent` | `run_backtest` with `performance.use_rl=true` | Stable-Baselines3 model (`.zip`) and `VecNormalize` stats (`_normalize.pkl`). Basename encodes algorithm, observation space, reward, WandB run id, and seed. Pass the basename (without extension) as `rl_model_folder=...`.                                                      |
@@ -192,7 +202,7 @@ data/
 5. `train_agent` → reads `rl_training/...`, writes `rl_models/`
 6. `run_backtest` with `performance.use_rl=true` → loads from `rl_models/`
 
-`data/` is gitignored except placeholder folders (see `.gitignore`). Use Zenodo/`make download_artifacts` to obtain the same tree without re-downloading.
+`data/` is gitignored except placeholder folders (see `.gitignore`). Use `make download_artifacts` for `pair_selection/`, `rl_training/`, and `rl_models/`; fetch `historical/` locally via `data_fetching_pipeline`. Monthly universes live in `config/schemas/list_of_assets.json` (committed to this repo).
 
 ---
 
@@ -388,15 +398,35 @@ Open `docs/api/index.html` in a browser after generation.
 
 ## Frozen artifacts (Zenodo)
 
-Re-downloading years of klines or re-training RL for several hours is not always necessary - especially for reviewers who only need to verify reported metrics or inspect individual backtests from the paper.
+Re-training RL for several hours is not always necessary - especially for reviewers who only need to verify reported metrics or inspect individual backtests from the paper.
 
-The `Makefile` target `download_artifacts` downloads both archived trees from Zenodo: **`data/`** (inputs and RL checkpoints) and **`results/`** (full experiment outputs). **Set the Zenodo URLs** in `Makefile` before running:
+**Zenodo record:** [https://zenodo.org/record/XXXXXXX](https://zenodo.org/record/XXXXXXX) *(placeholder)*  
+**DOI:** [10.5281/zenodo.XXXXXXX](https://doi.org/10.5281/zenodo.XXXXXXX) *(placeholder)*
+
+The `Makefile` target `download_artifacts` downloads both archived trees from Zenodo. **Set the Zenodo record ID** in `Makefile` (and update the links above) once the deposit is published:
 
 ```bash
 make download_artifacts
 ```
 
-Then run backtests against the extracted parquet files and evaluate the bundled RL checkpoints with `performance.use_rl=true`, without calling `data_fetching_pipeline` or `train_agent` again.
+| Archive | Contents                                                                                                                                                                                   |
+|---------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **`data/`** | `pair_selection/`, `rl_training/`, and `rl_models/`. **Does not include `data/historical/`** (Binance Data Vision OHLCV - fetch locally; see below).                                       |
+| **`results/`** | Per-run parquet outputs (returns, trades, stats) and `.hydra/config.yaml` + `.hydra/overrides.yaml`. Does **not** include `execution.log` or `.hydra/hydra.yaml` (local filesystem paths). |
+
+**To inspect:** extract and browse `results/` - nothing else needed.
+
+**To re-run backtests:** after `make download_artifacts`, fetch historical OHLCV (not on Zenodo), then run backtests against the bundled checkpoints:
+
+```bash
+poetry run python helpers/data_fetching_pipeline.py
+poetry run python runners/run_backtest.py performance.use_rl=true rl_model_folder=<folder_from_zenodo>
+# or with Docker:
+docker compose run --rm data_fetching_pipeline
+docker compose run --rm run_backtest
+```
+
+**Why `historical/` is excluded:** OHLCV is sourced from the public [Binance Data Vision](https://data.binance.vision/) archive. We do not redistribute it on Zenodo because of licensing and redistribution concerns; market data remains the intellectual property of Binance. Use `helpers/data_fetching_pipeline.py` to download the same files we used in the study.
 
 ---
 
@@ -419,3 +449,5 @@ Research and educational use only. Commercial use prohibited. See [LICENSE](LICE
 ---
 
 **Paper (arXiv):** *DOI / arXiv link - to be added after publication.*
+
+**Frozen artifacts (Zenodo):** [record](https://zenodo.org/record/XXXXXXX) · [DOI 10.5281/zenodo.XXXXXXX](https://doi.org/10.5281/zenodo.XXXXXXX) *(placeholders)*

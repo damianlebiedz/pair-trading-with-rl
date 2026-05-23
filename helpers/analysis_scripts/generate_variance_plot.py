@@ -11,7 +11,7 @@ from modules.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-TARGET_SUBFOLDER = "Wandb Export Seeds 4"
+TARGET_SUBFOLDER = "Wandb Export (sec 5.5.4)"
 
 ELSEVIER_FONT = "Arial, sans-serif"
 FONT_SIZE_TICK = 10

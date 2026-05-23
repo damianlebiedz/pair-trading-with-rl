@@ -1,7 +1,8 @@
 .PHONY: download_artifacts
 
-DATA_ZENODO_URL = "https://zenodo.org/record/XXXXXXX/files/data.zip"
-RESULTS_ZENODO_URL = "https://zenodo.org/record/XXXXXXX/files/results.zip"
+ZENODO_RECORD_ID = XXXXXXX
+DATA_ZENODO_URL = "https://zenodo.org/record/$(ZENODO_RECORD_ID)/files/data.zip"
+RESULTS_ZENODO_URL = "https://zenodo.org/record/$(ZENODO_RECORD_ID)/files/results.zip"
 
 all: download_artifacts
 

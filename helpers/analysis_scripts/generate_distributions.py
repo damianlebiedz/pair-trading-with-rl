@@ -16,7 +16,7 @@ from modules.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-FOLDER = "Baseline Optimization"
+FOLDER = "Baseline Optimization (sec 3.1.1 and 3.1.2)"
 
 TARGET_METRIC = "Sortino Ratio"
 

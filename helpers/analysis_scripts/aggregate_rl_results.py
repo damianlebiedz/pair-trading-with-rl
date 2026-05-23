@@ -5,7 +5,7 @@ import yaml
 import pandas as pd
 from pathlib import Path
 
-FOLDER = "RL MODELS OOS 10x"
+FOLDER = "RL OOS backtests"
 
 
 def get_column_id_from_folder(folder_name: str) -> int:
@@ -186,8 +186,7 @@ def aggregate_models():
 \\vspace{{12pt}}
 
 \\justifying \\noindent \\scriptsize 
-    Note: The 10x leverage is applied to the agents to scale its inherently lower structural volatility and align its risk profile with the unleveraged benchmarks (see Subsection 2.8). Consequently, all
-    calculated performance metrics represent the post-leverage performance of the strategy (see Subsection 2.7). Agents: 1 – StepPnLReward, Autonomous, $\\lambda=1.0$, 2 – StepPnLReward, Autonomous, $\\lambda=1.2$, 3 – StepPnLReward, Standard, $\\lambda=1.0$, 4 – StepPnLReward, Standard, $\\lambda=1.2$, 5 – StepPnLReward, Full, $\\lambda=1.0$, 6 – StepPnLReward, Full, $\\lambda=1.2$, 7 – TradePnLReward, Autonomous, $\\lambda=1.0$, 8 – TradePnLReward, Autonomous, $\\lambda=1.2$, 9 – TradePnLReward, Standard, $\\lambda=1.0$, 10 – TradePnLReward, Standard, $\\lambda=1.2$, 11 – TradePnLReward, Full, $\\lambda=1.0$, 12 – TradePnLReward, Full, $\\lambda=1.2$, 13 – HybridActionReward, Autonomous, $\\lambda=1.0$, 14 – HybridActionReward, Autonomous, $\\lambda=1.2$, 15 – HybridActionReward, Standard, $\\lambda=1.0$, 16 – HybridActionReward, Standard, $\\lambda=1.2$, 17 – HybridActionReward, Full, $\\lambda=1.0$, 18 – HybridActionReward, Full, $\\lambda=1.2$.
+    Note: 
 \\end{{center}}
 \\vspace*{{\\fill}}
 \\end{{landscape}}
