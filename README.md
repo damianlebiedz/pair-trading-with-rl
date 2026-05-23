@@ -7,6 +7,25 @@ Repository for the paper **"Dynamic Multi-Pair Trading Strategy in Cryptocurrenc
 | **Paper (arXiv)** | *Coming soon - DOI/link will be added after publication* |
 | **Preprint** | `https://arxiv.org/abs/XXXXXXXX` *(placeholder)*         |
 
+### For reviewers (fast path)
+
+If you only need to **inspect the study** without re-downloading market data from Binance or re-running experiments:
+
+```bash
+make download_artifacts
+```
+
+This pulls two archives from Zenodo:
+
+| Archive | What you get                                                                                                                                                                                                       |
+|---------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **`data/`** | Inputs used in the paper: historical prices, monthly pair lists, RL training exports, and trained model checkpoints.                                                                                               |
+| **`results/`** | Complete outputs of every experiment run cited in the paper - each backtest is its own timestamped folder (config snapshot, per-pair returns, trades, logs). You can open these directly without running any code. |
+
+To **re-run** backtests on the frozen inputs, continue with [Quick start](#quick-start) below. Details: [Frozen artifacts (Zenodo)](#frozen-artifacts-zenodo).
+
+___
+
 **Stack:** Python 3.12 · Poetry · Hydra · Pydantic · pandas · statsmodels · scikit-optimize · Gymnasium · Stable-Baselines3 · SB3-Contrib (Recurrent PPO) · Weights & Biases · joblib (parallel sweeps) · Docker
 
 - [Quick start](#quick-start)
@@ -44,7 +63,7 @@ What each step does:
 
 1. **`poetry install`** - installs all Python dependencies into a local virtualenv.
 2. **`update_config.py`** - syncs JSON schemas and `docs/configuration.md` with the Pydantic models (run once after clone, and again if you change config fields in code).
-3. **`data_fetching_pipeline.py`** - downloads historical futures data from Binance Data Vision, builds monthly asset universes, and writes parquet files under `data/`. This can take a long time on first run; see [Frozen artifacts](#frozen-artifacts-zenodo) to skip it.
+3. **`data_fetching_pipeline.py`** - downloads historical futures data from Binance Data Vision, builds monthly asset universes, and writes parquet files under `data/`. This can take a long time on first run; see [For reviewers (fast path)](#for-reviewers-fast-path) to download `data/` and `results/` from Zenodo instead.
 4. **`run_backtest.py`** - runs the main walk-forward backtest with defaults from `config/run_backtest.yaml`. Outputs go to `results/run_backtest_<timestamp>/`.
 
 To change parameters without editing YAML, append Hydra overrides, for example:
@@ -82,7 +101,7 @@ Pick the path that matches your goal:
 
 | Goal | What to do                                                                                                                                                                                             |
 |------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **Reproduce paper numbers quickly** | `make download_artifacts` (Zenodo), then run `run_backtest` with frozen `data/` and pre-trained RL weights in `results/`.                                                                              |
+| **Inspect or reproduce paper results quickly** | `make download_artifacts` (Zenodo) → browse `results/` as-is, or re-run `run_backtest` against frozen `data/` and bundled RL checkpoints.                                                              |
 | **Full pipeline from scratch** | `data_fetching_pipeline` → statistical `run_backtest` (optionally with multirun grids) → `run_backtest` with `save_for_training=true` → `train_agent` → `run_backtest` with `performance.use_rl=true`. |
 | **Only statistical arbitrage** | Skip RL: `performance.use_rl=false` everywhere; no WandB key required for backtests only.                                                                                                              |
 | **Hyperparameter search** | Use Hydra multirun + joblib launcher - see [Multirun & hyperparameter grids](#multirun--hyperparameter-grids).                                                                                         |
@@ -369,9 +388,9 @@ Open `docs/api/index.html` in a browser after generation.
 
 ## Frozen artifacts (Zenodo)
 
-Re-downloading years of klines or re-training RL for several hours is not always necessary - especially for reviewers who only need to verify reported metrics.
+Re-downloading years of klines or re-training RL for several hours is not always necessary - especially for reviewers who only need to verify reported metrics or inspect individual backtests from the paper.
 
-The `Makefile` target `download_artifacts` downloads archived `data/` and `results/` (including pre-trained models) from Zenodo. **Set the Zenodo URLs** in `Makefile` before running:
+The `Makefile` target `download_artifacts` downloads both archived trees from Zenodo: **`data/`** (inputs and RL checkpoints) and **`results/`** (full experiment outputs). **Set the Zenodo URLs** in `Makefile` before running:
 
 ```bash
 make download_artifacts
