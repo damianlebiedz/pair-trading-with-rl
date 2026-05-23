@@ -13,12 +13,10 @@ Repository for the paper **"Dynamic Multi-Pair Trading Strategy in Cryptocurrenc
 
 If you only want to **inspect** the paper outputs, pick one of two paths:
 
-**Option A - Manual download (no setup required, any OS).** From the [Zenodo record](https://zenodo.org/records/20355140), grab the two archives and extract them into the repo root:
+**Option A - Manual download (no setup required, any OS).** From the [Zenodo record](https://zenodo.org/records/20355140), grab the two archives and extract each one **into its matching subfolder** of the repo root:
 
-- [`data.zip`](https://zenodo.org/records/20355140/files/data.zip) → creates `./data/`
-- [`results.zip`](https://zenodo.org/records/20355140/files/results.zip) → creates `./results/`
-
-Each archive already contains the top-level folder name, so extracting in the project root puts files in the right place. Use any built-in unzipper (Windows Explorer, macOS Finder, Linux file manager).
+- [`data.zip`](https://zenodo.org/records/20355140/files/data.zip) → extract into `./data/`
+- [`results.zip`](https://zenodo.org/records/20355140/files/results.zip) → extract into `./results/`
 
 **Option B - Scripted (requires Python or Docker).** After completing [Quick start](#quick-start) (`poetry install` or `docker compose build`):
 

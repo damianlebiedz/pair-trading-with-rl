@@ -29,7 +29,7 @@ if __name__ == "__main__":
 
     print("=== Starting artifact download from Zenodo ===\n")
 
-    download_and_extract(DATA_URL, "data.zip", base_dir)
-    download_and_extract(RESULTS_URL, "results.zip", base_dir)
+    download_and_extract(DATA_URL, "data.zip", base_dir / "data")
+    download_and_extract(RESULTS_URL, "results.zip", base_dir / "results")
 
     print("=== Artifacts successfully downloaded and extracted! ===")
