@@ -16,7 +16,7 @@ from modules.utils.logger import get_logger
 warnings.filterwarnings("ignore", category=UserWarning, module="choreographer")
 logger = get_logger(__name__)
 
-FOLDER = "Baseline Sensitivity Analysis 10x/Wide"
+FOLDER = "Baseline Sensitivity Analysis (sec 4.2)/Sensitivity Analysis"
 
 BASELINE = {
     "IS": "BASELINE IS 10x",

@@ -12,7 +12,7 @@ from modules.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-TARGET_EXPERIMENT_FOLDER = "RL OOS 10x"
+TARGET_EXPERIMENT_FOLDER = "RL OOS backtests"
 
 ELSEVIER_FONT = "Arial, sans-serif"
 FONT_SIZE_TICK = 10

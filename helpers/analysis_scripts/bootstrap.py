@@ -15,8 +15,8 @@ if str(_project_root) not in sys.path:
 project_root = _project_root
 
 STRATEGIES = {
-    "Baseline": "Winners Results/BASELINE OOS 10x",
-    "Agent 2": "Winners Results/RL OOS 10x",
+    "Baseline": "MAIN RESULTS/BASELINE OOS 10x",
+    "Agent 2": "MAIN RESULTS/RL OOS 10x",
 }
 BLOCK_SIZE = 168
 N_BOOTSTRAP = 10000
@@ -168,7 +168,7 @@ def generate_latex_table(s_res, sh_res):
     \bottomrule
     \end{tabular}
     \vspace{6pt}
-    \justifying \noindent \scriptsize Note: Baseline: 0.05\% fees, 10x leverage; Agent 2: 0.05\% fees, 10x leverage. Statistical significance computed via stationary circular block bootstrap using the empirical percentile method. CI denotes Confidence Interval. The null hypothesis states that Agent 2 does not outperform the Baseline ($H_0: \Delta \le 0$).
+    \justifying \noindent \scriptsize Note: 
 \end{table}
 """
     )

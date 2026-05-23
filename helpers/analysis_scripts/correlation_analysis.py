@@ -59,7 +59,7 @@ def _build_correlation_latex(pooled_corr: pd.DataFrame, n_episodes: int) -> str:
     \\end{{tabularx}}
     \\vspace{{1ex}}
     \\raggedright
-    \\textit{{Note:}} Correlation coefficients are computed using a pooled dataset derived from {n_episodes} In-Sample training episodes to capture aggregate portfolio dynamics. The near-zero correlation between $H_t$ and $Z_{{score}}$ confirms the statistical independence of structural regime information from high-frequency execution signals.
+    \\textit{{Note:}} 
     \\end{{table}}
     """
 
@@ -85,7 +85,7 @@ def _build_vif_latex(pooled_vif: pd.DataFrame) -> str:
     \\end{{tabularx}}
     \\vspace{{1ex}}
     \\raggedright
-    \\textit{{Note:}} VIF values quantify the impact of multicollinearity on the variance of estimated coefficients. Values near 1.0 signify low inflation of variance, suggesting that the state representation is parsimonious and free from redundant signal overlap that could destabilize gradient-based learning.
+    \\textit{{Note:}} 
     \\end{{table}}
     """
 

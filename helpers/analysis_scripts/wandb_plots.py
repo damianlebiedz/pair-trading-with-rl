@@ -12,7 +12,7 @@ from modules.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-TARGET_SUBFOLDER = "Wandb Export Classic 18"
+TARGET_SUBFOLDER = "Wandb Export (sec 5.1)"
 
 RENAME_MAP = {
     "recurrent_ppo_autonomous_StepPnLReward_1_0": "1 – StepPnLReward, Autonomous, λ=1.0",

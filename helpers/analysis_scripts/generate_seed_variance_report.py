@@ -16,7 +16,7 @@ from modules.utils.logger import get_logger
 warnings.filterwarnings("ignore", category=UserWarning, module="choreographer")
 logger = get_logger(__name__)
 
-FOLDER = "RL OOS 10x Seeds"
+FOLDER = "RL OOS seeds backtests (sec 5.5.4)"
 LEVERAGE = 10
 
 TITLE = "Out-Of-Sample Performance Stability Across Random Seeds"
@@ -277,7 +277,7 @@ def generate_seed_variance_report(folder_name: str):
     \\bottomrule
     \\end{{tabularx}}
     \\vspace{{6pt}}
-    \\justifying\\noindent\\scriptsize Note: Performance metrics calculated for the Out-of-Sample period (2025) across 5 independent random seeds. Leverage {LEVERAGE}x.
+    \\justifying\\noindent\\scriptsize Note: 
 \\end{{table}}"""
 
     with open(

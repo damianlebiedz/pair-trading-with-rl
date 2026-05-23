@@ -21,8 +21,8 @@ logger = get_logger(__name__)
 LEVERAGE = 10
 
 PLOT_STRATEGIES = {
-    "Baseline": "Winners Results/BASELINE OOS 10x",
-    "Agent 2": "Winners Results/RL OOS 10x",
+    "Baseline": "MAIN RESULTS/BASELINE OOS 10x",
+    "Agent 2": "MAIN RESULTS/RL OOS 10x",
 }
 
 PLOT_COLORS = {
@@ -31,8 +31,8 @@ PLOT_COLORS = {
 }
 
 TABLE_STRATEGIES = {
-    "Baseline (10x)": "Winners Results/BASELINE OOS 10x",
-    "Agent 2 (10x)": "Winners Results/RL OOS 10x",
+    "Baseline (10x)": "MAIN RESULTS/BASELINE OOS 10x",
+    "Agent 2 (10x)": "MAIN RESULTS/RL OOS 10x",
 }
 
 TITLE = "Out-Of-Sample Performance of Agent 2 Against Baseline and Benchmarks (2025)."
@@ -505,7 +505,7 @@ def generate_academic_multi_report(plot_map: dict, table_map: dict):
     \\end{{tabularx}}
 
     \\vspace{{12pt}}
-    \\justifying \\noindent \\scriptsize Note:
+    \\justifying \\noindent \\scriptsize Note: 
 \\end{{table}}
 """
     with open(report_output_dir / "comparison_table.tex", "w") as f:

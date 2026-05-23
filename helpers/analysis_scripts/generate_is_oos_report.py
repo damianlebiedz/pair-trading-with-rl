@@ -19,13 +19,13 @@ from runners.core.utils import generate_date_lists
 logger = get_logger(__name__)
 
 OOS_TABLE_STRATEGIES = {
-    "Baseline (10x)": "Winners Results/BASELINE OOS 10x",
+    "Baseline (10x)": "MAIN RESULTS/BASELINE OOS 10x",
 }
 
 STRATEGY = {
-    "Rolling Beta-Hedge": {
-        "IS": "Winners Results/BASELINE IS 10x",
-        "OOS": "Winners Results/BASELINE OOS 10x",
+    "Strategy": {
+        "IS": "MAIN RESULTS/BASELINE IS 10x",
+        "OOS": "MAIN RESULTS/BASELINE OOS 10x",
     }
 }
 

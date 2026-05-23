@@ -17,8 +17,8 @@ from modules.utils.logger import get_logger
 logger = get_logger(__name__)
 
 STRATEGIES = {
-    "Agent 2 (Hedged)": "Winners Results/RL OOS 10x",
-    "Agent 2 (Unhedged)": "RL Sensitivity Analysis 10x/Assumptions Verification/oos/run_backtest_2026-04-22_22-10-07_daa822",
+    "Agent 2 (Hedged)": "MAIN RESULTS/RL OOS 10x",
+    "Agent 2 (Unhedged)": "RL Sensitivity Analysis (sec 5.4)/Assumptions Verification/oos/run_backtest_2026-04-22_22-10-07_daa822",
 }
 
 current_file = Path(__file__).resolve()
@@ -156,7 +156,7 @@ Strategy & $\\alpha$ & $p$-value ($\\alpha$) & $\\beta$ & $p$-value ($\\beta$) &
 
     latex_content += """\\bottomrule
 \\end{tabularx}
-\\justifying\\noindent\\scriptsize Note: Ordinary Least Squares (OLS) regression of daily strategy returns against the BTC benchmark returns in the Out-of-Sample period. $\\alpha$ represents the daily abnormal return intercept, while $\\beta$ represents the market exposure coefficient. The analysis empirically validates the structural market neutrality of the unhedged RL agent.
+\\justifying\\noindent\\scriptsize Note: 
 \\end{table}
 """
 
