@@ -2,12 +2,12 @@
 
 Repository for the paper **"Dynamic Multi-Pair Trading Strategy in Cryptocurrency Markets with Deep Reinforcement Learning"** (Lebiedź and Ślepaczuk, 2026). It implements a **statistical arbitrage** backtesting framework and **reinforcement learning** training and evaluation pipelines used in that study.
 
-| |                                                          |
-|---|----------------------------------------------------------|
-| **Paper (arXiv)** | *Coming soon - DOI/link will be added after publication* |
-| **Preprint** | `https://arxiv.org/abs/XXXXXXXX` *(placeholder)*         |
-| **Frozen artifacts (Zenodo)** | `https://zenodo.org/record/XXXXXXX` *(placeholder)*    |
-| **Zenodo DOI** | `10.5281/zenodo.XXXXXXX` *(placeholder)*                 |
+| |                                                      |
+|---|------------------------------------------------------|
+| **Paper** | *Coming soon - DOI/link will be added after publication* |
+| **Preprint** | `https://arxiv.org/abs/XXXXXXXX` *(placeholder)*     |
+| **Frozen artifacts (Zenodo)** | `https://zenodo.org/records/20355140` |
+| **Zenodo DOI** | `10.5281/zenodo.20355140`           |
 
 ### For reviewers (fast path)
 
@@ -400,8 +400,8 @@ Open `docs/api/index.html` in a browser after generation.
 
 Re-training RL for several hours is not always necessary - especially for reviewers who only need to verify reported metrics or inspect individual backtests from the paper.
 
-**Zenodo record:** [https://zenodo.org/record/XXXXXXX](https://zenodo.org/record/XXXXXXX) *(placeholder)*  
-**DOI:** [10.5281/zenodo.XXXXXXX](https://doi.org/10.5281/zenodo.XXXXXXX) *(placeholder)*
+**Zenodo record:** [https://zenodo.org/records/20355140](https://zenodo.org/record/XXXXXXX)
+**DOI:** [10.5281/zenodo.20355140](https://doi.org/10.5281/zenodo.20355140)
 
 The `Makefile` target `download_artifacts` downloads both archived trees from Zenodo. **Set the Zenodo record ID** in `Makefile` (and update the links above) once the deposit is published:
 
