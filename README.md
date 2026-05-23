@@ -2,36 +2,44 @@
 
 Repository for the paper **"Dynamic Multi-Pair Trading Strategy in Cryptocurrency Markets with Deep Reinforcement Learning"** (Lebiedź and Ślepaczuk, 2026). It implements a **statistical arbitrage** backtesting framework and **reinforcement learning** training and evaluation pipelines used in that study.
 
-| |                                                          |
-|---|----------------------------------------------------------|
-| **Paper (arXiv)** | *Coming soon - DOI/link will be added after publication* |
-| **Preprint** | `https://arxiv.org/abs/XXXXXXXX` *(placeholder)*         |
-| **Frozen artifacts (Zenodo)** | `https://zenodo.org/record/XXXXXXX` *(placeholder)*    |
-| **Zenodo DOI** | `10.5281/zenodo.XXXXXXX` *(placeholder)*                 |
+| |                                                      |
+|---|------------------------------------------------------|
+| **Paper** | *Coming soon - DOI/link will be added after publication* |
+| **Preprint** | `https://arxiv.org/abs/XXXXXXXX` *(placeholder)*     |
+| **Frozen artifacts (Zenodo)** | `https://zenodo.org/records/20355140` |
+| **Zenodo DOI** | `10.5281/zenodo.20355140`           |
 
-### For reviewers (fast path)
+### Fast path
 
-**Inspect only** - download frozen outputs and browse them:
+If you only want to **inspect** the paper outputs, pick one of two paths:
+
+**Option A - Manual download (no setup required, any OS).** From the [Zenodo record](https://zenodo.org/records/20355140), grab the two archives and extract each one **into its matching subfolder** of the repo root:
+
+- [`data.zip`](https://zenodo.org/records/20355140/files/data.zip) → extract into `./data/`
+- [`results.zip`](https://zenodo.org/records/20355140/files/results.zip) → extract into `./results/`
+
+**Option B - Scripted (requires Python or Docker).** After completing [Quick start](#quick-start) (`poetry install` or `docker compose build`):
 
 ```bash
-make download_artifacts
+poetry run python helpers/download_artifacts.py
+# or: docker compose run --rm download_artifacts
 ```
 
-This pulls two archives from Zenodo:
+Both options give you the same archives:
 
 | Archive | What you get                                                                                                                                                          |
 |---------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | **`data/`** | `pair_selection/`, `rl_training/`, and `rl_models/`. **Does not include `historical/`** - see below.                                                                  |
 | **`results/`** | Parquet outputs for every experiment cited in the paper (per-pair returns, trades, stats), plus `.hydra/config.yaml` and `.hydra/overrides.yaml` for reproducibility. |
 
-> **`data/historical/` is not on Zenodo.** OHLCV from [Binance Data Vision](https://data.binance.vision/) is excluded. To **re-run** backtests you must fetch it locally:
+> **`data/historical/` is not on Zenodo.** OHLCV from [Binance Data Vision](https://data.binance.vision/) is excluded. To **re-run** backtests you must fetch it locally (this step *does* require Python or Docker):
 
 ```bash
 poetry run python helpers/data_fetching_pipeline.py
 # or: docker compose run --rm data_fetching_pipeline
 ```
 
-**Re-run backtests:** `make download_artifacts` → `data_fetching_pipeline` → `run_backtest`. Details: [Quick start](#quick-start) and [Frozen artifacts (Zenodo)](#frozen-artifacts-zenodo).
+**Re-run backtests:** download artifacts (Option A or B) → `data_fetching_pipeline` → `run_backtest`. Details: [Quick start](#quick-start) and [Frozen artifacts (Zenodo)](#frozen-artifacts-zenodo).
 
 ___
 
@@ -72,7 +80,7 @@ What each step does:
 
 1. **`poetry install`** - installs all Python dependencies into a local virtualenv.
 2. **`update_config.py`** - syncs JSON schemas and `docs/configuration.md` with the Pydantic models (run once after clone, and again if you change config fields in code).
-3. **`data_fetching_pipeline.py`** - downloads historical futures data from Binance Data Vision into `data/historical/`, builds monthly asset universes, and writes `config/schemas/list_of_assets.json`. This step is **always required before re-running backtests** - `data/historical/` is not on Zenodo (see [For reviewers (fast path)](#for-reviewers-fast-path)). Other `data/` folders can be fetched from Zenodo instead of recomputing.
+3. **`data_fetching_pipeline.py`** - downloads historical futures data from Binance Data Vision into `data/historical/`, builds monthly asset universes, and writes `config/schemas/list_of_assets.json`. This step is **always required before re-running backtests** - `data/historical/` is not on Zenodo (see [Fast path](#fast-path)). Other `data/` folders can be fetched from Zenodo instead of recomputing.
 4. **`run_backtest.py`** - runs the main walk-forward backtest with defaults from `config/run_backtest.yaml`. Outputs go to `results/run_backtest_<timestamp>/`.
 
 To change parameters without editing YAML, append Hydra overrides, for example:
@@ -110,8 +118,8 @@ Pick the path that matches your goal:
 
 | Goal | What to do                                                                                                                                                                                             |
 |------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **Inspect paper results only** | `make download_artifacts` → browse `results/` (no code to run). |
-| **Re-run backtests with paper inputs** | `make download_artifacts` → `data_fetching_pipeline` (historical OHLCV) → `run_backtest` (uses Zenodo `pair_selection/` + `rl_models/`). |
+| **Inspect paper results only** | `download_artifacts` → browse `results/` (no code to run). |
+| **Re-run backtests with paper inputs** | `download_artifacts` → `data_fetching_pipeline` (historical OHLCV) → `run_backtest` (uses Zenodo `pair_selection/` + `rl_models/`). |
 | **Full pipeline from scratch** | `data_fetching_pipeline` → statistical `run_backtest` (optionally with multirun grids) → `run_backtest` with `save_for_training=true` → `train_agent` → `run_backtest` with `performance.use_rl=true`. |
 | **Only statistical arbitrage** | Skip RL: `performance.use_rl=false` everywhere; no WandB key required for backtests only.                                                                                                              |
 | **Hyperparameter search** | Use Hydra multirun + joblib launcher - see [Multirun & hyperparameter grids](#multirun--hyperparameter-grids).                                                                                         |
@@ -202,7 +210,7 @@ data/
 5. `train_agent` → reads `rl_training/...`, writes `rl_models/`
 6. `run_backtest` with `performance.use_rl=true` → loads from `rl_models/`
 
-`data/` is gitignored except placeholder folders (see `.gitignore`). Use `make download_artifacts` for `pair_selection/`, `rl_training/`, and `rl_models/`; fetch `historical/` locally via `data_fetching_pipeline`. Monthly universes live in `config/schemas/list_of_assets.json` (committed to this repo).
+`data/` is gitignored except placeholder folders (see `.gitignore`). Use `helpers/download_artifacts.py` for `pair_selection/`, `rl_training/`, and `rl_models/`; fetch `historical/` locally via `data_fetching_pipeline`. Monthly universes live in `config/schemas/list_of_assets.json` (committed to this repo).
 
 ---
 
@@ -400,14 +408,17 @@ Open `docs/api/index.html` in a browser after generation.
 
 Re-training RL for several hours is not always necessary - especially for reviewers who only need to verify reported metrics or inspect individual backtests from the paper.
 
-**Zenodo record:** [https://zenodo.org/record/XXXXXXX](https://zenodo.org/record/XXXXXXX) *(placeholder)*  
-**DOI:** [10.5281/zenodo.XXXXXXX](https://doi.org/10.5281/zenodo.XXXXXXX) *(placeholder)*
+**Zenodo record:** [https://zenodo.org/records/20355140](https://zenodo.org/record/20355140)
+**DOI:** [10.5281/zenodo.20355140](https://doi.org/10.5281/zenodo.20355140)
 
-The `Makefile` target `download_artifacts` downloads both archived trees from Zenodo. **Set the Zenodo record ID** in `Makefile` (and update the links above) once the deposit is published:
+The helper script `helpers/download_artifacts.py` downloads both archived trees from Zenodo:
 
 ```bash
-make download_artifacts
+poetry run python helpers/download_artifacts.py
+# or: docker compose run --rm download_artifacts
 ```
+
+No Python or Docker? Grab [`data.zip`](https://zenodo.org/records/20355140/files/data.zip) and [`results.zip`](https://zenodo.org/records/20355140/files/results.zip) straight from the Zenodo record and extract them in the repo root - see [Fast path](#fast-path) for the manual flow.
 
 | Archive | Contents                                                                                                                                                                                   |
 |---------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -416,7 +427,7 @@ make download_artifacts
 
 **To inspect:** extract and browse `results/` - nothing else needed.
 
-**To re-run backtests:** after `make download_artifacts`, fetch historical OHLCV (not on Zenodo), then run backtests against the bundled checkpoints:
+**To re-run backtests:** after running `helpers/download_artifacts.py`, fetch historical OHLCV (not on Zenodo), then run backtests against the bundled checkpoints:
 
 ```bash
 poetry run python helpers/data_fetching_pipeline.py
