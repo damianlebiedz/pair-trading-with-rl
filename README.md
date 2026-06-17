@@ -5,9 +5,9 @@ Repository for the paper **"Dynamic Multi-Pair Trading Strategy in Cryptocurrenc
 | |                                                      |
 |---|------------------------------------------------------|
 | **Paper** | *Coming soon - DOI/link will be added after publication* |
-| **Preprint** | `https://arxiv.org/abs/XXXXXXXX` *(placeholder)*     |
-| **Frozen artifacts (Zenodo)** | `https://zenodo.org/records/20355140` |
-| **Zenodo DOI** | `10.5281/zenodo.20355140`           |
+| **Preprint (arXiv)** | [10.48550/arXiv.2606.04574](https://doi.org/10.48550/arXiv.2606.04574)     |
+| **Preprint (SSRN)** | [https://ssrn.com/abstract=6825378](https://ssrn.com/abstract=6825378)     |
+| **Frozen artifacts (Zenodo)** | [10.5281/zenodo.20355140](https://doi.org/10.5281/zenodo.20355140) |
 
 ### Fast path
 
@@ -456,9 +456,3 @@ Unit tests cover core indicators, execution helpers, reward functions, and perfo
 ## License
 
 Research and educational use only. Commercial use prohibited. See [LICENSE](LICENSE).
-
----
-
-**Paper (arXiv):** *DOI / arXiv link - to be added after publication.*
-
-**Frozen artifacts (Zenodo):** [record](https://zenodo.org/record/XXXXXXX) · [DOI 10.5281/zenodo.XXXXXXX](https://doi.org/10.5281/zenodo.XXXXXXX) *(placeholders)*
